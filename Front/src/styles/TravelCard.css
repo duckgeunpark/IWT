@@ -1,0 +1,119 @@
+.travel-card {
+  display: flex;
+  flex-direction: column;
+  min-height: 180px;
+  border-radius: 12px;
+  padding: 16px;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+  position: relative;
+}
+
+.travel-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* Create Card */
+.create-card {
+  background: linear-gradient(135deg, #FFB3BA 0%, #FFE4E6 100%);
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  min-height: 180px;
+}
+
+.create-icon {
+  font-size: 48px;
+  color: #666;
+  font-weight: 300;
+  margin-bottom: 8px;
+}
+
+.create-text {
+  font-size: 16px;
+  font-weight: 500;
+  color: #333;
+}
+
+/* Theme Colors */
+.green-theme {
+  background: linear-gradient(135deg, #C8E6C9 0%, #E8F5E8 100%);
+}
+
+.pink-theme {
+  background: linear-gradient(135deg, #F8BBD9 0%, #FCE4EC 100%);
+}
+
+.purple-theme {
+  background: linear-gradient(135deg, #CE93D8 0%, #F3E5F5 100%);
+}
+
+.blue-theme {
+  background: linear-gradient(135deg, #90CAF9 0%, #E3F2FD 100%);
+}
+
+.yellow-theme {
+  background: linear-gradient(135deg, #FFF176 0%, #FFFDE7 100%);
+}
+
+/* Card Content */
+.card-header {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.date-badge, .duration-badge {
+  background-color: rgba(255, 255, 255, 0.8);
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #666;
+}
+
+.card-content {
+  flex: 1;
+  display: flex;
+  align-items: center;
+}
+
+.travel-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #333;
+  line-height: 1.4;
+  margin: 0;
+  word-break: keep-all;
+}
+
+.card-footer {
+  margin-top: 12px;
+}
+
+.author-badge {
+  background-color: #8E24AA;
+  color: white;
+  padding: 6px 12px;
+  border-radius: 16px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* Status variations */
+.green-theme .author-badge {
+  background-color: #4CAF50;
+}
+
+.pink-theme .author-badge {
+  background-color: #E91E63;
+}
+
+.blue-theme .author-badge {
+  background-color: #2196F3;
+}
+
+.yellow-theme .author-badge {
+  background-color: #FF9800;
+}

@@ -1,0 +1,69 @@
+.resizer {
+  background-color: transparent;
+  cursor: col-resize;
+  user-select: none;
+  transition: background-color 0.2s ease;
+  position: absolute;
+  z-index: 100;
+  width: 24px;
+  height: 100%;
+  top: 0;
+  transform: translateX(-50%);
+}
+
+.resizer.horizontal {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: transparent;
+  cursor: col-resize;
+}
+
+.resizer.horizontal::before {
+  content: '';
+  width: 4px;
+  height: 100px;
+  background-color: #e0e0e0;
+  border-radius: 2px;
+  transition: all 0.2s ease;
+  position: relative;
+  z-index: 1;
+}
+
+.resizer:hover {
+  background-color: rgba(0, 123, 255, 0.1);
+}
+
+/* 클릭 가능한 영역 확장 */
+.resizer::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -12px;
+  width: 48px;
+  height: 100%;
+  background-color: transparent;
+  cursor: col-resize;
+  z-index: 2;
+}
+
+/* 디버깅용 - 호버 시 배경 표시 */
+.resizer:hover::after {
+  background-color: rgba(0, 123, 255, 0.05);
+}
+
+.resizer:hover::before {
+  background-color: #007bff;
+  height: 120px;
+  width: 5px;
+}
+
+.resizer:active {
+  background-color: rgba(0, 123, 255, 0.2);
+}
+
+.resizer:active::before {
+  background-color: #0056b3;
+  height: 140px;
+  width: 6px;
+}

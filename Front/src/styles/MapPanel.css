@@ -1,0 +1,467 @@
+.map-panel {
+  width: 100%;
+  height: 100%;
+  background-color: #f8f9fa;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  box-sizing: border-box;
+}
+
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.panel-header h3 {
+  font-size: 18px;
+  font-weight: bold;
+  color: #333;
+  margin: 0;
+}
+
+.map-controls {
+  display: flex;
+  gap: 5px;
+}
+
+.map-control-btn {
+  width: 32px;
+  height: 32px;
+  border: 1px solid #ddd;
+  background-color: #fff;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: bold;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.map-control-btn:hover {
+  background-color: #f0f0f0;
+  border-color: #007bff;
+}
+
+.map-container {
+  height: 400px;
+  margin-bottom: 20px;
+  position: relative;
+}
+
+.map-placeholder {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, #e8f5e8 0%, #f0f8ff 100%);
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  position: relative;
+  overflow: hidden;
+}
+
+.map-background {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  background-image: 
+    linear-gradient(rgba(0,0,0,0.1) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,0,0,0.1) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+.location-marker {
+  position: absolute;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  color: white;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border: 2px solid white;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+  transition: all 0.3s ease;
+}
+
+.location-marker:hover {
+  transform: scale(1.1);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+}
+
+.location-marker.active {
+  transform: scale(1.2);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+  border-width: 3px;
+}
+
+.map-overlay {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  color: #666;
+  pointer-events: none;
+}
+
+.map-overlay span {
+  font-size: 18px;
+  font-weight: bold;
+  display: block;
+  margin-bottom: 5px;
+}
+
+.map-overlay p {
+  font-size: 12px;
+  margin: 0;
+  opacity: 0.7;
+}
+
+.location-details {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.location-details h4 {
+  font-size: 16px;
+  color: #333;
+  margin: 0 0 15px 0;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.location-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 0;
+  padding-right: 5px; /* 선택된 아이템의 이동 공간 확보 */
+}
+
+.location-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 15px;
+  background-color: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+  max-width: calc(100% - 5px); /* 선택된 아이템의 이동 공간 고려 */
+}
+
+.location-item:hover {
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.location-item.selected {
+  background-color: #e7f3ff;
+  border-color: #007bff;
+  box-shadow: 0 2px 8px rgba(0, 123, 255, 0.2);
+  transform: translateX(5px);
+  transition: all 0.3s ease;
+}
+
+.location-marker-small {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  font-weight: bold;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border: 2px solid white;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.location-content {
+  flex: 1;
+}
+
+.location-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 5px;
+}
+
+.location-number {
+  background-color: #007bff;
+  color: white;
+  font-size: 12px;
+  padding: 2px 6px;
+  border-radius: 10px;
+  min-width: 18px;
+  text-align: center;
+  font-weight: bold;
+}
+
+.location-name {
+  font-weight: 600;
+  color: #333;
+  font-size: 14px;
+}
+
+.location-time, .location-info {
+  font-size: 13px;
+  color: #666;
+  margin-bottom: 3px;
+}
+
+.location-actions {
+  display: flex;
+  gap: 5px;
+  position: absolute;
+  top: 10px;
+  right: 10px;
+}
+
+.edit-location-btn, .delete-location-btn {
+  padding: 4px 8px;
+  font-size: 11px;
+  border: 1px solid #ddd;
+  background-color: #fff;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.edit-location-btn:hover {
+  background-color: #e7f1ff;
+  border-color: #007bff;
+}
+
+.delete-location-btn:hover {
+  background-color: #ffe7e7;
+  border-color: #dc3545;
+  color: #dc3545;
+}
+
+.location-controls {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.add-location-btn, .route-optimize-btn, .route-toggle-btn {
+  padding: 10px 16px;
+  border: 1px solid #ddd;
+  background-color: #fff;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s;
+  flex: 1;
+}
+
+.add-location-btn:hover, .route-optimize-btn:hover, .route-toggle-btn:hover {
+  background-color: #f0f0f0;
+}
+
+.add-location-btn {
+  background-color: #28a745;
+  color: white;
+  border-color: #28a745;
+}
+
+.add-location-btn:hover {
+  background-color: #1e7e34;
+}
+
+.route-optimize-btn {
+  background-color: #17a2b8;
+  color: white;
+  border-color: #17a2b8;
+}
+
+.route-optimize-btn:hover {
+  background-color: #117a8b;
+}
+
+.route-toggle-btn {
+  background-color: #6c757d;
+  color: white;
+  border-color: #6c757d;
+}
+
+.route-toggle-btn:hover {
+  background-color: #545b62;
+}
+
+.route-toggle-btn.active {
+  background-color: #007bff;
+  border-color: #007bff;
+}
+
+.route-toggle-btn.active:hover {
+  background-color: #0056b3;
+}
+
+.map-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  padding-top: 15px;
+  border-top: 1px solid #e0e0e0;
+}
+
+/* 반응형 개선 */
+@media (max-width: 768px) {
+  .map-panel {
+    padding: 12px;
+  }
+  
+  .location-controls {
+    flex-direction: column;
+  }
+  
+  .add-location-btn, .route-optimize-btn {
+    width: 100%;
+    margin: 0;
+  }
+  
+  .map-type-selector, .travel-mode-selector {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 5px;
+  }
+  
+  .map-type-selector label, .travel-mode-selector label {
+    min-width: auto;
+  }
+  
+  .map-type-selector select, .travel-mode-selector select {
+    width: 100%;
+  }
+}
+
+.map-type-selector, .travel-mode-selector {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.map-type-selector label, .travel-mode-selector label {
+  font-size: 14px;
+  color: #555;
+  font-weight: 500;
+  min-width: 80px;
+}
+
+.map-type-selector select, .travel-mode-selector select {
+  padding: 6px 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+  background-color: white;
+  flex: 1;
+}
+
+/* 스크롤바 스타일링 */
+.map-panel::-webkit-scrollbar,
+.location-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.map-panel::-webkit-scrollbar-track,
+.location-list::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 3px;
+}
+
+.map-panel::-webkit-scrollbar-thumb,
+.location-list::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
+}
+
+.map-panel::-webkit-scrollbar-thumb:hover,
+.location-list::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+/* Google Maps 관련 스타일 */
+.map-loading,
+.map-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  font-size: 16px;
+  color: #666;
+}
+
+.map-error {
+  flex-direction: column;
+  gap: 10px;
+  text-align: center;
+  color: #dc3545;
+  background-color: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 6px;
+  padding: 20px;
+}
+
+.map-error p {
+  margin: 5px 0;
+  font-size: 14px;
+}
+
+.map-loading {
+  background-color: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 6px;
+}
+
+/* 위치 좌표 표시 스타일 */
+.location-coordinates {
+  font-size: 12px;
+  color: #888;
+  margin-top: 3px;
+  font-family: monospace;
+}
+
+/* 일차 구분선 스타일 */
+.day-separator {
+  display: flex;
+  align-items: center;
+  margin: 20px 0 15px 0;
+  gap: 15px;
+}
+
+.day-separator-line {
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(to right, transparent, #007bff, transparent);
+}
+
+.day-separator-text {
+  font-size: 14px;
+  font-weight: bold;
+  color: #007bff;
+  background-color: white;
+  padding: 5px 15px;
+  border: 2px solid #007bff;
+  border-radius: 20px;
+  white-space: nowrap;
+  box-shadow: 0 2px 4px rgba(0, 123, 255, 0.2);
+}

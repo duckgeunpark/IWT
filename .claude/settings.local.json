@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mv:*)",
+      "Bash(docker-compose:*)",
+      "Bash(npm install:*)",
+      "Bash(docker network prune:*)",
+      "Bash(docker volume prune:*)",
+      "Bash(docker system prune:*)",
+      "Bash(docker rmi:*)",
+      "Bash(dir:*)",
+      "Bash(npm start)",
+      "mcp__sequential-thinking__sequentialthinking",
+      "mcp__playwright__playwright_navigate"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

@@ -1,0 +1,421 @@
+.create-trip-page {
+  width: 100%;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background-color: #f5f5f5;
+  overflow: hidden;
+}
+
+/* 헤더 영역 */
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 30px;
+  background-color: white;
+  border-bottom: 1px solid #e0e0e0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+}
+
+.logo-container {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  padding: 8px 12px;
+  border-radius: 8px;
+  transition: background-color 0.2s;
+}
+
+.logo-container:hover {
+  background-color: #f8f9fa;
+}
+
+.logo-avatar {
+  width: 40px;
+  height: 40px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: bold;
+  font-size: 16px;
+}
+
+.logo-avatar::before {
+  content: '✈️';
+}
+
+.logo-text h1 {
+  font-size: 24px;
+  font-weight: bold;
+  color: #2c3e50;
+  margin: 0;
+  line-height: 1;
+}
+
+.logo-text p {
+  font-size: 12px;
+  color: #7f8c8d;
+  margin: 2px 0 0 0;
+  line-height: 1;
+  font-weight: 500;
+}
+
+.title-section {
+  flex: 1;
+  margin: 0 20px;
+}
+
+.page-title {
+  font-size: 24px;
+  font-weight: bold;
+  color: #333;
+  margin: 0;
+  cursor: pointer;
+  padding: 5px 10px;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+
+.page-title:hover {
+  background-color: #f8f9fa;
+}
+
+.title-input {
+  font-size: 24px;
+  font-weight: bold;
+  color: #333;
+  border: 2px solid #007bff;
+  border-radius: 4px;
+  padding: 5px 10px;
+  background-color: white;
+  outline: none;
+  width: 100%;
+  max-width: 600px;
+}
+
+.header-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.action-btn {
+  padding: 10px 16px;
+  border: 1px solid #ddd;
+  background-color: white;
+  border-radius: 20px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.action-btn:hover {
+  background-color: #f0f0f0;
+  border-color: #007bff;
+}
+
+.temp-save-btn {
+  background-color: #6c757d;
+  color: white;
+  border-color: #6c757d;
+}
+
+.temp-save-btn:hover {
+  background-color: #545b62;
+}
+
+.upload-btn {
+  background-color: #17a2b8;
+  color: white;
+  border-color: #17a2b8;
+}
+
+.upload-btn:hover {
+  background-color: #117a8b;
+}
+
+.user-profile-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #f0f0f0;
+  border: 2px solid #ddd;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.user-profile-icon:hover {
+  border-color: #007bff;
+  transform: scale(1.05);
+}
+
+.profile-img {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.default-profile {
+  font-size: 18px;
+  color: #6c757d;
+}
+
+/* 메인 콘텐츠 영역 */
+.page-content {
+  flex: 1;
+  padding: 20px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 탭 메뉴 스타일 */
+.tab-menu {
+  display: none;
+  justify-content: center;
+  background-color: white;
+  border-radius: 8px;
+  padding: 8px;
+  margin-bottom: 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  gap: 4px;
+}
+
+.tab-button {
+  padding: 12px 20px;
+  border: none;
+  background-color: transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  color: #666;
+  flex: 1;
+  text-align: center;
+}
+
+.tab-button:hover {
+  background-color: #f0f0f0;
+  color: #333;
+}
+
+.tab-button.active {
+  background-color: #007bff;
+  color: white;
+  box-shadow: 0 2px 4px rgba(0, 123, 255, 0.3);
+}
+
+.tab-button.active:hover {
+  background-color: #0056b3;
+}
+
+.panels-container {
+  width: 100%;
+  flex: 1;
+  display: flex;
+  align-items: stretch;
+  min-height: 600px;
+  position: relative;
+  overflow: hidden;
+}
+
+.panel-wrapper {
+  height: 100%;
+  overflow: visible;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transition: box-shadow 0.3s ease;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+
+.panel-wrapper:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+}
+
+.left-panel {
+  /* ImagePanel 스타일 */
+  width: 33.33%;
+  min-width: 200px;
+}
+
+.center-panel {
+  /* DocumentPanel 스타일 */
+  width: 33.33%;
+  min-width: 300px;
+  overflow-x: auto;
+}
+
+.right-panel {
+  /* MapPanel 스타일 */
+  width: 33.34%;
+  min-width: 200px;
+}
+
+/* 패널 내부 콘텐츠가 잘리지 않도록 */
+.panel-wrapper > * {
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  overflow-x: visible;
+  overflow-y: auto;
+}
+
+/* 반응형에서 최소 너비 보장 */
+@media (min-width: 1200px) {
+  .left-panel {
+    min-width: 280px;
+  }
+  .center-panel {
+    min-width: 400px;
+  }
+  .right-panel {
+    min-width: 300px;
+  }
+}
+
+
+/* 반응형 디자인 */
+@media (max-width: 1200px) {
+  .page-header {
+    padding: 15px 20px;
+  }
+  
+  .page-content {
+    padding: 10px;
+  }
+  
+  .left-panel {
+    min-width: 180px;
+  }
+  
+  .center-panel {
+    min-width: 280px;
+  }
+  
+  .right-panel {
+    min-width: 180px;
+  }
+}
+
+@media (max-width: 992px) {
+  .tab-menu {
+    display: flex;
+  }
+  
+  .panels-container {
+    display: block;
+    position: relative;
+  }
+  
+  .panel-wrapper {
+    min-height: 500px;
+    width: 100% !important;
+    position: relative;
+    box-sizing: border-box;
+  }
+  
+  .mobile-hidden {
+    display: none !important;
+  }
+  
+  .desktop-only {
+    display: none !important;
+  }
+  
+  .page-title {
+    font-size: 20px;
+  }
+  
+  .title-input {
+    font-size: 20px;
+  }
+  
+  .header-actions {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  
+  .action-btn {
+    padding: 8px 12px;
+    font-size: 13px;
+  }
+  
+  .page-content {
+    padding: 5px;
+  }
+}
+
+@media (max-width: 768px) {
+  .page-header {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+  }
+  
+  .header-left {
+    order: 1;
+    flex: 0 0 auto;
+  }
+  
+  .header-actions {
+    order: 2;
+    flex: 1;
+    justify-content: flex-end;
+    gap: 5px;
+  }
+  
+  .title-section {
+    order: 3;
+    flex: 1 1 100%;
+    text-align: center;
+    margin-top: 10px;
+  }
+  
+  .tab-menu {
+    padding: 6px;
+    margin-bottom: 15px;
+  }
+  
+  .tab-button {
+    padding: 10px 16px;
+    font-size: 14px;
+    min-width: 80px;
+  }
+  
+  .panel-wrapper {
+    min-height: 400px;
+  }
+  
+  .page-content {
+    padding: 5px;
+  }
+  
+  
+  .panels-container {
+    gap: 5px;
+  }
+  
+  .panel-wrapper {
+    min-height: 350px;
+  }
+}

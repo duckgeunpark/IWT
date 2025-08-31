@@ -1,0 +1,476 @@
+.image-panel {
+  width: 100%;
+  height: 100%;
+  background-color: #f8f9fa;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.panel-header {
+  margin-bottom: 20px;
+  flex-shrink: 0;
+}
+
+.panel-header h3 {
+  font-size: 18px;
+  font-weight: bold;
+  color: #333;
+  margin: 0;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+  width: 100%;
+  flex-shrink: 0;
+}
+
+.add-btn, .explore-btn, .toggle-all-btn {
+  padding: 8px 16px;
+  border: 1px solid #ddd;
+  background-color: #fff;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.2s;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.add-btn:hover, .explore-btn:hover, .toggle-all-btn:hover {
+  background-color: #f0f0f0;
+}
+
+.add-btn {
+  background-color: #007bff;
+  color: white;
+  border-color: #007bff;
+}
+
+.add-btn:hover {
+  background-color: #0056b3;
+}
+
+.toggle-all-btn {
+  background-color: #28a745;
+  color: white;
+  border-color: #28a745;
+}
+
+.toggle-all-btn:hover {
+  background-color: #1e7e34;
+}
+
+/* 지도 표시 체크박스 (점점점 메뉴 바로 왼쪽) */
+.map-checkbox {
+  display: flex;
+  align-items: center;
+  padding: 4px 8px;
+}
+
+/* 커스텀 체크박스 디자인 */
+.map-checkbox input[type="checkbox"] {
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border: 2px solid #ddd;
+  border-radius: 4px;
+  background-color: white;
+  cursor: pointer;
+  position: relative;
+  transition: all 0.2s ease;
+}
+
+.map-checkbox input[type="checkbox"]:hover {
+  border-color: #007bff;
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.1);
+}
+
+.map-checkbox input[type="checkbox"]:checked {
+  background-color: #007bff;
+  border-color: #007bff;
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.2);
+}
+
+.map-checkbox input[type="checkbox"]:checked::after {
+  content: '✓';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: white;
+  font-size: 14px;
+  font-weight: bold;
+}
+
+/* 헤더 컨트롤 */
+.header-controls {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.active-count {
+  font-size: 14px;
+  color: #28a745;
+  font-weight: 500;
+}
+
+/* 헤더의 전체 활성화/비활성화 버튼 */
+.header-controls .toggle-all-btn {
+  padding: 6px 12px;
+  font-size: 12px;
+  border-radius: 4px;
+  border: 1px solid #28a745;
+  background-color: #28a745;
+  color: white;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.header-controls .toggle-all-btn:hover {
+  background-color: #1e7e34;
+  border-color: #1e7e34;
+}
+
+/* 섹션 헤더 */
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+  flex-shrink: 0;
+}
+
+.section-header h4 {
+  font-size: 16px;
+  color: #555;
+  margin: 0;
+  font-weight: 500;
+}
+
+
+.image-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.image-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  flex: 1;
+  min-height: 0;
+  padding-right: 5px; /* 선택된 아이템의 이동 공간 확보 */
+}
+
+
+.image-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px;
+  background-color: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  transition: all 0.2s;
+  position: relative;
+  cursor: pointer;
+  max-width: calc(100% - 5px); /* 선택된 아이템의 이동 공간 고려 */
+}
+
+.image-item:hover {
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* 선택된 이미지 아이템 강조 */
+.image-item.selected {
+  background-color: #e7f3ff;
+  border-color: #007bff;
+  box-shadow: 0 2px 8px rgba(0, 123, 255, 0.2);
+  transform: translateX(5px);
+  transition: all 0.3s ease;
+}
+
+.image-item.selected .image-preview {
+  border-color: #007bff;
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.3);
+}
+
+
+/* 점점점 메뉴 */
+.menu-container {
+  position: relative;
+  margin-left: auto;
+  z-index: 100;
+}
+
+/* 메뉴가 아래쪽으로 잘릴 때 위쪽으로 표시 */
+.image-item:nth-last-child(-n+2) .dropdown-menu {
+  bottom: calc(100% + 2px);
+  top: auto;
+}
+
+.menu-btn {
+  background: none;
+  border: none;
+  font-size: 18px;
+  cursor: pointer;
+  padding: 6px 10px;
+  border-radius: 6px;
+  transition: all 0.2s;
+  color: #6c757d;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  height: 32px;
+}
+
+.menu-btn:hover {
+  background-color: #e9ecef;
+  color: #495057;
+  transform: scale(1.05);
+}
+
+.dropdown-menu {
+  position: absolute;
+  top: calc(100% + 2px);
+  right: 0;
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+  min-width: 120px;
+  width: auto;
+  z-index: 99999;
+  overflow: visible;
+  animation: fadeInScale 0.15s ease-out;
+  /* 명시적 크기 설정 */
+  height: auto;
+  min-height: 80px;
+  /* 브라우저별 호환성 */
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
+}
+
+@keyframes fadeInScale {
+  from {
+    opacity: 0;
+    transform: scale(0.9) translateY(-2px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  background: none;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s;
+  color: #374151;
+  white-space: nowrap;
+  min-height: 36px;
+  box-sizing: border-box;
+}
+
+.menu-item:hover {
+  background-color: #f3f4f6;
+}
+
+.menu-item.edit-item {
+  color: #2563eb;
+}
+
+.menu-item.edit-item:hover {
+  background-color: #dbeafe;
+  color: #1d4ed8;
+}
+
+.menu-item.delete-item {
+  color: #dc2626;
+}
+
+.menu-item.delete-item:hover {
+  background-color: #fee2e2;
+  color: #b91c1c;
+}
+
+.menu-item:not(:last-child) {
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.image-preview {
+  display: block;
+  width: 60px;
+  height: 60px;
+  background-color: #e9ecef;
+  border: 2px solid #ddd;
+  border-radius: 6px;
+  overflow: hidden;
+  flex-shrink: 0;
+  position: relative;
+}
+
+/* 지도 순서 번호 */
+.map-order-number {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: bold;
+  border: 2px solid white;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  z-index: 10;
+}
+
+.image-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+
+.image-info {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.image-name {
+  font-size: 14px;
+  color: #333;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+}
+
+
+
+
+/* 스크롤바 스타일링 */
+.image-panel::-webkit-scrollbar {
+  width: 6px;
+}
+
+.image-panel::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 3px;
+}
+
+.image-panel::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
+}
+
+.image-panel::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+/* 빈 상태 스타일 */
+.empty-state {
+  text-align: center;
+  padding: 40px 20px;
+  color: #666;
+}
+
+.empty-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+  opacity: 0.5;
+}
+
+.empty-state p {
+  margin: 0 0 20px 0;
+  font-size: 14px;
+}
+
+.upload-first-btn {
+  background-color: #28a745;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.2s;
+}
+
+.upload-first-btn:hover {
+  background-color: #218838;
+}
+
+/* 이미지 정보 영역 */
+.image-info {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.image-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: #333;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+
+/* 이미지 개수 표시 */
+.add-btn {
+  background-color: #007bff;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* 로딩 애니메이션 */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.image-item {
+  animation: fadeIn 0.3s ease-out;
+}

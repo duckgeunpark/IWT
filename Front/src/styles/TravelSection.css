@@ -1,0 +1,61 @@
+.travel-section {
+  margin: 40px 0;
+  padding: 0 40px;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: #333;
+  margin: 0;
+}
+
+.section-actions {
+  display: flex;
+  align-items: center;
+}
+
+.view-all-btn {
+  padding: 8px 16px;
+  border: 1px solid #ddd;
+  background-color: white;
+  border-radius: 20px;
+  cursor: pointer;
+  font-size: 14px;
+  color: #666;
+  transition: all 0.2s;
+}
+
+.view-all-btn:hover {
+  background-color: #f5f5f5;
+  border-color: #bbb;
+}
+
+.travel-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 20px;
+  align-items: start;
+}
+
+@media (max-width: 768px) {
+  .travel-section {
+    padding: 0 20px;
+  }
+  
+  .travel-grid {
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 15px;
+  }
+  
+  .section-title {
+    font-size: 20px;
+  }
+}

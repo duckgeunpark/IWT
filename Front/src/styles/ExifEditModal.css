@@ -1,0 +1,301 @@
+/* EXIF 편집 모달 스타일 */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.exif-edit-modal {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  max-width: 800px;
+  max-height: 90vh;
+  width: 90%;
+  display: flex;
+  flex-direction: column;
+  animation: slideUp 0.3s ease-out;
+  overflow: hidden;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(50px) scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* 모달 헤더 */
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  border-bottom: 1px solid #e5e7eb;
+  flex-shrink: 0;
+}
+
+.modal-header h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  font-size: 28px;
+  cursor: pointer;
+  color: #6b7280;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  transition: all 0.2s;
+}
+
+.close-btn:hover {
+  background-color: #f3f4f6;
+  color: #374151;
+}
+
+/* 모달 컨텐츠 */
+.modal-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+}
+
+/* 폼 섹션 */
+.form-section {
+  margin-bottom: 32px;
+}
+
+.form-section:last-child {
+  margin-bottom: 0;
+}
+
+.form-section h3 {
+  margin: 0 0 16px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #374151;
+  padding-bottom: 8px;
+  border-bottom: 2px solid #e5e7eb;
+}
+
+/* 폼 그룹 */
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+}
+
+.form-row {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.form-row:last-child {
+  margin-bottom: 0;
+}
+
+.form-group label {
+  font-size: 14px;
+  font-weight: 500;
+  color: #374151;
+  margin-bottom: 4px;
+}
+
+/* 입력 필드 */
+.form-group input,
+.form-group select {
+  padding: 10px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 14px;
+  transition: all 0.2s;
+  background-color: white;
+}
+
+.form-group input:focus,
+.form-group select:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.form-group input:hover,
+.form-group select:hover {
+  border-color: #9ca3af;
+}
+
+.form-group input[type="number"] {
+  text-align: right;
+}
+
+.form-group input[type="datetime-local"] {
+  font-family: monospace;
+}
+
+.form-group select {
+  cursor: pointer;
+}
+
+/* 모달 푸터 */
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 20px 24px;
+  border-top: 1px solid #e5e7eb;
+  flex-shrink: 0;
+  background-color: #f9fafb;
+}
+
+.cancel-btn,
+.save-btn {
+  padding: 10px 20px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  min-width: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.cancel-btn {
+  background-color: white;
+  color: #6b7280;
+  border: 1px solid #d1d5db;
+}
+
+.cancel-btn:hover:not(:disabled) {
+  background-color: #f3f4f6;
+  color: #374151;
+  border-color: #9ca3af;
+}
+
+.save-btn {
+  background-color: #3b82f6;
+  color: white;
+  border: 1px solid #3b82f6;
+}
+
+.save-btn:hover:not(:disabled) {
+  background-color: #2563eb;
+  border-color: #2563eb;
+}
+
+.save-btn:disabled,
+.cancel-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 스크롤바 스타일링 */
+.modal-content::-webkit-scrollbar {
+  width: 8px;
+}
+
+.modal-content::-webkit-scrollbar-track {
+  background: #f1f3f4;
+  border-radius: 4px;
+}
+
+.modal-content::-webkit-scrollbar-thumb {
+  background: #c1c7cd;
+  border-radius: 4px;
+}
+
+.modal-content::-webkit-scrollbar-thumb:hover {
+  background: #a8b0b8;
+}
+
+/* 반응형 디자인 */
+@media (max-width: 768px) {
+  .exif-edit-modal {
+    max-width: 95%;
+    max-height: 95vh;
+    margin: 20px;
+  }
+  
+  .modal-header,
+  .modal-content,
+  .modal-footer {
+    padding: 16px;
+  }
+  
+  .form-row {
+    flex-direction: column;
+    gap: 12px;
+  }
+  
+  .modal-header h2 {
+    font-size: 18px;
+  }
+  
+  .close-btn {
+    font-size: 24px;
+    width: 28px;
+    height: 28px;
+  }
+  
+  .modal-footer {
+    flex-direction: column-reverse;
+  }
+  
+  .cancel-btn,
+  .save-btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+/* 로딩 상태 */
+.save-btn:disabled {
+  position: relative;
+}
+
+.save-btn:disabled::after {
+  content: '';
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  margin: auto;
+  border: 2px solid transparent;
+  border-top-color: #ffffff;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
