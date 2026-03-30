@@ -6,7 +6,6 @@ import os
 from typing import List, Optional
 from pydantic import field_validator
 from pydantic_settings import BaseSettings
-import secrets
 
 
 class Settings(BaseSettings):
@@ -62,7 +61,7 @@ class Settings(BaseSettings):
     log_format: str = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     
     # 보안 설정
-    secret_key: str = secrets.token_urlsafe(32)
+    secret_key: str = os.getenv("SECRET_KEY", "CHANGE-ME-IN-PRODUCTION")
     access_token_expire_minutes: int = 30
     
     @field_validator("database_url", mode="before")

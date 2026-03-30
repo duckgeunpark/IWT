@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useDispatch } from 'react-redux';
+import { apiClient } from '../services/apiClient';
 import '../styles/ExifEditModal.css';
 
 /**
@@ -11,7 +11,6 @@ import '../styles/ExifEditModal.css';
  * @param {Function} props.onSave - 저장 콜백
  */
 const ExifEditModal = ({ isOpen, onClose, imageData, onSave }) => {
-  const dispatch = useDispatch();
   
   // 편집 가능한 EXIF 데이터 상태
   const [editData, setEditData] = useState({
@@ -131,24 +130,9 @@ const ExifEditModal = ({ isOpen, onClose, imageData, onSave }) => {
         updatedBackendData.gps = null;
       }
       
-      console.log('📝 저장할 EXIF 데이터:', updatedBackendData);
-      
       // 백엔드로 업데이트된 메타데이터 전송
-      const response = await fetch(`http://localhost:8000/api/v1/images/metadata/${updatedBackendData.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(updatedBackendData)
-      });
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      
-      const result = await response.json();
-      console.log('✅ 백엔드 업데이트 응답:', result);
-      
+      await apiClient.put(`/api/v1/images/metadata/${updatedBackendData.id}`, updatedBackendData);
+
       // 부모 컴포넌트에 저장 완료 알림
       onSave(imageData.id, updatedBackendData);
       
@@ -156,7 +140,6 @@ const ExifEditModal = ({ isOpen, onClose, imageData, onSave }) => {
       onClose();
       
     } catch (error) {
-      console.error('❌ EXIF 데이터 저장 실패:', error);
       alert('EXIF 데이터 저장에 실패했습니다: ' + error.message);
     } finally {
       setIsSaving(false);

@@ -12,7 +12,7 @@ from app.schemas.post import (
 )
 from app.models.db_models import Post, Photo, Location, Category
 from app.db.session import get_db
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from app.services.llm_route_recommend import LLMRouteRecommendService
 from app.services.s3_presigned_url import S3PresignedURLService
 from app.services.labeling_service import LabelingService
@@ -375,22 +375,23 @@ async def get_posts(
     게시글 목록 조회
     """
     try:
-        query = db.query(Post)
-        
+        count_query = db.query(Post)
+
         # 사용자별 필터링
         if user_id:
-            query = query.filter(Post.user_id == user_id)
-        
+            count_query = count_query.filter(Post.user_id == user_id)
+
         # 카테고리별 필터링
         if category:
-            query = query.join(Category).filter(Category.category_name == category)
-        
-        # 최신순 정렬
-        query = query.order_by(Post.created_at.desc())
-        
-        # 페이지네이션
-        total = query.count()
-        posts = query.offset(skip).limit(limit).all()
+            count_query = count_query.join(Category).filter(Category.category_name == category)
+
+        total = count_query.count()
+
+        posts = count_query.options(
+            joinedload(Post.photos)
+        ).order_by(
+            Post.created_at.desc()
+        ).offset(skip).limit(limit).all()
         
         return PostListResponse(
             posts=[
@@ -537,7 +538,9 @@ async def get_user_posts(
     특정 사용자의 게시글 목록 조회
     """
     try:
-        posts = db.query(Post).filter(
+        posts = db.query(Post).options(
+            joinedload(Post.photos)
+        ).filter(
             Post.user_id == user_id
         ).order_by(
             Post.created_at.desc()

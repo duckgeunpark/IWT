@@ -76,12 +76,7 @@ def setup_middleware(app: FastAPI) -> None:
         # 인증 정보 추출 (가능한 경우)
         auth_header = request.headers.get("authorization")
         if auth_header:
-            try:
-                # 간단한 로깅용 사용자 ID 추출 (보안상 민감하지 않은 정보만)
-                # 실제 구현시에는 토큰 검증 로직 필요
-                pass  # 추후 구현
-            except:
-                pass
+            pass  # TODO: 로깅용 사용자 ID 추출
         
         # 요청 로그
         log_api_request(logger, request.method, str(request.url.path), user_id)

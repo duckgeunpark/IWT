@@ -45,7 +45,7 @@ const TravelSection = ({ type, travels, onCreateNew, onTravelClick }) => {
         <div className="section-actions">
           <button 
             className="view-all-btn"
-            onClick={() => console.log('모두 보기 클릭')}
+            onClick={() => {}}
           >
             모두 보기
           </button>

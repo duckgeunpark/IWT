@@ -24,9 +24,11 @@ services:
       - "8000:8000"
     volumes:
       - ./back:/app
+    env_file:
+      - ./back/.env
     environment:
       - PYTHONPATH=/app
-      - CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
+      - ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
     networks:
       - iwt-network
     restart: unless-stopped

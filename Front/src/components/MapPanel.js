@@ -1,29 +1,10 @@
-import React, { useState, useCallback, useRef, useEffect, Fragment } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { togglePhotoActive, setSelectedPhoto } from '../store/photoSlice';
 import { Wrapper, Status } from "@googlemaps/react-wrapper";
+import getContrastColor from '../utils/getContrastColor';
+import extractDate from '../utils/extractDate';
 import '../styles/MapPanel.css';
-
-/**
- * 배경색의 밝기를 계산하여 적절한 글자색을 반환
- * @param {string} hexColor - 16진수 색상 코드 (예: #ff0000)
- * @returns {string} - 'white' 또는 'black'
- */
-const getContrastColor = (hexColor) => {
-  // #이 없으면 추가
-  const color = hexColor.startsWith('#') ? hexColor.slice(1) : hexColor;
-  
-  // RGB로 변환
-  const r = parseInt(color.substr(0, 2), 16);
-  const g = parseInt(color.substr(2, 2), 16);
-  const b = parseInt(color.substr(4, 2), 16);
-  
-  // 상대적 밝기 계산 (YIQ 공식)
-  const brightness = ((r * 299) + (g * 587) + (b * 114)) / 1000;
-  
-  // 밝기가 128보다 크면 검은색, 작으면 흰색
-  return brightness > 128 ? 'black' : 'white';
-};
 
 // Google Maps 컴포넌트
 const GoogleMapComponent = ({ 
@@ -194,7 +175,6 @@ const MapLoadingComponent = ({ status }) => {
 const MapPanel = () => {
   const dispatch = useDispatch();
   const { locations, selectedPhotoId } = useSelector(state => state.photos);
-  console.log('🗺️ MapPanel - Redux locations:', locations);
   const [selectedLocation, setSelectedLocation] = useState(null);
   const [mapType, setMapType] = useState('roadmap');
   const [center, setCenter] = useState({ lat: 37.566535, lng: 126.977969 }); // 서울 시청 기본 위치
@@ -225,8 +205,7 @@ const MapPanel = () => {
   }, [locations, dispatch]);
 
   const handleMapClick = useCallback((lat, lng) => {
-    console.log('지도 클릭:', lat, lng);
-    // 새 위치 추가 로직을 여기에 구현할 수 있습니다
+    // TODO: 새 위치 추가 로직
   }, []);
 
   const handleZoomIn = () => {
@@ -249,13 +228,10 @@ const MapPanel = () => {
   };
 
   const handleLocationEdit = (locationId) => {
-    console.log('위치 편집:', locationId);
-    // 위치 편집 로직
+    // TODO: 위치 편집 로직
   };
 
   const handleLocationDelete = (locationId) => {
-    console.log('위치 삭제:', locationId);
-    // togglePhotoActive를 호출하여 해당 사진을 비활성화 (체크박스 해제와 동일)
     dispatch(togglePhotoActive(locationId));
   };
 
@@ -326,98 +302,19 @@ const MapPanel = () => {
         <h4>위치별 상세 정보</h4>
         <div className="location-list">
           {locations.map((location, index) => {
-            console.log(`🗺️ Location ${index}:`, location.time);
-            
-            // 날짜 구분선 표시 여부 결정
             const shouldShowDaySeparator = index > 0 && (() => {
-              // 다양한 날짜 형식 처리
-              const extractDate = (timeString) => {
-                if (!timeString) return null;
-                
-                // 한국어 형식: "2023. 08. 13. 오후 03:00:23"
-                const koreanDateMatch = timeString.match(/(\d{4})\.\s*(\d{1,2})\.\s*(\d{1,2})\./);
-                if (koreanDateMatch) {
-                  const [, year, month, day] = koreanDateMatch;
-                  return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
-                }
-                
-                // "YYYY-MM-DD HH:mm:ss" 형식
-                if (timeString.includes('-') && timeString.includes(':')) {
-                  return timeString.split(' ')[0];
-                }
-                
-                // "YYYY:MM:DD HH:mm:ss" EXIF 형식
-                if (timeString.includes(':')) {
-                  const parts = timeString.split(' ');
-                  if (parts[0] && parts[0].split(':').length === 3) {
-                    return parts[0].replace(/:/g, '-');
-                  }
-                }
-                
-                // 다른 형식들도 시도
-                const dateMatch = timeString.match(/(\d{4}[-:]\d{2}[-:]\d{2})/);
-                if (dateMatch) {
-                  return dateMatch[1].replace(/:/g, '-');
-                }
-                
-                return timeString.split(' ')[0];
-              };
-              
               const currentDate = extractDate(location.time);
               const previousDate = extractDate(locations[index - 1].time);
-              console.log(`🗺️ Date comparison ${index}: current=${currentDate}, previous=${previousDate}`);
               return currentDate && previousDate && currentDate !== previousDate;
             })();
 
-            // 날짜로부터 일차 계산
             const getDayNumber = (locationIndex) => {
               if (locations.length === 0) return 1;
-              
-              // 같은 날짜 추출 함수 사용
-              const extractDate = (timeString) => {
-                if (!timeString) return null;
-                
-                // 한국어 형식: "2023. 08. 13. 오후 03:00:23"
-                const koreanDateMatch = timeString.match(/(\d{4})\.\s*(\d{1,2})\.\s*(\d{1,2})\./);
-                if (koreanDateMatch) {
-                  const [, year, month, day] = koreanDateMatch;
-                  return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
-                }
-                
-                if (timeString.includes('-') && timeString.includes(':')) {
-                  return timeString.split(' ')[0];
-                }
-                
-                if (timeString.includes(':')) {
-                  const parts = timeString.split(' ');
-                  if (parts[0] && parts[0].split(':').length === 3) {
-                    return parts[0].replace(/:/g, '-');
-                  }
-                }
-                
-                const dateMatch = timeString.match(/(\d{4}[-:]\d{2}[-:]\d{2})/);
-                if (dateMatch) {
-                  return dateMatch[1].replace(/:/g, '-');
-                }
-                
-                return timeString.split(' ')[0];
-              };
-              
               const firstDate = extractDate(locations[0].time);
               const currentDate = extractDate(locations[locationIndex].time);
-              
-              console.log(`🗺️ Day calculation: first=${firstDate}, current=${currentDate}`);
-              
               if (!firstDate || !currentDate) return 1;
-              
-              const firstDateTime = new Date(firstDate);
-              const currentDateTime = new Date(currentDate);
-              const diffTime = currentDateTime - firstDateTime;
-              const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-              
-              console.log(`🗺️ Day number for index ${locationIndex}:`, diffDays + 1);
-              
-              return diffDays + 1;
+              const diffTime = new Date(currentDate) - new Date(firstDate);
+              return Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1;
             };
 
             const elements = [];

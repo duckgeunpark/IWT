@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth0 } from '@auth0/auth0-react';
 import Header from '../components/Header';
@@ -7,7 +7,7 @@ import '../styles/MainPage.css';
 
 const MainPage = () => {
   const navigate = useNavigate();
-  const { user, isAuthenticated, isLoading, getAccessTokenSilently, loginWithRedirect } = useAuth0();
+  const { isAuthenticated, isLoading, loginWithRedirect } = useAuth0();
   const [activeTab, setActiveTab] = useState('all');
   const [sortBy, setSortBy] = useState('latest');
 
@@ -46,7 +46,6 @@ const MainPage = () => {
   const recommendedTravels = allTravels.filter(travel => !travel.isMyTravel);
 
   const handleCreateNew = () => {
-    console.log('새 여행 만들기 클릭');
     if (!isAuthenticated) {
       // 로그인하지 않은 사용자에게 로그인 요구
       const shouldLogin = window.confirm('여행 기록을 만들려면 로그인이 필요합니다. 로그인하시겠습니까?');
@@ -59,8 +58,6 @@ const MainPage = () => {
   };
 
   const handleTravelClick = (travel) => {
-    console.log('여행 카드 클릭:', travel);
-    // 내 여행인 경우 편집 페이지로, 추천 여행인 경우 생성 페이지로
     navigate('/create-trip', { state: { travel } });
   };
 
@@ -68,26 +65,6 @@ const MainPage = () => {
     setSortBy(newSort);
     // TODO: 정렬 로직
   };
-
-  // Auth0 상태 디버깅
-  useEffect(() => {
-    console.log('🔐 Auth0 Debug Info:');
-    console.log('- isLoading:', isLoading);
-    console.log('- isAuthenticated:', isAuthenticated);
-    console.log('- user:', user);
-    
-    if (isAuthenticated) {
-      // 토큰 정보도 가져와서 확인
-      getAccessTokenSilently()
-        .then(token => {
-          console.log('- accessToken exists:', !!token);
-          console.log('- token preview:', token?.substring(0, 20) + '...');
-        })
-        .catch(err => {
-          console.error('- token error:', err);
-        });
-    }
-  }, [isAuthenticated, isLoading, user, getAccessTokenSilently]);
 
   if (isLoading) {
     return (

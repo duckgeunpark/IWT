@@ -5,15 +5,9 @@ import { Auth0Provider } from '@auth0/auth0-react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { Provider } from 'react-redux';
 import { store } from './store';
+import ErrorBoundary from './components/ErrorBoundary';
 
 function App() {
-  // Auth0 설정 디버깅
-  console.log('🔐 Auth0 환경변수 확인:');
-  console.log('- REACT_APP_AUTH0_DOMAIN:', process.env.REACT_APP_AUTH0_DOMAIN);
-  console.log('- REACT_APP_AUTH0_CLIENT_ID:', process.env.REACT_APP_AUTH0_CLIENT_ID);
-  console.log('- REACT_APP_AUTH0_CALLBACK_URL:', process.env.REACT_APP_AUTH0_CALLBACK_URL);
-  console.log('- REACT_APP_AUTH0_AUDIENCE:', process.env.REACT_APP_AUTH0_AUDIENCE);
-  
   return (
     <Provider store={store}>
       <Auth0Provider
@@ -25,12 +19,14 @@ function App() {
         }}
       >
         <Router>
-          <div className="App">
-            <Routes>
-              <Route path="/" element={<MainPage />} />
-              <Route path="/create-trip" element={<CreateTripPage />} />
-            </Routes>
-          </div>
+          <ErrorBoundary>
+            <div className="App">
+              <Routes>
+                <Route path="/" element={<MainPage />} />
+                <Route path="/create-trip" element={<CreateTripPage />} />
+              </Routes>
+            </div>
+          </ErrorBoundary>
         </Router>
       </Auth0Provider>
     </Provider>

@@ -1,88 +1,166 @@
+/* ── Document Panel ── */
 .document-panel {
   width: 100%;
   height: 100%;
   background-color: #fff;
   border: 1px solid #e0e0e0;
   border-radius: 8px;
-  padding: 20px;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
-.panel-header {
+/* ── Panel Header ── */
+.document-panel .panel-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid #e0e0e0;
+  padding: 12px 16px;
+  border-bottom: 1px solid #e5e7eb;
+  flex-shrink: 0;
 }
 
-.panel-header h3 {
-  font-size: 18px;
-  font-weight: bold;
-  color: #333;
+.document-panel .panel-header h3 {
+  font-size: 16px;
+  font-weight: 700;
+  color: #111827;
   margin: 0;
 }
 
-
-.document-content {
-  flex: 1;
+/* ── Mode Toggle ── */
+.mode-toggle {
   display: flex;
-  flex-direction: column;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  overflow: hidden;
 }
 
-.content-area {
+.mode-btn {
+  padding: 5px 14px;
+  border: none;
+  background: #fff;
+  font-size: 13px;
+  font-weight: 500;
+  color: #6b7280;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.mode-btn:first-child {
+  border-right: 1px solid #e5e7eb;
+}
+
+.mode-btn.active {
+  background: #2563eb;
+  color: #fff;
+}
+
+.mode-btn:hover:not(.active) {
+  background: #f3f4f6;
+}
+
+/* ── Markdown Toolbar ── */
+.markdown-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 12px;
+  border-bottom: 1px solid #e5e7eb;
+  background: #f9fafb;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.toolbar-btn {
+  width: 32px;
+  height: 32px;
+  border: 1px solid transparent;
+  background: transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #374151;
+  transition: all 0.15s;
+}
+
+.toolbar-btn:hover {
+  background: #e5e7eb;
+  border-color: #d1d5db;
+}
+
+.toolbar-divider {
+  width: 1px;
+  height: 20px;
+  background: #d1d5db;
+  margin: 0 4px;
+}
+
+/* ── Document Content ── */
+.document-content {
   flex: 1;
-  margin-bottom: 20px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .document-textarea {
   width: 100%;
   height: 100%;
-  min-height: 400px;
-  padding: 15px;
-  border: 1px solid #ddd;
-  border-radius: 6px;
-  font-size: 16px;
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  line-height: 1.6;
+  min-height: 300px;
+  padding: 16px;
+  border: none;
+  font-size: 14px;
+  font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+  line-height: 1.7;
   resize: none;
   outline: none;
-  transition: border-color 0.2s;
   box-sizing: border-box;
-}
-
-.document-textarea:focus {
-  border-color: #007bff;
-  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.1);
+  color: #1f2937;
+  background: #fff;
+  tab-size: 2;
 }
 
 .document-textarea::placeholder {
-  color: #999;
-  font-style: italic;
+  color: #9ca3af;
+}
+
+.markdown-preview-area {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+}
+
+/* ── Document Footer ── */
+.document-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 16px;
+  border-top: 1px solid #e5e7eb;
+  flex-shrink: 0;
 }
 
 .document-actions {
-  margin-bottom: 15px;
-  text-align: center;
+  display: flex;
+  gap: 8px;
 }
 
 .llm-generate-btn {
-  padding: 12px 24px;
+  padding: 8px 20px;
   background-color: #6f42c1;
   color: white;
   border: none;
-  border-radius: 25px;
-  font-size: 16px;
+  border-radius: 20px;
+  font-size: 14px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all 0.2s;
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  min-width: 200px;
-  justify-content: center;
 }
 
 .llm-generate-btn:hover:not(:disabled) {
@@ -98,8 +176,8 @@
 }
 
 .loading-spinner {
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
   border: 2px solid transparent;
   border-top: 2px solid white;
   border-radius: 50%;
@@ -111,85 +189,290 @@
   100% { transform: rotate(360deg); }
 }
 
-.document-tools {
-  display: flex;
-  align-items: center;
-  gap: 15px;
-}
-
-.formatting-tools {
-  display: flex;
-  gap: 5px;
-}
-
-.format-btn {
-  width: 32px;
-  height: 32px;
-  border: 1px solid #ddd;
-  background-color: #fff;
-  border-radius: 4px;
-  cursor: pointer;
-  font-weight: bold;
-  transition: all 0.2s;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.format-btn:hover {
-  background-color: #f0f0f0;
-  border-color: #007bff;
-}
-
-.format-btn.bold {
-  font-weight: 900;
-}
-
-.format-btn.italic {
-  font-style: italic;
-}
-
-.format-btn.underline {
-  text-decoration: underline;
-}
-
-.format-btn.highlight {
-  background-color: #ffeb3b;
-}
-
-.insert-tools {
-  display: flex;
-  gap: 10px;
-}
-
-.insert-btn {
-  padding: 6px 12px;
-  border: 1px solid #ddd;
-  background-color: #fff;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 12px;
-  transition: background-color 0.2s;
-}
-
-.insert-btn:hover {
-  background-color: #f0f0f0;
-}
-
 .document-status {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding-top: 10px;
-  border-top: 1px solid #e0e0e0;
-  font-size: 12px;
-  color: #666;
+  gap: 12px;
 }
 
 .word-count {
+  font-size: 12px;
+  color: #6b7280;
   font-weight: 500;
 }
 
-.last-saved {
-  color: #28a745;
+/* ════════════════════════════════════════════
+   Prose / Markdown Preview Styles
+   ════════════════════════════════════════════ */
+
+.prose {
+  line-height: 1.8;
+  color: #111827;
+  word-break: break-word;
+}
+
+/* Headings */
+.prose h1, .prose h2, .prose h3, .prose h4, .prose h5, .prose h6 {
+  font-weight: 700;
+  margin-top: 1.25em;
+  margin-bottom: 0.5em;
+  line-height: 1.3;
+}
+.prose h1 { font-size: 2em; }
+.prose h2 { font-size: 1.5em; }
+.prose h3 { font-size: 1.25em; }
+.prose h4 { font-size: 1.1em; }
+
+.prose h1:first-child,
+.prose h2:first-child,
+.prose h3:first-child {
+  margin-top: 0;
+}
+
+/* Paragraph */
+.prose p {
+  margin-bottom: 1.25em;
+}
+
+/* Links */
+.prose a {
+  color: #2563eb;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.prose a:hover {
+  color: #1d4ed8;
+}
+
+/* Bold & Italic */
+.prose strong, .prose b {
+  font-weight: 700 !important;
+}
+.prose em, .prose i {
+  font-style: italic !important;
+}
+
+/* Inline Code */
+.prose code {
+  font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 0.875em;
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.25rem;
+  padding: 0.125em 0.375em;
+}
+
+/* Code Blocks */
+.prose pre {
+  position: relative;
+  font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 0.875em;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.5rem;
+  padding: 1rem;
+  overflow-x: auto;
+  margin-bottom: 1.25em;
+}
+
+.prose pre:has(.code-lang-label) {
+  padding-top: 2rem;
+}
+
+.prose pre code {
+  background: transparent;
+  border: none;
+  padding: 0;
+  font-size: 1em;
+}
+
+/* Code Copy Button */
+.prose pre .code-copy-btn {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 0.375rem;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  color: #6b7280;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.prose pre:hover .code-copy-btn {
+  opacity: 1;
+}
+
+.prose .code-output .code-copy-btn {
+  display: none;
+}
+
+.prose pre .code-copy-btn:hover {
+  color: #111827;
+  border-color: #111827;
+}
+
+/* Code Language Label */
+.prose .code-lang-label {
+  position: absolute;
+  top: 0.5rem;
+  left: 0.75rem;
+  font-size: 0.65em;
+  font-weight: 500;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  opacity: 0.5;
+  user-select: none;
+  pointer-events: none;
+}
+
+/* Lists */
+.prose ul {
+  list-style-type: disc;
+  padding-left: 1.5em;
+  margin-bottom: 1.25em;
+}
+.prose ul ul {
+  list-style-type: circle;
+}
+.prose ul ul ul {
+  list-style-type: square;
+}
+.prose ol {
+  list-style-type: decimal;
+  padding-left: 1.5em;
+  margin-bottom: 1.25em;
+}
+.prose li {
+  margin-bottom: 0.375em;
+}
+
+/* Blockquote */
+.prose blockquote {
+  border-left: 3px solid #2563eb;
+  padding-left: 1rem;
+  color: #6b7280;
+  font-style: italic;
+  margin-bottom: 1.25em;
+}
+
+/* Images */
+.prose img {
+  max-width: 100%;
+  border-radius: 0.5rem;
+  margin: 1em 0;
+}
+
+/* Horizontal Rule */
+.prose hr {
+  border: none;
+  border-top: 1px solid #e5e7eb;
+  margin: 2em 0;
+}
+
+/* Tables */
+.prose table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 1.25em;
+}
+.prose th, .prose td {
+  border: 1px solid #e5e7eb;
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+}
+.prose th {
+  background: #f9fafb;
+  font-weight: 600;
+}
+
+/* Code Output Blocks */
+.prose .code-output {
+  display: block;
+  position: relative;
+  background: rgba(22, 163, 74, 0.08);
+  border-left: 3px solid #16a34a;
+  margin: 0.5em -1rem;
+  padding: 0.5em 1rem;
+}
+
+.prose .code-output pre {
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin: 0;
+}
+
+.prose .code-output pre code {
+  background: transparent;
+  border: none;
+  padding: 0;
+}
+
+.prose .standalone-output {
+  margin: 0 0 1.25em 0;
+  border-radius: 0.5rem;
+  padding: 0.75rem 1rem;
+}
+
+.prose .code-output-label {
+  display: block;
+  font-size: 0.7em;
+  font-weight: 600;
+  color: #16a34a;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.25em;
+  user-select: none;
+}
+
+/* ── Syntax Highlighting (highlight.js) ── */
+.prose .hljs-comment,
+.prose .hljs-quote {
+  color: #6b7280;
+  font-style: italic;
+}
+.prose .hljs-keyword,
+.prose .hljs-selector-tag,
+.prose .hljs-type {
+  color: #8b5cf6;
+}
+.prose .hljs-string,
+.prose .hljs-attr,
+.prose .hljs-addition {
+  color: #059669;
+}
+.prose .hljs-function .hljs-title,
+.prose .hljs-title.function_ {
+  color: #2563eb;
+}
+.prose .hljs-class .hljs-title,
+.prose .hljs-title.class_ {
+  color: #0891b2;
+}
+.prose .hljs-variable,
+.prose .hljs-template-variable {
+  color: #dc2626;
+}
+.prose .hljs-deletion {
+  color: #dc2626;
+}
+.prose .hljs-regexp {
+  color: #ea580c;
+}
+.prose .hljs-symbol,
+.prose .hljs-bullet {
+  color: #0d9488;
+}
+
+/* ── Task List (GFM) ── */
+.prose input[type="checkbox"] {
+  margin-right: 0.5em;
 }
