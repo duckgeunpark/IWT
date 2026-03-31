@@ -5,7 +5,7 @@ import Header from '../components/Header';
 import TravelSection from '../components/TravelSection';
 import '../styles/MainPage.css';
 
-const MainPage = () => {
+const MainPage = ({ toggleTheme, theme }) => {
   const navigate = useNavigate();
   const { isAuthenticated, isLoading, loginWithRedirect } = useAuth0();
   const [activeTab, setActiveTab] = useState('all');
@@ -42,8 +42,8 @@ const MainPage = () => {
     }
   ];
 
-  const myTravels = allTravels.filter(travel => travel.isMyTravel);
-  const recommendedTravels = allTravels.filter(travel => !travel.isMyTravel);
+  const myTravels = sortTravels(allTravels.filter(travel => travel.isMyTravel), sortBy);
+  const recommendedTravels = sortTravels(allTravels.filter(travel => !travel.isMyTravel), sortBy);
 
   const handleCreateNew = () => {
     if (!isAuthenticated) {
@@ -61,15 +61,35 @@ const MainPage = () => {
     navigate('/create-trip', { state: { travel } });
   };
 
+  const sortTravels = (travels, sortType) => {
+    const sorted = [...travels];
+    switch (sortType) {
+      case 'oldest':
+        return sorted.sort((a, b) => {
+          const dateA = a.date.replace(/[년월일\s]/g, '-').replace(/-$/, '');
+          const dateB = b.date.replace(/[년월일\s]/g, '-').replace(/-$/, '');
+          return new Date(dateA) - new Date(dateB);
+        });
+      case 'name':
+        return sorted.sort((a, b) => a.title.localeCompare(b.title, 'ko'));
+      case 'latest':
+      default:
+        return sorted.sort((a, b) => {
+          const dateA = a.date.replace(/[년월일\s]/g, '-').replace(/-$/, '');
+          const dateB = b.date.replace(/[년월일\s]/g, '-').replace(/-$/, '');
+          return new Date(dateB) - new Date(dateA);
+        });
+    }
+  };
+
   const handleSortChange = (newSort) => {
     setSortBy(newSort);
-    // TODO: 정렬 로직
   };
 
   if (isLoading) {
     return (
       <div className="main-page">
-        <Header />
+        <Header toggleTheme={toggleTheme} theme={theme} />
         <div className="main-content">
           <div style={{ textAlign: 'center', padding: '50px' }}>
             <p>인증 상태를 확인하는 중...</p>

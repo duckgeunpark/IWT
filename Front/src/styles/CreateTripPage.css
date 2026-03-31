@@ -419,3 +419,40 @@
     min-height: 350px;
   }
 }
+
+/* Dark mode */
+[data-theme="dark"] .create-trip-page {
+  background-color: var(--bg-primary);
+}
+
+[data-theme="dark"] .page-header {
+  background-color: var(--header-bg);
+  border-bottom-color: var(--border-color);
+}
+
+[data-theme="dark"] .page-title {
+  color: var(--text-primary);
+}
+
+[data-theme="dark"] .title-input {
+  background-color: var(--input-bg);
+  color: var(--text-primary);
+  border-color: var(--input-border);
+}
+
+[data-theme="dark"] .action-btn {
+  background-color: var(--bg-tertiary);
+  color: var(--text-primary);
+  border-color: var(--border-color);
+}
+
+[data-theme="dark"] .tab-button {
+  background-color: var(--bg-secondary);
+  color: var(--text-secondary);
+  border-color: var(--border-color);
+}
+
+[data-theme="dark"] .tab-button.active {
+  background-color: var(--accent-color);
+  color: white;
+}

@@ -1,5 +1,7 @@
 import React, { useState, useRef, useCallback } from 'react';
+import { useSelector } from 'react-redux';
 import MarkdownPreview from './MarkdownPreview';
+import { apiClient } from '../services/apiClient';
 import '../styles/DocumentPanel.css';
 
 const SAMPLE_CONTENT = `# 여행 기록
@@ -22,8 +24,9 @@ const SAMPLE_CONTENT = `# 여행 기록
 `;
 
 const DocumentPanel = () => {
+  const { photos, locations } = useSelector(state => state.photos);
   const [content, setContent] = useState(SAMPLE_CONTENT);
-  const [mode, setMode] = useState('preview'); // 'edit' | 'preview'
+  const [mode, setMode] = useState('preview');
   const [isLLMProcessing, setIsLLMProcessing] = useState(false);
   const textareaRef = useRef(null);
 
@@ -78,26 +81,63 @@ const DocumentPanel = () => {
   };
 
   const handleLLMGenerate = async () => {
+    if (photos.length === 0) {
+      alert('사진을 먼저 업로드해주세요.');
+      return;
+    }
+
     setIsLLMProcessing(true);
     try {
-      // TODO: 실제 백엔드 API 호출로 교체
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      const photoData = photos.map(p => ({
+        name: p.name,
+        captureTime: p.captureTime,
+        gps: p.gpsData,
+        exif: p.exifData?.backendData ? {
+          imageWidth: p.exifData.backendData.imageWidth,
+          imageHeight: p.exifData.backendData.imageHeight,
+        } : null,
+      }));
 
-      setContent(prev => prev + `\n\n## AI 생성 콘텐츠
+      const locationData = locations.map(loc => ({
+        name: loc.name,
+        coordinates: loc.coordinates,
+        time: loc.time,
+      }));
 
-> 이 내용은 LLM이 자동 생성한 여행 기록입니다.
+      const response = await apiClient.post('/api/v1/llm/generate-itinerary', {
+        route_data: {
+          photos: photoData,
+          locations: locationData,
+          total_photos: photos.length,
+        },
+        user_preferences: {
+          language: 'ko',
+          format: 'markdown',
+        },
+      });
 
-사진의 위치 정보와 시간 정보를 바탕으로 분석한 결과입니다.
-
-### 주요 장소
-- 장소 정보가 사진 메타데이터로부터 추출됩니다
-- 경로 추천이 자동으로 생성됩니다
-
-### 여행 요약
-사진을 업로드하면 더 정확한 기록이 생성됩니다.
-`);
+      if (response.success && response.itinerary) {
+        setContent(prev => prev + '\n\n' + response.itinerary);
+      } else {
+        throw new Error(response.error_message || 'LLM 생성 실패');
+      }
     } catch (error) {
       console.error('LLM 처리 중 오류:', error);
+      // API 실패 시 로컬 데이터 기반 기본 생성
+      const locationSummary = locations.map((loc, i) =>
+        `${i + 1}. **${loc.name}** - ${loc.time} (${loc.coordinates.lat.toFixed(4)}, ${loc.coordinates.lng.toFixed(4)})`
+      ).join('\n');
+
+      setContent(prev => prev + `\n\n## 여행 요약 (로컬 생성)
+
+> 총 ${photos.length}장의 사진, ${locations.length}개의 위치가 기록되었습니다.
+
+### 방문 장소
+${locationSummary || '- 위치 정보가 있는 사진이 없습니다.'}
+
+---
+*서버 연결 후 AI가 더 상세한 여행 기록을 생성합니다.*
+`);
     } finally {
       setIsLLMProcessing(false);
     }

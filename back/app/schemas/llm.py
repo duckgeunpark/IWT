@@ -56,4 +56,16 @@ class CategoryRecommendationsRequest(BaseModel):
 class CategoryRecommendationsResponse(BaseModel):
     success: bool
     recommendations: Optional[Dict[str, Any]] = None
-    error_message: Optional[str] = None 
+    error_message: Optional[str] = None
+
+class BlogGenerateRequest(BaseModel):
+    photos: List[Dict[str, Any]]
+    locations: List[Dict[str, Any]]
+    title: Optional[str] = None
+    style: str = "casual"  # casual, formal, travel-blog
+    language: str = "ko"
+
+class BlogGenerateResponse(BaseModel):
+    success: bool
+    blog_content: Optional[str] = None
+    error_message: Optional[str] = None

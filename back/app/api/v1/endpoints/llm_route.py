@@ -1,11 +1,13 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from typing import List, Optional, Dict, Any
 import logging
 
+from app.core.rate_limit import limiter
 from app.services.llm_location_search import LLMLocationSearchService
 from app.services.llm_route_recommend import LLMRouteRecommendService
 from app.services.ocr_augmenter import OCRAugmenterService
 from app.core.auth import get_current_user
+from app.core.cache import cache_get, cache_set
 from app.schemas.llm import (
     LocationEstimateRequest,
     LocationEstimateResponse,
@@ -18,7 +20,9 @@ from app.schemas.llm import (
     ItineraryRequest,
     ItineraryResponse,
     CategoryRecommendationsRequest,
-    CategoryRecommendationsResponse
+    CategoryRecommendationsResponse,
+    BlogGenerateRequest,
+    BlogGenerateResponse
 )
 
 router = APIRouter(prefix="/llm", tags=["llm"])
@@ -31,8 +35,10 @@ ocr_service = OCRAugmenterService()
 logger = logging.getLogger(__name__)
 
 @router.post("/location-estimate", response_model=LocationEstimateResponse)
+@limiter.limit("10/minute")
 async def estimate_location(
     request: LocationEstimateRequest,
+    raw_request: Request = None,
     current_user = Depends(get_current_user)
 ):
     """
@@ -90,8 +96,10 @@ async def enhance_location_with_ocr(
         )
 
 @router.post("/route-recommend", response_model=RouteRecommendResponse)
+@limiter.limit("10/minute")
 async def recommend_travel_route(
     request: RouteRecommendRequest,
+    raw_request: Request = None,
     current_user = Depends(get_current_user)
 ):
     """
@@ -143,8 +151,10 @@ async def recommend_attractions(
         )
 
 @router.post("/generate-itinerary", response_model=ItineraryResponse)
+@limiter.limit("10/minute")
 async def generate_travel_itinerary(
     request: ItineraryRequest,
+    raw_request: Request = None,
     current_user = Depends(get_current_user)
 ):
     """
@@ -206,7 +216,7 @@ async def enhance_location_with_context(
             location_data,
             user_context
         )
-        
+
         return {
             "success": True,
             "enhanced_location": enhanced_location
@@ -216,4 +226,61 @@ async def enhance_location_with_context(
         return {
             "success": False,
             "error_message": str(e)
-        } 
+        }
+
+
+@router.post("/generate-blog", response_model=BlogGenerateResponse)
+@limiter.limit("5/minute")
+async def generate_travel_blog(
+    request: BlogGenerateRequest,
+    raw_request: Request = None,
+    current_user = Depends(get_current_user)
+):
+    """
+    여행 사진/위치 데이터로 블로그 자동 생성
+    """
+    try:
+        # 캐시 확인
+        import hashlib
+        cache_key = f"blog:{hashlib.md5(str(request.dict()).encode()).hexdigest()}"
+        cached = await cache_get(cache_key)
+        if cached:
+            return BlogGenerateResponse(success=True, blog_content=cached)
+
+        # LLM으로 블로그 생성
+        location_summary = []
+        for loc in request.locations:
+            name = loc.get("name", "알 수 없는 장소")
+            time = loc.get("time", "")
+            coords = loc.get("coordinates", {})
+            location_summary.append(f"- {name}: {time} ({coords.get('lat', 0):.4f}, {coords.get('lng', 0):.4f})")
+
+        prompt = f"""다음 여행 데이터를 바탕으로 마크다운 형식의 여행 블로그를 작성해주세요.
+
+제목: {request.title or '나의 여행 기록'}
+스타일: {request.style}
+사진 수: {len(request.photos)}장
+방문 장소:
+{chr(10).join(location_summary)}
+
+요구사항:
+- 마크다운 형식으로 작성
+- 각 장소에 대한 감상 포함
+- 여행 일정 요약 포함
+- 자연스러운 {request.language} 문체
+"""
+
+        blog_content = await llm_route_service.generate_travel_itinerary(
+            {"prompt": prompt, "locations": request.locations},
+            {"language": request.language, "style": request.style}
+        )
+
+        result = blog_content if isinstance(blog_content, str) else str(blog_content)
+
+        # 캐시 저장
+        await cache_set(cache_key, result, ttl=1800)
+
+        return BlogGenerateResponse(success=True, blog_content=result)
+    except Exception as e:
+        logger.error(f"블로그 생성 실패: {str(e)}")
+        return BlogGenerateResponse(success=False, error_message=str(e))

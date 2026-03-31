@@ -7,7 +7,7 @@ import MapPanel from '../components/MapPanel';
 import Resizer from '../components/Resizer';
 import '../styles/CreateTripPage.css';
 
-const CreateTripPage = () => {
+const CreateTripPage = ({ toggleTheme, theme }) => {
   const { user, isAuthenticated, isLoading, loginWithRedirect } = useAuth0();
   const navigate = useNavigate();
   const [tripTitle, setTripTitle] = useState('이름의 2025. 05. 02 ~ 2025. 05. 02 여행 기록');
@@ -195,6 +195,11 @@ const CreateTripPage = () => {
         </div>
         
         <div className="header-actions">
+          {toggleTheme && (
+            <button className="theme-toggle" onClick={toggleTheme} title={theme === 'light' ? '다크 모드' : '라이트 모드'}>
+              {theme === 'light' ? '\uD83C\uDF19' : '\u2600\uFE0F'}
+            </button>
+          )}
           <button className="action-btn temp-save-btn">임시저장</button>
           <button className="action-btn upload-btn">업로드</button>
           <div className="user-profile-icon">

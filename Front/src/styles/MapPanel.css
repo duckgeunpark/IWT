@@ -465,3 +465,138 @@
   white-space: nowrap;
   box-shadow: 0 2px 4px rgba(0, 123, 255, 0.2);
 }
+
+/* 위치 추가/편집 */
+.location-details-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.add-location-btn {
+  padding: 4px 12px;
+  font-size: 12px;
+  border: 1px solid #28a745;
+  background: #28a745;
+  color: white;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.add-location-btn:hover {
+  background: #1e7e34;
+}
+
+.add-location-btn.active {
+  background: #dc3545;
+  border-color: #dc3545;
+}
+
+.add-location-hint {
+  background: #fff3cd;
+  color: #856404;
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  margin-bottom: 8px;
+  border-left: 3px solid #ffc107;
+}
+
+.location-edit-form {
+  margin-top: 8px;
+  padding: 10px;
+  background: var(--bg-secondary, #f5f5f5);
+  border-radius: 6px;
+  border: 1px solid var(--border-color, #e0e0e0);
+}
+
+.edit-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.edit-field label {
+  font-size: 12px;
+  font-weight: 600;
+  min-width: 30px;
+  color: var(--text-secondary, #666);
+}
+
+.edit-field input {
+  flex: 1;
+  padding: 4px 8px;
+  border: 1px solid var(--input-border, #ddd);
+  border-radius: 4px;
+  font-size: 13px;
+  background: var(--input-bg, #fff);
+  color: var(--text-primary, #333);
+}
+
+.edit-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.edit-actions .save-btn {
+  padding: 4px 12px;
+  background: #007bff;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.edit-actions .cancel-btn {
+  padding: 4px 12px;
+  background: #6c757d;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+/* Dark mode */
+[data-theme="dark"] .map-panel {
+  background-color: var(--bg-panel);
+  border-color: var(--border-color);
+}
+
+[data-theme="dark"] .map-panel .panel-header h3,
+[data-theme="dark"] .location-details h4 {
+  color: var(--text-primary);
+}
+
+[data-theme="dark"] .location-item {
+  background-color: var(--bg-secondary);
+  border-color: var(--border-color);
+}
+
+[data-theme="dark"] .location-item.selected {
+  background-color: var(--accent-light);
+  border-color: var(--accent-color);
+}
+
+[data-theme="dark"] .location-name,
+[data-theme="dark"] .location-time,
+[data-theme="dark"] .location-info,
+[data-theme="dark"] .location-coordinates {
+  color: var(--text-secondary);
+}
+
+[data-theme="dark"] .day-separator-text {
+  background-color: var(--bg-panel);
+  color: var(--accent-color);
+  border-color: var(--accent-color);
+}
+
+[data-theme="dark"] .add-location-hint {
+  background: var(--warning-light);
+  color: var(--warning-color);
+}

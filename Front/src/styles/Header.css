@@ -144,3 +144,28 @@
     font-size: 12px;
   }
 }
+
+/* Dark mode */
+[data-theme="dark"] .header {
+  background-color: var(--header-bg);
+  border-bottom-color: var(--border-color);
+}
+
+[data-theme="dark"] .logo-text h1 {
+  color: var(--text-primary);
+}
+
+[data-theme="dark"] .logo-text p {
+  color: var(--text-secondary);
+}
+
+[data-theme="dark"] .user-info {
+  color: var(--text-secondary);
+}
+
+[data-theme="dark"] .login-btn,
+[data-theme="dark"] .logout-btn {
+  background-color: var(--bg-tertiary);
+  color: var(--text-primary);
+  border-color: var(--border-color);
+}

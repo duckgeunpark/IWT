@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import exifr from 'exifr';
-import { addPhoto, removePhoto, togglePhotoActive, activateAllPhotos, deactivateAllPhotos, setSelectedPhoto, updatePhotoExif, setLoading, setError } from '../store/photoSlice';
+import { addPhoto, removePhoto, togglePhotoActive, activateAllPhotos, deactivateAllPhotos, setSelectedPhoto, updatePhotoExif, setLoading, setError, setUploadProgress } from '../store/photoSlice';
 import DropdownMenu from './DropdownMenu';
 import ExifEditModal from './ExifEditModal';
 import getContrastColor from '../utils/getContrastColor';
@@ -13,12 +13,14 @@ import '../styles/ImagePanel.css';
  */
 const ImagePanel = () => {
   const dispatch = useDispatch();
-  const { photos, locations, selectedPhotoId } = useSelector(state => state.photos);
+  const { photos, locations, selectedPhotoId, uploadProgress } = useSelector(state => state.photos);
 
   const [openMenuId, setOpenMenuId] = useState(null);
   const [menuPosition, setMenuPosition] = useState(null);
   const [editingImageId, setEditingImageId] = useState(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
 
   const fileInputRef = useRef(null);
 
@@ -183,7 +185,12 @@ const ImagePanel = () => {
     }
 
     try {
-      for (const file of validFiles) {
+      dispatch(setUploadProgress({ current: 0, total: validFiles.length }));
+
+      for (let i = 0; i < validFiles.length; i++) {
+        const file = validFiles[i];
+        dispatch(setUploadProgress({ current: i + 1, total: validFiles.length }));
+
         const url = URL.createObjectURL(file);
         const exifData = await extractExifData(file);
 
@@ -210,6 +217,7 @@ const ImagePanel = () => {
         }
       }
 
+      dispatch(setUploadProgress({ current: 0, total: 0 }));
       dispatch(setLoading(false));
       event.target.value = '';
     } catch (error) {
@@ -219,8 +227,23 @@ const ImagePanel = () => {
   };
 
   const handleExploreImage = () => {
-    // TODO: 이미지 탐색 로직
+    setIsSearchOpen(!isSearchOpen);
+    if (isSearchOpen) {
+      setSearchQuery('');
+    }
   };
+
+  const filteredPhotos = searchQuery
+    ? photos.filter(photo => {
+        const query = searchQuery.toLowerCase();
+        const nameMatch = photo.name?.toLowerCase().includes(query);
+        const dateMatch = photo.captureTime?.toLowerCase().includes(query);
+        const locationMatch = photo.gpsData
+          ? `${photo.gpsData.lat}, ${photo.gpsData.lng}`.includes(query)
+          : false;
+        return nameMatch || dateMatch || locationMatch;
+      })
+    : photos;
 
   const handleImageDelete = (imageId) => {
     const imageToDelete = photos.find(img => img.id === imageId);
@@ -324,8 +347,38 @@ const ImagePanel = () => {
           <button className="add-btn" onClick={handleAddImage} aria-label="이미지 추가">
             이미지 추가 ({photos.length})
           </button>
-          <button className="explore-btn" onClick={handleExploreImage} aria-label="이미지 탐색">탐색</button>
+          <button className={`explore-btn ${isSearchOpen ? 'active' : ''}`} onClick={handleExploreImage} aria-label="이미지 탐색">탐색</button>
         </div>
+
+        {isSearchOpen && (
+          <div className="search-bar">
+            <input
+              type="text"
+              className="search-input"
+              placeholder="파일명, 날짜, 좌표로 검색..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              autoFocus
+            />
+            {searchQuery && (
+              <span className="search-result-count">{filteredPhotos.length}건</span>
+            )}
+          </div>
+        )}
+
+        {uploadProgress.total > 0 && (
+          <div className="upload-progress">
+            <div className="progress-bar">
+              <div
+                className="progress-fill"
+                style={{ width: `${(uploadProgress.current / uploadProgress.total) * 100}%` }}
+              />
+            </div>
+            <span className="progress-text">
+              {uploadProgress.current} / {uploadProgress.total} 처리 중...
+            </span>
+          </div>
+        )}
 
         <div className="image-section">
           <div className="section-header">
@@ -352,7 +405,7 @@ const ImagePanel = () => {
             </div>
           ) : (
             <div className="image-list" role="list">
-              {photos.map((image) => {
+              {filteredPhotos.map((image) => {
                 const activatedPhotos = photos.filter(p => p.isActive);
                 const mapOrderNumber = activatedPhotos.findIndex(p => p.id === image.id) + 1;
                 const location = locations.find(loc => loc.photoId === image.id);

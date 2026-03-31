@@ -36,6 +36,7 @@ const photoSlice = createSlice({
     selectedPhotoId: null,
     isLoading: false,
     error: null,
+    uploadProgress: { current: 0, total: 0 },
   },
   reducers: {
     addPhoto: (state, action) => {
@@ -127,6 +128,10 @@ const photoSlice = createSlice({
       state.error = action.payload;
     },
 
+    setUploadProgress: (state, action) => {
+      state.uploadProgress = action.payload;
+    },
+
     setSelectedPhoto: (state, action) => {
       state.selectedPhotoId = action.payload;
     },
@@ -160,7 +165,8 @@ export const {
   setSelectedPhoto,
   updatePhotoExif,
   setLoading,
-  setError
+  setError,
+  setUploadProgress
 } = photoSlice.actions;
 
 export default photoSlice.reducer;

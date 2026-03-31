@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
-import { togglePhotoActive, setSelectedPhoto } from '../store/photoSlice';
+import { togglePhotoActive, setSelectedPhoto, updatePhotoGPS } from '../store/photoSlice';
 import { Wrapper, Status } from "@googlemaps/react-wrapper";
 import getContrastColor from '../utils/getContrastColor';
 import extractDate from '../utils/extractDate';
@@ -174,12 +174,15 @@ const MapLoadingComponent = ({ status }) => {
 
 const MapPanel = () => {
   const dispatch = useDispatch();
-  const { locations, selectedPhotoId } = useSelector(state => state.photos);
+  const { locations, selectedPhotoId, photos } = useSelector(state => state.photos);
   const [selectedLocation, setSelectedLocation] = useState(null);
   const [mapType, setMapType] = useState('roadmap');
-  const [center, setCenter] = useState({ lat: 37.566535, lng: 126.977969 }); // 서울 시청 기본 위치
+  const [center, setCenter] = useState({ lat: 37.566535, lng: 126.977969 });
   const [zoom, setZoom] = useState(12);
   const [showRoutes, setShowRoutes] = useState(true);
+  const [isAddingLocation, setIsAddingLocation] = useState(false);
+  const [editingLocationId, setEditingLocationId] = useState(null);
+  const [editForm, setEditForm] = useState({ lat: '', lng: '' });
 
   // selectedPhotoId가 변경될 때 해당 위치를 선택
   useEffect(() => {
@@ -205,8 +208,18 @@ const MapPanel = () => {
   }, [locations, dispatch]);
 
   const handleMapClick = useCallback((lat, lng) => {
-    // TODO: 새 위치 추가 로직
-  }, []);
+    if (!isAddingLocation) return;
+
+    // GPS가 없는 첫 번째 활성 사진에 위치 할당
+    const photoWithoutGPS = photos.find(p => p.isActive && (!p.gpsData || !p.gpsData.lat));
+    if (photoWithoutGPS) {
+      dispatch(updatePhotoGPS({
+        photoId: photoWithoutGPS.id,
+        gpsData: { lat, lng }
+      }));
+    }
+    setIsAddingLocation(false);
+  }, [isAddingLocation, photos, dispatch]);
 
   const handleZoomIn = () => {
     setZoom(prevZoom => Math.min(prevZoom + 1, 20));
@@ -228,7 +241,34 @@ const MapPanel = () => {
   };
 
   const handleLocationEdit = (locationId) => {
-    // TODO: 위치 편집 로직
+    const location = locations.find(loc => loc.id === locationId);
+    if (location) {
+      setEditingLocationId(locationId);
+      setEditForm({
+        lat: location.coordinates.lat.toString(),
+        lng: location.coordinates.lng.toString()
+      });
+    }
+  };
+
+  const handleEditSave = () => {
+    if (editingLocationId) {
+      const lat = parseFloat(editForm.lat);
+      const lng = parseFloat(editForm.lng);
+      if (!isNaN(lat) && !isNaN(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+        dispatch(updatePhotoGPS({
+          photoId: editingLocationId,
+          gpsData: { lat, lng }
+        }));
+        setEditingLocationId(null);
+        setEditForm({ lat: '', lng: '' });
+      }
+    }
+  };
+
+  const handleEditCancel = () => {
+    setEditingLocationId(null);
+    setEditForm({ lat: '', lng: '' });
   };
 
   const handleLocationDelete = (locationId) => {
@@ -299,7 +339,21 @@ const MapPanel = () => {
       </div>
 
       <div className="location-details">
-        <h4>위치별 상세 정보</h4>
+        <div className="location-details-header">
+          <h4>위치별 상세 정보</h4>
+          <button
+            className={`add-location-btn ${isAddingLocation ? 'active' : ''}`}
+            onClick={() => setIsAddingLocation(!isAddingLocation)}
+            title="지도를 클릭하여 위치 추가"
+          >
+            {isAddingLocation ? '취소' : '+ 위치 추가'}
+          </button>
+        </div>
+        {isAddingLocation && (
+          <div className="add-location-hint">
+            지도를 클릭하여 GPS 정보가 없는 사진에 위치를 지정하세요.
+          </div>
+        )}
         <div className="location-list">
           {locations.map((location, index) => {
             const shouldShowDaySeparator = index > 0 && (() => {
@@ -371,9 +425,9 @@ const MapPanel = () => {
                     좌표: {location.coordinates.lat.toFixed(4)}, {location.coordinates.lng.toFixed(4)}
                   </div>
                 </div>
-                {selectedLocation === location.id && (
+                {selectedLocation === location.id && editingLocationId !== location.id && (
                   <div className="location-actions">
-                    <button 
+                    <button
                       className="edit-location-btn"
                       onClick={(e) => {
                         e.stopPropagation();
@@ -382,7 +436,7 @@ const MapPanel = () => {
                     >
                       편집
                     </button>
-                    <button 
+                    <button
                       className="delete-location-btn"
                       onClick={(e) => {
                         e.stopPropagation();
@@ -391,6 +445,32 @@ const MapPanel = () => {
                     >
                       삭제
                     </button>
+                  </div>
+                )}
+                {editingLocationId === location.id && (
+                  <div className="location-edit-form" onClick={(e) => e.stopPropagation()}>
+                    <div className="edit-field">
+                      <label>위도</label>
+                      <input
+                        type="number"
+                        step="0.000001"
+                        value={editForm.lat}
+                        onChange={(e) => setEditForm({ ...editForm, lat: e.target.value })}
+                      />
+                    </div>
+                    <div className="edit-field">
+                      <label>경도</label>
+                      <input
+                        type="number"
+                        step="0.000001"
+                        value={editForm.lng}
+                        onChange={(e) => setEditForm({ ...editForm, lng: e.target.value })}
+                      />
+                    </div>
+                    <div className="edit-actions">
+                      <button className="save-btn" onClick={handleEditSave}>저장</button>
+                      <button className="cancel-btn" onClick={handleEditCancel}>취소</button>
+                    </div>
                   </div>
                 )}
               </div>

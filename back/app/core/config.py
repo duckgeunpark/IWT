@@ -20,8 +20,8 @@ class Settings(BaseSettings):
     host: str = "0.0.0.0"
     port: int = 8000
     
-    # CORS 설정
-    allowed_origins: List[str] = ["http://localhost:3000"]
+    # CORS 설정 (환경별: ALLOWED_ORIGINS 환경변수로 오버라이드)
+    allowed_origins: List[str] = ["http://localhost:3000", "http://127.0.0.1:3000"]
     allowed_methods: List[str] = ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
     allowed_headers: List[str] = ["*"]
     allow_credentials: bool = True
@@ -44,7 +44,8 @@ class Settings(BaseSettings):
     aws_secret_access_key: Optional[str] = None
     aws_region: str = "ap-northeast-2"
     s3_bucket_name: Optional[str] = None
-    s3_presigned_url_expire: int = 3600  # 1시간
+    s3_presigned_url_expire: int = 3600  # 1시간 (다운로드용)
+    s3_upload_url_expire: int = 900  # 15분 (업로드용)
     
     # LLM 설정
     groq_api_key: Optional[str] = None
@@ -56,6 +57,14 @@ class Settings(BaseSettings):
     max_file_size: int = 10 * 1024 * 1024  # 10MB
     allowed_image_types: List[str] = ["image/jpeg", "image/png", "image/gif", "image/webp"]
     
+    # Redis 설정
+    redis_url: str = "redis://localhost:6379/0"
+    cache_ttl: int = 3600  # 1시간
+
+    # Rate Limiting 설정
+    rate_limit_default: str = "60/minute"
+    rate_limit_llm: str = "10/minute"
+
     # 로깅 설정
     log_level: str = "INFO"
     log_format: str = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"

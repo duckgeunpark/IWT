@@ -115,11 +115,36 @@
 
 @media (max-width: 480px) {
   .main-content {
-    margin: 0 0.5rem; /* 모바일에서 여백 최소화 */
+    margin: 0 0.5rem;
     padding: 10px 0;
   }
-  
+
   .content-header {
     padding: 0 15px;
   }
+}
+
+/* Dark mode */
+[data-theme="dark"] .main-page {
+  background-color: var(--bg-primary);
+}
+
+[data-theme="dark"] .tab-btn {
+  color: var(--text-secondary);
+  border-color: var(--border-color);
+}
+
+[data-theme="dark"] .tab-btn.active {
+  color: var(--accent-color);
+  border-bottom-color: var(--accent-color);
+}
+
+[data-theme="dark"] .sort-select {
+  background-color: var(--input-bg);
+  color: var(--text-primary);
+  border-color: var(--input-border);
+}
+
+[data-theme="dark"] .create-new-btn {
+  background-color: var(--accent-color);
 }

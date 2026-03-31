@@ -476,3 +476,61 @@
 .prose input[type="checkbox"] {
   margin-right: 0.5em;
 }
+
+/* ── Dark Mode ── */
+[data-theme="dark"] .document-panel {
+  background-color: var(--bg-panel);
+  border-color: var(--border-color);
+}
+
+[data-theme="dark"] .document-panel .panel-header {
+  border-bottom-color: var(--border-color);
+}
+
+[data-theme="dark"] .document-panel .panel-header h3 {
+  color: var(--text-primary);
+}
+
+[data-theme="dark"] .document-textarea {
+  background-color: var(--input-bg);
+  color: var(--text-primary);
+  border-color: var(--border-color);
+}
+
+[data-theme="dark"] .markdown-preview-area {
+  color: var(--text-primary);
+}
+
+[data-theme="dark"] .markdown-toolbar {
+  background-color: var(--bg-secondary);
+  border-color: var(--border-color);
+}
+
+[data-theme="dark"] .toolbar-btn {
+  color: var(--text-secondary);
+  border-color: var(--border-color);
+}
+
+[data-theme="dark"] .toolbar-btn:hover {
+  background-color: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+[data-theme="dark"] .document-footer {
+  border-top-color: var(--border-color);
+  background-color: var(--bg-secondary);
+}
+
+[data-theme="dark"] .word-count {
+  color: var(--text-muted);
+}
+
+[data-theme="dark"] .mode-btn {
+  color: var(--text-secondary);
+  border-color: var(--border-color);
+}
+
+[data-theme="dark"] .mode-btn.active {
+  background-color: var(--accent-color);
+  color: white;
+}

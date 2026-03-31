@@ -11,9 +11,14 @@ import time
 import logging
 
 from app.api.v1.endpoints import user_auth0, photo_route, llm_route, post_route, image_metadata
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+
 from app.core.config import settings, APIConstants
 from app.core.exceptions import BaseAPIException, EXCEPTION_HANDLERS
 from app.core.logging import setup_logging, get_logger, log_api_request, log_api_response
+from app.core.rate_limit import limiter
+from jose import jwt, JWTError
 
 # 로깅 설정 초기화
 setup_logging()
@@ -32,9 +37,13 @@ def create_application() -> FastAPI:
         openapi_url="/openapi.json" if settings.debug else None,
     )
     
+    # Rate Limiter 설정
+    app.state.limiter = limiter
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
     # 미들웨어 설정
     setup_middleware(app)
-    
+
     # 예외 핸들러 설정
     setup_exception_handlers(app)
     
@@ -75,8 +84,13 @@ def setup_middleware(app: FastAPI) -> None:
         
         # 인증 정보 추출 (가능한 경우)
         auth_header = request.headers.get("authorization")
-        if auth_header:
-            pass  # TODO: 로깅용 사용자 ID 추출
+        if auth_header and auth_header.startswith("Bearer "):
+            try:
+                token = auth_header.split(" ", 1)[1]
+                payload = jwt.get_unverified_claims(token)
+                user_id = payload.get("sub")
+            except (JWTError, IndexError, Exception):
+                pass  # 로깅용이므로 실패해도 무시
         
         # 요청 로그
         log_api_request(logger, request.method, str(request.url.path), user_id)

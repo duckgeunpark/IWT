@@ -8,10 +8,6 @@ from typing import Optional
 from .llm_base import LLMService, LLMProvider
 from .providers.groq_provider import GroqProvider
 
-# 추가 제공자들을 여기에 import
-# from .providers.openai_provider import OpenAIProvider
-# from .providers.anthropic_provider import AnthropicProvider
-
 
 class LLMFactory:
     """LLM 서비스 팩토리"""
@@ -56,17 +52,24 @@ class LLMFactory:
         """
         if provider_name == 'groq':
             return GroqProvider()
-        # elif provider_name == 'openai':
-        #     return OpenAIProvider()
-        # elif provider_name == 'anthropic':
-        #     return AnthropicProvider()
+        elif provider_name == 'openai':
+            from .providers.openai_provider import OpenAIProvider
+            return OpenAIProvider()
+        elif provider_name == 'anthropic':
+            from .providers.anthropic_provider import AnthropicProvider
+            return AnthropicProvider()
         else:
             raise ValueError(f"지원하지 않는 LLM 제공자: {provider_name}")
-    
+
     @staticmethod
     def get_available_providers() -> list:
         """사용 가능한 제공자 목록 반환"""
-        return ['groq']  # 'openai', 'anthropic' 추가 가능
+        available = ['groq']
+        if os.getenv('OPENAI_API_KEY'):
+            available.append('openai')
+        if os.getenv('ANTHROPIC_API_KEY'):
+            available.append('anthropic')
+        return available
 
 
 # 전역 LLM 서비스 인스턴스

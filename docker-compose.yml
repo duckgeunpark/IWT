@@ -29,11 +29,62 @@ services:
     environment:
       - PYTHONPATH=/app
       - ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
+      - DB_HOST=mysql
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     networks:
       - iwt-network
     restart: unless-stopped
 
+  mysql:
+    image: mysql:8.0
+    container_name: iwt-mysql
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-iwt_root_pass}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-iwt_db}
+      MYSQL_USER: ${MYSQL_USER:-iwt_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-iwt_pass}
+      MYSQL_CHARSET: utf8mb4
+      MYSQL_COLLATION: utf8mb4_unicode_ci
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - iwt-network
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: iwt-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - iwt-network
+    restart: unless-stopped
+
+volumes:
+  mysql_data:
+  redis_data:
+
 networks:
   iwt-network:
     driver: bridge
-    name: iwt-network 
+    name: iwt-network

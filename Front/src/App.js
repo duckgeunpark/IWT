@@ -6,6 +6,27 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { Provider } from 'react-redux';
 import { store } from './store';
 import ErrorBoundary from './components/ErrorBoundary';
+import { ToastProvider } from './components/Toast';
+import useTheme from './hooks/useTheme';
+
+function AppContent() {
+  const { theme, toggleTheme } = useTheme();
+
+  return (
+    <Router>
+      <ErrorBoundary>
+        <ToastProvider>
+          <div className="App">
+            <Routes>
+              <Route path="/" element={<MainPage toggleTheme={toggleTheme} theme={theme} />} />
+              <Route path="/create-trip" element={<CreateTripPage toggleTheme={toggleTheme} theme={theme} />} />
+            </Routes>
+          </div>
+        </ToastProvider>
+      </ErrorBoundary>
+    </Router>
+  );
+}
 
 function App() {
   return (
@@ -18,16 +39,7 @@ function App() {
           audience: process.env.REACT_APP_AUTH0_AUDIENCE
         }}
       >
-        <Router>
-          <ErrorBoundary>
-            <div className="App">
-              <Routes>
-                <Route path="/" element={<MainPage />} />
-                <Route path="/create-trip" element={<CreateTripPage />} />
-              </Routes>
-            </div>
-          </ErrorBoundary>
-        </Router>
+        <AppContent />
       </Auth0Provider>
     </Provider>
   );
