@@ -1,150 +1,121 @@
+/* ── Main Page ── */
 .main-page {
   min-height: 100vh;
-  background-color: #f8f9fa;
+  background: var(--bg-primary);
 }
 
 .main-content {
-  padding: 20px 0;
-  margin: 0 20rem;
+  max-width: 975px;
+  margin: 0 auto;
+  padding: 24px 20px;
 }
 
 .content-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0 40px;
-  margin-bottom: 20px;
+  margin-bottom: 24px;
+  padding: 0;
 }
 
+/* ── Tabs ── */
 .tab-container {
   display: flex;
-  gap: 10px;
+  gap: 0;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .tab-btn {
-  padding: 10px 20px;
-  border: 1px solid #ddd;
-  background-color: white;
-  border-radius: 20px;
-  cursor: pointer;
+  padding: 12px 20px;
   font-size: 14px;
-  font-weight: 500;
-  color: #666;
-  transition: all 0.2s;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .tab-btn:hover {
-  border-color: #bbb;
+  color: var(--text-primary);
 }
 
 .tab-btn.active {
-  background-color: #2196F3;
-  border-color: #2196F3;
-  color: white;
+  color: var(--text-primary);
+  border-bottom-color: var(--text-primary);
 }
 
+/* ── Sort & Actions ── */
 .content-actions {
   display: flex;
   align-items: center;
-  gap: 15px;
+  gap: 12px;
 }
 
 .sort-select {
-  padding: 8px 16px;
-  border: 1px solid #ddd;
-  border-radius: 20px;
-  background-color: white;
+  appearance: none;
+  padding: 8px 32px 8px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
   font-size: 14px;
-  color: #666;
+  color: var(--text-primary);
+  background: var(--bg-secondary) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%238e8e8e' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E") no-repeat right 10px center;
   cursor: pointer;
-  outline: none;
+  transition: border-color var(--transition-fast);
+}
+
+.sort-select:hover {
+  border-color: var(--text-secondary);
 }
 
 .sort-select:focus {
-  border-color: #2196F3;
+  border-color: var(--accent-color);
+  outline: none;
 }
 
 .create-new-btn {
-  padding: 10px 20px;
-  background-color: #4CAF50;
-  color: white;
+  padding: 8px 20px;
+  background: var(--accent-color);
+  color: #fff;
   border: none;
-  border-radius: 20px;
-  cursor: pointer;
+  border-radius: var(--radius-sm);
   font-size: 14px;
-  font-weight: 500;
-  transition: background-color 0.2s;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
 }
 
 .create-new-btn:hover {
-  background-color: #45a049;
+  background: var(--accent-hover);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
 }
 
 .sections-container {
-  max-width: 100%;
-}
-
-/* 반응형 디자인 */
-@media (max-width: 1200px) {
-  .main-content {
-    margin: 0 2rem; /* 큰 화면에서 여백 줄이기 */
-  }
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
 }
 
 @media (max-width: 768px) {
   .main-content {
-    margin: 0 1rem; /* 태블릿에서 여백 더 줄이기 */
-    padding: 15px 0;
+    padding: 16px 12px;
   }
-  
   .content-header {
     flex-direction: column;
-    gap: 15px;
-    padding: 0 20px;
+    gap: 12px;
     align-items: stretch;
   }
-  
-  .tab-container {
-    justify-content: center;
-  }
-  
   .content-actions {
     justify-content: space-between;
   }
-}
-
-@media (max-width: 480px) {
-  .main-content {
-    margin: 0 0.5rem;
-    padding: 10px 0;
+  .tab-btn {
+    padding: 10px 14px;
+    font-size: 12px;
   }
-
-  .content-header {
-    padding: 0 15px;
-  }
-}
-
-/* Dark mode */
-[data-theme="dark"] .main-page {
-  background-color: var(--bg-primary);
-}
-
-[data-theme="dark"] .tab-btn {
-  color: var(--text-secondary);
-  border-color: var(--border-color);
-}
-
-[data-theme="dark"] .tab-btn.active {
-  color: var(--accent-color);
-  border-bottom-color: var(--accent-color);
-}
-
-[data-theme="dark"] .sort-select {
-  background-color: var(--input-bg);
-  color: var(--text-primary);
-  border-color: var(--input-border);
-}
-
-[data-theme="dark"] .create-new-btn {
-  background-color: var(--accent-color);
 }

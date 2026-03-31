@@ -1,9 +1,9 @@
+/* ── Travel Section ── */
 .travel-section {
-  margin: 40px 0;
-  padding: 0 40px;
+  margin: 0;
 }
 
-.section-header {
+.travel-section .section-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -11,10 +11,11 @@
 }
 
 .section-title {
-  font-size: 24px;
-  font-weight: 600;
-  color: #333;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-primary);
   margin: 0;
+  letter-spacing: -0.3px;
 }
 
 .section-actions {
@@ -23,39 +24,34 @@
 }
 
 .view-all-btn {
-  padding: 8px 16px;
-  border: 1px solid #ddd;
-  background-color: white;
-  border-radius: 20px;
+  padding: 7px 16px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-full);
   cursor: pointer;
-  font-size: 14px;
-  color: #666;
-  transition: all 0.2s;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  transition: all var(--transition-fast);
 }
 
 .view-all-btn:hover {
-  background-color: #f5f5f5;
-  border-color: #bbb;
+  background: var(--bg-tertiary);
 }
 
 .travel-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 20px;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 16px;
   align-items: start;
 }
 
 @media (max-width: 768px) {
-  .travel-section {
-    padding: 0 20px;
-  }
-  
   .travel-grid {
-    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-    gap: 15px;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 12px;
   }
-  
   .section-title {
-    font-size: 20px;
+    font-size: 18px;
   }
 }

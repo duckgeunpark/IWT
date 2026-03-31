@@ -1,21 +1,23 @@
+/* ── Create Trip Page ── */
 .create-trip-page {
   width: 100%;
   height: 100vh;
   display: flex;
   flex-direction: column;
-  background-color: #f5f5f5;
+  background: var(--bg-primary);
   overflow: hidden;
 }
 
-/* 헤더 영역 */
+/* ── Page Header ── */
 .page-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 20px 30px;
-  background-color: white;
-  border-bottom: 1px solid #e0e0e0;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  padding: 12px 20px;
+  background: var(--header-bg);
+  border-bottom: 1px solid var(--border-color);
+  backdrop-filter: blur(12px);
+  z-index: 50;
 }
 
 .header-left {
@@ -26,433 +28,280 @@
 .logo-container {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   cursor: pointer;
-  padding: 8px 12px;
-  border-radius: 8px;
-  transition: background-color 0.2s;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  transition: background var(--transition-fast);
 }
-
 .logo-container:hover {
-  background-color: #f8f9fa;
+  background: var(--bg-tertiary);
 }
 
 .logo-avatar {
-  width: 40px;
-  height: 40px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-  font-weight: bold;
-  font-size: 16px;
+  width: 36px;
+  height: 36px;
+  background: var(--accent-gradient);
+  border-radius: var(--radius-full);
 }
-
 .logo-avatar::before {
-  content: '✈️';
+  content: '';
 }
 
 .logo-text h1 {
-  font-size: 24px;
-  font-weight: bold;
-  color: #2c3e50;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-primary);
   margin: 0;
-  line-height: 1;
+  letter-spacing: -0.5px;
 }
 
 .logo-text p {
-  font-size: 12px;
-  color: #7f8c8d;
-  margin: 2px 0 0 0;
-  line-height: 1;
-  font-weight: 500;
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin: 0;
 }
 
+/* ── Title Section ── */
 .title-section {
   flex: 1;
-  margin: 0 20px;
+  margin: 0 16px;
 }
 
 .page-title {
-  font-size: 24px;
-  font-weight: bold;
-  color: #333;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
   margin: 0;
   cursor: pointer;
-  padding: 5px 10px;
-  border-radius: 4px;
-  transition: background-color 0.2s;
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  transition: background var(--transition-fast);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-
 .page-title:hover {
-  background-color: #f8f9fa;
+  background: var(--bg-tertiary);
 }
 
 .title-input {
-  font-size: 24px;
-  font-weight: bold;
-  color: #333;
-  border: 2px solid #007bff;
-  border-radius: 4px;
-  padding: 5px 10px;
-  background-color: white;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+  background: var(--input-bg);
+  border: 2px solid var(--accent-color);
+  border-radius: var(--radius-sm);
+  padding: 6px 12px;
   outline: none;
   width: 100%;
-  max-width: 600px;
+  max-width: 500px;
 }
 
+/* ── Header Actions ── */
 .header-actions {
   display: flex;
-  gap: 10px;
+  gap: 8px;
   align-items: center;
 }
 
 .action-btn {
-  padding: 10px 16px;
-  border: 1px solid #ddd;
-  background-color: white;
-  border-radius: 20px;
+  padding: 7px 16px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-full);
   cursor: pointer;
-  font-size: 14px;
-  font-weight: 500;
-  transition: all 0.2s;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  transition: all var(--transition-fast);
+  white-space: nowrap;
 }
-
 .action-btn:hover {
-  background-color: #f0f0f0;
-  border-color: #007bff;
+  background: var(--bg-tertiary);
 }
 
 .temp-save-btn {
-  background-color: #6c757d;
-  color: white;
-  border-color: #6c757d;
-}
-
-.temp-save-btn:hover {
-  background-color: #545b62;
+  color: var(--text-secondary);
 }
 
 .upload-btn {
-  background-color: #17a2b8;
-  color: white;
-  border-color: #17a2b8;
+  background: var(--accent-color);
+  color: #fff;
+  border-color: var(--accent-color);
 }
-
 .upload-btn:hover {
-  background-color: #117a8b;
+  background: var(--accent-hover);
 }
 
+/* ── User Profile ── */
 .user-profile-icon {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-full);
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: #f0f0f0;
-  border: 2px solid #ddd;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--transition-fast);
+  position: relative;
+  overflow: hidden;
 }
-
-.user-profile-icon:hover {
-  border-color: #007bff;
-  transform: scale(1.05);
+.user-profile-icon::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: var(--radius-full);
+  background: var(--accent-gradient);
+  z-index: 0;
+}
+.user-profile-icon::after {
+  content: '';
+  position: absolute;
+  inset: 1px;
+  border-radius: var(--radius-full);
+  background: var(--bg-secondary);
+  z-index: 1;
 }
 
 .profile-img {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-full);
   object-fit: cover;
+  position: relative;
+  z-index: 2;
 }
 
 .default-profile {
-  font-size: 18px;
-  color: #6c757d;
+  font-size: 16px;
+  position: relative;
+  z-index: 2;
 }
 
-/* 메인 콘텐츠 영역 */
+/* ── Page Content ── */
 .page-content {
   flex: 1;
-  padding: 20px;
+  padding: 12px;
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  gap: 12px;
 }
 
-/* 탭 메뉴 스타일 */
+/* ── Tab Menu (Mobile) ── */
 .tab-menu {
   display: none;
   justify-content: center;
-  background-color: white;
-  border-radius: 8px;
-  padding: 8px;
-  margin-bottom: 20px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-md);
+  padding: 4px;
   gap: 4px;
+  border: 1px solid var(--border-color);
 }
 
 .tab-button {
-  padding: 12px 20px;
+  padding: 10px 16px;
   border: none;
-  background-color: transparent;
-  border-radius: 6px;
+  background: transparent;
+  border-radius: var(--radius-sm);
   cursor: pointer;
-  font-size: 16px;
-  font-weight: 500;
-  transition: all 0.2s ease;
-  color: #666;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary);
   flex: 1;
   text-align: center;
+  transition: all var(--transition-fast);
 }
-
 .tab-button:hover {
-  background-color: #f0f0f0;
-  color: #333;
+  color: var(--text-primary);
+  background: var(--bg-tertiary);
 }
-
 .tab-button.active {
-  background-color: #007bff;
-  color: white;
-  box-shadow: 0 2px 4px rgba(0, 123, 255, 0.3);
+  background: var(--text-primary);
+  color: var(--bg-secondary);
 }
 
-.tab-button.active:hover {
-  background-color: #0056b3;
-}
-
+/* ── Panels ── */
 .panels-container {
   width: 100%;
   flex: 1;
   display: flex;
-  align-items: stretch;
-  min-height: 600px;
+  gap: 0;
+  min-height: 0;
   position: relative;
   overflow: hidden;
 }
 
 .panel-wrapper {
   height: 100%;
-  overflow: visible;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  transition: box-shadow 0.3s ease;
-  padding: 0;
+  overflow: hidden;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  transition: box-shadow var(--transition-normal);
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
 }
-
 .panel-wrapper:hover {
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--shadow-sm);
 }
 
-.left-panel {
-  /* ImagePanel 스타일 */
-  width: 33.33%;
-  min-width: 200px;
-}
-
-.center-panel {
-  /* DocumentPanel 스타일 */
-  width: 33.33%;
-  min-width: 300px;
-  overflow-x: auto;
-}
-
-.right-panel {
-  /* MapPanel 스타일 */
-  width: 33.34%;
-  min-width: 200px;
-}
-
-/* 패널 내부 콘텐츠가 잘리지 않도록 */
 .panel-wrapper > * {
   width: 100%;
   height: 100%;
   box-sizing: border-box;
-  overflow-x: visible;
   overflow-y: auto;
 }
 
-/* 반응형에서 최소 너비 보장 */
+.left-panel { min-width: 200px; }
+.center-panel { min-width: 250px; }
+.right-panel { min-width: 200px; }
+
 @media (min-width: 1200px) {
-  .left-panel {
-    min-width: 280px;
-  }
-  .center-panel {
-    min-width: 400px;
-  }
-  .right-panel {
-    min-width: 300px;
-  }
+  .left-panel { min-width: 260px; }
+  .center-panel { min-width: 360px; }
+  .right-panel { min-width: 260px; }
 }
 
-
-/* 반응형 디자인 */
+/* ── Responsive ── */
 @media (max-width: 1200px) {
-  .page-header {
-    padding: 15px 20px;
-  }
-  
-  .page-content {
-    padding: 10px;
-  }
-  
-  .left-panel {
-    min-width: 180px;
-  }
-  
-  .center-panel {
-    min-width: 280px;
-  }
-  
-  .right-panel {
-    min-width: 180px;
-  }
+  .page-header { padding: 10px 16px; }
+  .page-content { padding: 8px; }
 }
 
 @media (max-width: 992px) {
-  .tab-menu {
-    display: flex;
-  }
-  
-  .panels-container {
-    display: block;
-    position: relative;
-  }
-  
+  .tab-menu { display: flex; }
+  .panels-container { display: block; }
   .panel-wrapper {
-    min-height: 500px;
+    min-height: 450px;
     width: 100% !important;
-    position: relative;
-    box-sizing: border-box;
   }
-  
-  .mobile-hidden {
-    display: none !important;
-  }
-  
-  .desktop-only {
-    display: none !important;
-  }
-  
-  .page-title {
-    font-size: 20px;
-  }
-  
-  .title-input {
-    font-size: 20px;
-  }
-  
-  .header-actions {
-    flex-wrap: wrap;
-    gap: 8px;
-  }
-  
-  .action-btn {
-    padding: 8px 12px;
-    font-size: 13px;
-  }
-  
-  .page-content {
-    padding: 5px;
-  }
+  .mobile-hidden { display: none !important; }
+  .page-title, .title-input { font-size: 16px; }
 }
 
 @media (max-width: 768px) {
   .page-header {
-    flex-direction: row;
     flex-wrap: wrap;
-    gap: 10px;
-    align-items: center;
+    gap: 8px;
   }
-  
-  .header-left {
-    order: 1;
-    flex: 0 0 auto;
-  }
-  
+  .header-left { order: 1; }
   .header-actions {
     order: 2;
     flex: 1;
     justify-content: flex-end;
-    gap: 5px;
+    gap: 6px;
   }
-  
   .title-section {
     order: 3;
     flex: 1 1 100%;
-    text-align: center;
-    margin-top: 10px;
+    margin: 4px 0 0;
   }
-  
-  .tab-menu {
-    padding: 6px;
-    margin-bottom: 15px;
+  .action-btn {
+    padding: 6px 12px;
+    font-size: 12px;
   }
-  
-  .tab-button {
-    padding: 10px 16px;
-    font-size: 14px;
-    min-width: 80px;
-  }
-  
-  .panel-wrapper {
-    min-height: 400px;
-  }
-  
-  .page-content {
-    padding: 5px;
-  }
-  
-  
-  .panels-container {
-    gap: 5px;
-  }
-  
-  .panel-wrapper {
-    min-height: 350px;
-  }
-}
-
-/* Dark mode */
-[data-theme="dark"] .create-trip-page {
-  background-color: var(--bg-primary);
-}
-
-[data-theme="dark"] .page-header {
-  background-color: var(--header-bg);
-  border-bottom-color: var(--border-color);
-}
-
-[data-theme="dark"] .page-title {
-  color: var(--text-primary);
-}
-
-[data-theme="dark"] .title-input {
-  background-color: var(--input-bg);
-  color: var(--text-primary);
-  border-color: var(--input-border);
-}
-
-[data-theme="dark"] .action-btn {
-  background-color: var(--bg-tertiary);
-  color: var(--text-primary);
-  border-color: var(--border-color);
-}
-
-[data-theme="dark"] .tab-button {
-  background-color: var(--bg-secondary);
-  color: var(--text-secondary);
-  border-color: var(--border-color);
-}
-
-[data-theme="dark"] .tab-button.active {
-  background-color: var(--accent-color);
-  color: white;
+  .panel-wrapper { min-height: 350px; }
 }

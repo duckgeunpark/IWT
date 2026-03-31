@@ -1,11 +1,11 @@
+/* ── Panel Resizer ── */
 .resizer {
-  background-color: transparent;
+  background: transparent;
   cursor: col-resize;
   user-select: none;
-  transition: background-color 0.2s ease;
   position: absolute;
   z-index: 100;
-  width: 24px;
+  width: 20px;
   height: 100%;
   top: 0;
   transform: translateX(-50%);
@@ -15,55 +15,46 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: transparent;
-  cursor: col-resize;
 }
 
 .resizer.horizontal::before {
   content: '';
+  width: 3px;
+  height: 40px;
+  background: var(--border-color);
+  border-radius: var(--radius-full);
+  transition: all var(--transition-fast);
+}
+
+.resizer:hover::before {
+  background: var(--accent-color);
+  height: 60px;
   width: 4px;
-  height: 100px;
-  background-color: #e0e0e0;
-  border-radius: 2px;
-  transition: all 0.2s ease;
-  position: relative;
-  z-index: 1;
 }
 
-.resizer:hover {
-  background-color: rgba(0, 123, 255, 0.1);
+.resizer:active::before {
+  background: var(--accent-hover);
+  height: 80px;
+  width: 4px;
 }
 
-/* 클릭 가능한 영역 확장 */
+/* Expanded hit area */
 .resizer::after {
   content: '';
   position: absolute;
   top: 0;
-  left: -12px;
-  width: 48px;
+  left: -10px;
+  width: 40px;
   height: 100%;
-  background-color: transparent;
+  background: transparent;
   cursor: col-resize;
   z-index: 2;
 }
 
-/* 디버깅용 - 호버 시 배경 표시 */
-.resizer:hover::after {
-  background-color: rgba(0, 123, 255, 0.05);
-}
-
-.resizer:hover::before {
-  background-color: #007bff;
-  height: 120px;
-  width: 5px;
+.resizer:hover {
+  background: rgba(0, 149, 246, 0.04);
 }
 
 .resizer:active {
-  background-color: rgba(0, 123, 255, 0.2);
-}
-
-.resizer:active::before {
-  background-color: #0056b3;
-  height: 140px;
-  width: 6px;
+  background: rgba(0, 149, 246, 0.08);
 }

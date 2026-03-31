@@ -1,12 +1,16 @@
+/* ── Header ── */
 .header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 20px 40px;
-  background-color: white;
-  border: 2px solid #2196F3;
-  margin: 20px;
-  border-radius: 8px;
+  padding: 12px 24px;
+  background: var(--header-bg);
+  border-bottom: 1px solid var(--border-color);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 
 .header-left {
@@ -17,155 +21,98 @@
 .logo-container {
   display: flex;
   align-items: center;
-  gap: 15px;
+  gap: 12px;
+  cursor: pointer;
+  text-decoration: none;
 }
 
 .logo-avatar {
-  width: 60px;
-  height: 60px;
-  border-radius: 50%;
-  background-color: #E0E0E0;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-full);
+  background: var(--accent-gradient);
+  flex-shrink: 0;
 }
 
 .logo-text h1 {
-  font-size: 28px;
-  font-weight: bold;
-  color: #333;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text-primary);
   margin: 0;
+  letter-spacing: -0.5px;
 }
 
 .logo-text p {
-  font-size: 14px;
-  color: #666;
-  margin: 5px 0 0 0;
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin: 0;
+  letter-spacing: 0.3px;
 }
 
 .header-right {
   display: flex;
   align-items: center;
-  gap: 10px;
-}
-
-.login-btn, .logout-btn, .settings-btn {
-  padding: 8px 16px;
-  border: 1px solid #ddd;
-  background-color: #f5f5f5;
-  border-radius: 20px;
-  cursor: pointer;
-  font-size: 14px;
-  transition: background-color 0.2s;
-}
-
-.login-btn:hover, .logout-btn:hover, .settings-btn:hover {
-  background-color: #e0e0e0;
-}
-
-.logout-btn {
-  background-color: #ff5722;
-  color: white;
-  border: 1px solid #ff5722;
-}
-
-.logout-btn:hover {
-  background-color: #f44336;
+  gap: 8px;
 }
 
 .user-info {
   font-size: 14px;
-  color: #333;
-  margin-right: 10px;
+  font-weight: 500;
+  color: var(--text-primary);
+  margin-right: 4px;
 }
 
-/* 반응형 디자인 */
+.login-btn,
+.logout-btn {
+  padding: 7px 16px;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  border: none;
+}
+
+.login-btn {
+  background: var(--accent-color);
+  color: #fff;
+}
+.login-btn:hover {
+  background: var(--accent-hover);
+}
+.login-btn:focus-visible {
+  outline: 2px solid var(--accent-color);
+  outline-offset: 2px;
+}
+
+.logout-btn {
+  background: transparent;
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+}
+.logout-btn:hover {
+  background: var(--bg-tertiary);
+}
+.logout-btn:focus-visible {
+  outline: 2px solid var(--accent-color);
+  outline-offset: 2px;
+}
+
 @media (max-width: 768px) {
   .header {
-    flex-direction: row;
-    flex-wrap: wrap;
-    padding: 15px 20px;
-    margin: 10px;
-    gap: 10px;
+    padding: 10px 16px;
   }
-  
-  .header-left {
-    order: 1;
-    flex: 0 0 auto;
-  }
-  
-  .header-right {
-    order: 2;
-    flex: 1;
-    justify-content: flex-end;
-    gap: 8px;
-  }
-  
   .logo-text h1 {
-    font-size: 24px;
+    font-size: 18px;
   }
-  
   .logo-text p {
-    font-size: 12px;
+    display: none;
   }
-  
-  .logo-avatar {
-    width: 50px;
-    height: 50px;
-  }
-  
   .user-info {
     display: none;
   }
-}
-
-@media (max-width: 480px) {
-  .header {
-    padding: 10px 15px;
-    margin: 5px;
-  }
-  
-  .logo-container {
-    gap: 10px;
-  }
-  
-  .logo-text h1 {
-    font-size: 20px;
-  }
-  
-  .logo-avatar {
-    width: 40px;
-    height: 40px;
-  }
-  
-  .header-right {
-    gap: 5px;
-  }
-  
-  .login-btn, .logout-btn, .settings-btn {
+  .login-btn, .logout-btn {
     padding: 6px 12px;
-    font-size: 12px;
+    font-size: 13px;
   }
-}
-
-/* Dark mode */
-[data-theme="dark"] .header {
-  background-color: var(--header-bg);
-  border-bottom-color: var(--border-color);
-}
-
-[data-theme="dark"] .logo-text h1 {
-  color: var(--text-primary);
-}
-
-[data-theme="dark"] .logo-text p {
-  color: var(--text-secondary);
-}
-
-[data-theme="dark"] .user-info {
-  color: var(--text-secondary);
-}
-
-[data-theme="dark"] .login-btn,
-[data-theme="dark"] .logout-btn {
-  background-color: var(--bg-tertiary);
-  color: var(--text-primary);
-  border-color: var(--border-color);
 }
