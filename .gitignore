@@ -7,7 +7,7 @@
 
 # testing
 /coverage
-
+/.claude
 /resourcedata
 
 # production
