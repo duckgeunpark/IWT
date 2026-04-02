@@ -11,6 +11,7 @@ import { setTokenProvider } from './services/apiClient';
 
 const MainPage = React.lazy(() => import('./pages/MainPage'));
 const CreateTripPage = React.lazy(() => import('./pages/CreateTripPage'));
+const NewTripPage = React.lazy(() => import('./pages/NewTripPage'));
 const TripDetailPage = React.lazy(() => import('./pages/TripDetailPage'));
 const ExplorePage = React.lazy(() => import('./pages/ExplorePage'));
 const ProfilePage = React.lazy(() => import('./pages/ProfilePage'));
@@ -47,7 +48,8 @@ function AppContent() {
               <Routes>
                 <Route path="/" element={<MainPage toggleTheme={toggleTheme} theme={theme} />} />
                 <Route path="/explore" element={<ExplorePage toggleTheme={toggleTheme} theme={theme} />} />
-                <Route path="/trip/new" element={<CreateTripPage toggleTheme={toggleTheme} theme={theme} />} />
+                <Route path="/trip/new" element={<NewTripPage toggleTheme={toggleTheme} theme={theme} />} />
+                <Route path="/trip/new/edit" element={<CreateTripPage toggleTheme={toggleTheme} theme={theme} />} />
                 <Route path="/trip/:id" element={<TripDetailPage toggleTheme={toggleTheme} theme={theme} />} />
                 <Route path="/trip/:id/edit" element={<CreateTripPage toggleTheme={toggleTheme} theme={theme} />} />
                 <Route path="/profile" element={<ProfilePage toggleTheme={toggleTheme} theme={theme} />} />
