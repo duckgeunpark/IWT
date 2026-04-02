@@ -11,14 +11,18 @@ class ErrorBoundary extends React.Component {
   }
 
   componentDidCatch(error, errorInfo) {
-    // 프로덕션에서는 에러 리포팅 서비스로 전송
     if (process.env.NODE_ENV === 'production') {
       // TODO: Sentry 등 에러 리포팅 연동
     }
+    console.error('ErrorBoundary caught:', error, errorInfo);
   }
 
   handleRetry = () => {
     this.setState({ hasError: false, error: null });
+  };
+
+  handleReload = () => {
+    window.location.reload();
   };
 
   render() {
@@ -29,29 +33,41 @@ class ErrorBoundary extends React.Component {
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
+          minHeight: '60vh',
           padding: '40px 20px',
           textAlign: 'center',
+          color: 'var(--text-primary)',
         }}>
-          <h2 style={{ marginBottom: '12px', color: '#333' }}>
+          <div style={{ fontSize: '48px', marginBottom: '16px' }}>!</div>
+          <h2 style={{ marginBottom: '8px', fontSize: '20px', fontWeight: 600 }}>
             문제가 발생했습니다
           </h2>
-          <p style={{ marginBottom: '20px', color: '#666' }}>
-            페이지를 새로고침하거나 다시 시도해주세요.
+          <p style={{ marginBottom: '24px', color: 'var(--text-secondary)', maxWidth: '400px' }}>
+            예기치 않은 오류가 발생했습니다. 다시 시도하거나 페이지를 새로고침해주세요.
           </p>
-          <button
-            onClick={this.handleRetry}
-            style={{
-              padding: '8px 20px',
-              backgroundColor: '#007bff',
-              color: 'white',
-              border: 'none',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              fontSize: '14px',
-            }}
-          >
-            다시 시도
-          </button>
+          {process.env.NODE_ENV !== 'production' && this.state.error && (
+            <pre style={{
+              marginBottom: '24px',
+              padding: '12px 16px',
+              background: 'var(--bg-tertiary)',
+              borderRadius: 'var(--radius-sm)',
+              fontSize: '12px',
+              color: 'var(--danger-color)',
+              maxWidth: '500px',
+              overflow: 'auto',
+              textAlign: 'left',
+            }}>
+              {this.state.error.toString()}
+            </pre>
+          )}
+          <div style={{ display: 'flex', gap: '12px' }}>
+            <button onClick={this.handleRetry} className="btn-primary">
+              다시 시도
+            </button>
+            <button onClick={this.handleReload} className="btn-secondary">
+              페이지 새로고침
+            </button>
+          </div>
         </div>
       );
     }

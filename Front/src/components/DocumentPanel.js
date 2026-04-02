@@ -1,6 +1,7 @@
 import React, { useState, useRef, useCallback } from 'react';
 import { useSelector } from 'react-redux';
 import MarkdownPreview from './MarkdownPreview';
+import { useToast } from './Toast';
 import { apiClient } from '../services/apiClient';
 import '../styles/DocumentPanel.css';
 
@@ -25,6 +26,7 @@ const SAMPLE_CONTENT = `# 여행 기록
 
 const DocumentPanel = () => {
   const { photos, locations } = useSelector(state => state.photos);
+  const toast = useToast();
   const [content, setContent] = useState(SAMPLE_CONTENT);
   const [mode, setMode] = useState('preview');
   const [isLLMProcessing, setIsLLMProcessing] = useState(false);
@@ -82,7 +84,7 @@ const DocumentPanel = () => {
 
   const handleLLMGenerate = async () => {
     if (photos.length === 0) {
-      alert('사진을 먼저 업로드해주세요.');
+      toast.warning('사진을 먼저 업로드해주세요.');
       return;
     }
 

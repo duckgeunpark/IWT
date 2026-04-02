@@ -13,16 +13,20 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px 20px;
+  padding: 0 20px;
+  height: 56px;
   background: var(--header-bg);
   border-bottom: 1px solid var(--border-color);
-  backdrop-filter: blur(12px);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
   z-index: 50;
+  flex-shrink: 0;
 }
 
 .header-left {
   display: flex;
   align-items: center;
+  flex-shrink: 0;
 }
 
 .logo-container {
@@ -30,46 +34,44 @@
   align-items: center;
   gap: 10px;
   cursor: pointer;
-  padding: 6px 10px;
+  padding: 4px 8px;
   border-radius: var(--radius-sm);
   transition: background var(--transition-fast);
 }
-.logo-container:hover {
-  background: var(--bg-tertiary);
-}
+.logo-container:hover { background: var(--hover-overlay); }
 
 .logo-avatar {
-  width: 36px;
-  height: 36px;
+  width: 28px;
+  height: 28px;
   background: var(--accent-gradient);
   border-radius: var(--radius-full);
-}
-.logo-avatar::before {
-  content: '';
+  flex-shrink: 0;
 }
 
 .logo-text h1 {
-  font-size: 20px;
-  font-weight: 700;
+  font-size: 18px;
+  font-weight: 800;
   color: var(--text-primary);
   margin: 0;
   letter-spacing: -0.5px;
 }
 
 .logo-text p {
-  font-size: 11px;
+  font-size: 10px;
   color: var(--text-secondary);
   margin: 0;
+  line-height: 1.2;
 }
 
 /* ── Title Section ── */
 .title-section {
   flex: 1;
   margin: 0 16px;
+  min-width: 0;
 }
 
 .page-title {
-  font-size: 18px;
+  font-size: 15px;
   font-weight: 600;
   color: var(--text-primary);
   margin: 0;
@@ -81,49 +83,47 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.page-title:hover {
-  background: var(--bg-tertiary);
-}
+.page-title:hover { background: var(--hover-overlay); }
 
 .title-input {
-  font-size: 18px;
+  font-size: 15px;
   font-weight: 600;
   color: var(--text-primary);
   background: var(--input-bg);
-  border: 2px solid var(--accent-color);
+  border: 1.5px solid var(--accent-color);
   border-radius: var(--radius-sm);
   padding: 6px 12px;
   outline: none;
   width: 100%;
   max-width: 500px;
+  font-family: var(--font-sans);
+  box-shadow: 0 0 0 3px rgba(0, 149, 246, 0.1);
 }
 
 /* ── Header Actions ── */
 .header-actions {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   align-items: center;
+  flex-shrink: 0;
 }
 
 .action-btn {
-  padding: 7px 16px;
+  padding: 6px 14px;
   border: 1px solid var(--border-color);
   background: var(--bg-secondary);
-  border-radius: var(--radius-full);
+  border-radius: var(--radius-sm);
   cursor: pointer;
   font-size: 13px;
   font-weight: 600;
   color: var(--text-primary);
   transition: all var(--transition-fast);
   white-space: nowrap;
+  font-family: var(--font-sans);
 }
-.action-btn:hover {
-  background: var(--bg-tertiary);
-}
+.action-btn:hover { background: var(--hover-overlay); }
 
-.temp-save-btn {
-  color: var(--text-secondary);
-}
+.temp-save-btn { color: var(--text-secondary); }
 
 .upload-btn {
   background: var(--accent-color);
@@ -132,9 +132,10 @@
 }
 .upload-btn:hover {
   background: var(--accent-hover);
+  border-color: var(--accent-hover);
 }
 
-/* ── User Profile ── */
+/* ── User Profile (Instagram Story Ring) ── */
 .user-profile-icon {
   width: 32px;
   height: 32px;
@@ -146,47 +147,39 @@
   transition: all var(--transition-fast);
   position: relative;
   overflow: hidden;
-}
-.user-profile-icon::before {
-  content: '';
-  position: absolute;
-  inset: -2px;
-  border-radius: var(--radius-full);
+  padding: 2px;
   background: var(--accent-gradient);
-  z-index: 0;
-}
-.user-profile-icon::after {
-  content: '';
-  position: absolute;
-  inset: 1px;
-  border-radius: var(--radius-full);
-  background: var(--bg-secondary);
-  z-index: 1;
 }
 
 .profile-img {
-  width: 28px;
-  height: 28px;
+  width: 100%;
+  height: 100%;
   border-radius: var(--radius-full);
   object-fit: cover;
-  position: relative;
-  z-index: 2;
+  border: 2px solid var(--bg-secondary);
+  display: block;
 }
 
 .default-profile {
-  font-size: 16px;
-  position: relative;
-  z-index: 2;
+  width: 100%;
+  height: 100%;
+  border-radius: var(--radius-full);
+  background: var(--bg-secondary);
+  border: 2px solid var(--bg-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
 }
 
 /* ── Page Content ── */
 .page-content {
   flex: 1;
-  padding: 12px;
+  padding: 8px;
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 0;
 }
 
 /* ── Tab Menu (Mobile) ── */
@@ -194,28 +187,30 @@
   display: none;
   justify-content: center;
   background: var(--bg-secondary);
-  border-radius: var(--radius-md);
-  padding: 4px;
-  gap: 4px;
+  border-radius: var(--radius-sm);
+  padding: 3px;
+  gap: 2px;
   border: 1px solid var(--border-color);
+  margin-bottom: 8px;
 }
 
 .tab-button {
-  padding: 10px 16px;
+  padding: 8px 16px;
   border: none;
   background: transparent;
-  border-radius: var(--radius-sm);
+  border-radius: 6px;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--text-secondary);
   flex: 1;
   text-align: center;
   transition: all var(--transition-fast);
+  font-family: var(--font-sans);
 }
 .tab-button:hover {
   color: var(--text-primary);
-  background: var(--bg-tertiary);
+  background: var(--hover-overlay);
 }
 .tab-button.active {
   background: var(--text-primary);
@@ -239,14 +234,12 @@
   border-radius: var(--radius-md);
   border: 1px solid var(--border-color);
   background: var(--bg-secondary);
-  transition: box-shadow var(--transition-normal);
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
+  transition: border-color var(--transition-fast);
 }
-.panel-wrapper:hover {
-  box-shadow: var(--shadow-sm);
-}
+.panel-wrapper:hover { border-color: var(--separator); }
 
 .panel-wrapper > * {
   width: 100%;
@@ -267,8 +260,8 @@
 
 /* ── Responsive ── */
 @media (max-width: 1200px) {
-  .page-header { padding: 10px 16px; }
-  .page-content { padding: 8px; }
+  .page-header { padding: 0 16px; }
+  .page-content { padding: 6px; }
 }
 
 @media (max-width: 992px) {
@@ -279,29 +272,14 @@
     width: 100% !important;
   }
   .mobile-hidden { display: none !important; }
-  .page-title, .title-input { font-size: 16px; }
+  .page-title, .title-input { font-size: 14px; }
 }
 
 @media (max-width: 768px) {
-  .page-header {
-    flex-wrap: wrap;
-    gap: 8px;
-  }
+  .page-header { flex-wrap: wrap; gap: 6px; height: auto; padding: 8px 12px; }
   .header-left { order: 1; }
-  .header-actions {
-    order: 2;
-    flex: 1;
-    justify-content: flex-end;
-    gap: 6px;
-  }
-  .title-section {
-    order: 3;
-    flex: 1 1 100%;
-    margin: 4px 0 0;
-  }
-  .action-btn {
-    padding: 6px 12px;
-    font-size: 12px;
-  }
+  .header-actions { order: 2; flex: 1; justify-content: flex-end; gap: 4px; }
+  .title-section { order: 3; flex: 1 1 100%; margin: 4px 0 0; }
+  .action-btn { padding: 5px 10px; font-size: 12px; }
   .panel-wrapper { min-height: 350px; }
 }

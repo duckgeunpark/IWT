@@ -1,21 +1,29 @@
 import React from 'react';
 import '../styles/TravelCard.css';
 
-const TravelCard = ({ 
-  type = 'travel', 
-  date, 
-  title, 
-  subtitle, 
-  author, 
+const TravelCard = ({
+  type = 'travel',
+  date,
+  title,
+  subtitle,
+  author,
   status,
   colorTheme = 'green',
-  onClick 
+  photoCount,
+  locationCount,
+  onClick
 }) => {
   if (type === 'create') {
     return (
       <div className="travel-card create-card" onClick={onClick}>
-        <div className="create-icon">+</div>
+        <div className="create-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19" />
+            <line x1="5" y1="12" x2="19" y2="12" />
+          </svg>
+        </div>
         <div className="create-text">새 여행 만들기</div>
+        <div className="create-hint">사진을 업로드하고 AI로 기록하세요</div>
       </div>
     );
   }
@@ -23,6 +31,7 @@ const TravelCard = ({
   return (
     <div className={`travel-card ${colorTheme}-theme`} onClick={onClick}>
       <div className="card-header">
+        {status && <span className="status-badge">{status}</span>}
         <span className="date-badge">{date}</span>
         <span className="duration-badge">{subtitle}</span>
       </div>
@@ -30,7 +39,26 @@ const TravelCard = ({
         <h3 className="travel-title">{title}</h3>
       </div>
       <div className="card-footer">
-        <span className="author-badge">{author || status}</span>
+        <div className="card-stats">
+          {photoCount > 0 && (
+            <span className="stat-item">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+              {photoCount}
+            </span>
+          )}
+          {locationCount > 0 && (
+            <span className="stat-item">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+              {locationCount}
+            </span>
+          )}
+        </div>
+        {author && (
+          <span className="author-badge">
+            <span className="author-avatar">{author[0].toUpperCase()}</span>
+            {author}
+          </span>
+        )}
       </div>
     </div>
   );

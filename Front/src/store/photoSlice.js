@@ -46,8 +46,7 @@ const photoSlice = createSlice({
       const captureTimestamp = new Date(captureTime).getTime();
 
       const photoData = {
-        id: Date.now() + Math.random(),
-        file: photo.file,
+        id: photo.id || (Date.now() + Math.random()),
         name: photo.name,
         size: photo.size,
         type: photo.type,

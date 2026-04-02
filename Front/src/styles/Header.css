@@ -1,34 +1,42 @@
-/* ── Header ── */
+/* ── Header (Instagram Nav Style) ── */
 .header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px 24px;
+  padding: 0 20px;
+  height: 60px;
   background: var(--header-bg);
   border-bottom: 1px solid var(--border-color);
   position: sticky;
   top: 0;
   z-index: 100;
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
 }
 
+/* ── Logo ── */
 .header-left {
   display: flex;
   align-items: center;
+  flex-shrink: 0;
+  min-width: 100px;
 }
 
 .logo-container {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   cursor: pointer;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  transition: background var(--transition-fast);
   text-decoration: none;
 }
+.logo-container:hover { background: var(--hover-overlay); }
 
 .logo-avatar {
-  width: 36px;
-  height: 36px;
+  width: 28px;
+  height: 28px;
   border-radius: var(--radius-full);
   background: var(--accent-gradient);
   flex-shrink: 0;
@@ -36,32 +44,114 @@
 
 .logo-text h1 {
   font-size: 22px;
-  font-weight: 700;
+  font-weight: 800;
   color: var(--text-primary);
   margin: 0;
   letter-spacing: -0.5px;
 }
 
-.logo-text p {
-  font-size: 11px;
-  color: var(--text-secondary);
-  margin: 0;
-  letter-spacing: 0.3px;
+/* ── Center Navigation ── */
+.header-nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
+.nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 16px;
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  color: var(--text-secondary);
+  transition: all var(--transition-fast);
+  position: relative;
+  font-family: var(--font-sans);
+}
+.nav-item:hover {
+  color: var(--text-primary);
+  background: var(--hover-overlay);
+}
+.nav-item.active {
+  color: var(--text-primary);
+}
+.nav-item.active::after {
+  content: '';
+  position: absolute;
+  bottom: 2px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 4px;
+  height: 4px;
+  border-radius: var(--radius-full);
+  background: var(--text-primary);
+}
+
+.nav-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+}
+
+/* ── Create Button (Instagram-style gradient) ── */
+.nav-create-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  border: 2px solid var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast);
+}
+.nav-create:hover .nav-create-icon {
+  border-color: var(--text-primary);
+}
+.nav-create:hover {
+  color: var(--text-primary);
+}
+
+/* ── Profile Ring (Instagram Story) ── */
+.nav-profile-ring {
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-full);
+  padding: 2px;
+  background: var(--border-color);
+  transition: all var(--transition-fast);
+}
+.nav-profile-ring.active {
+  background: var(--accent-gradient);
+}
+.nav-profile-img {
+  width: 100%;
+  height: 100%;
+  border-radius: var(--radius-full);
+  object-fit: cover;
+  border: 2px solid var(--bg-secondary);
+  display: block;
+}
+
+/* ── Right: Actions ── */
 .header-right {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-shrink: 0;
+  min-width: 100px;
+  justify-content: flex-end;
 }
 
-.user-info {
+.header-loading {
   font-size: 14px;
-  font-weight: 500;
-  color: var(--text-primary);
-  margin-right: 4px;
+  color: var(--text-muted);
 }
 
+/* ── Auth Buttons ── */
 .login-btn,
 .logout-btn {
   padding: 7px 16px;
@@ -71,48 +161,41 @@
   cursor: pointer;
   transition: all var(--transition-fast);
   border: none;
+  font-family: var(--font-sans);
 }
 
 .login-btn {
   background: var(--accent-color);
   color: #fff;
 }
-.login-btn:hover {
-  background: var(--accent-hover);
-}
-.login-btn:focus-visible {
-  outline: 2px solid var(--accent-color);
-  outline-offset: 2px;
-}
+.login-btn:hover { background: var(--accent-hover); }
 
 .logout-btn {
   background: transparent;
-  color: var(--text-primary);
+  color: var(--text-secondary);
   border: 1px solid var(--border-color);
+  font-size: 13px;
+  padding: 6px 12px;
 }
 .logout-btn:hover {
-  background: var(--bg-tertiary);
-}
-.logout-btn:focus-visible {
-  outline: 2px solid var(--accent-color);
-  outline-offset: 2px;
+  background: var(--hover-overlay);
+  color: var(--text-primary);
 }
 
+/* ── Responsive ── */
 @media (max-width: 768px) {
   .header {
-    padding: 10px 16px;
+    padding: 0 12px;
+    height: 54px;
   }
-  .logo-text h1 {
-    font-size: 18px;
-  }
-  .logo-text p {
-    display: none;
-  }
-  .user-info {
-    display: none;
-  }
-  .login-btn, .logout-btn {
-    padding: 6px 12px;
-    font-size: 13px;
-  }
+  .logo-text h1 { font-size: 18px; }
+  .nav-item { padding: 6px 10px; }
+  .nav-label { display: none; }
+  .nav-create-icon { width: 24px; height: 24px; }
+  .login-btn, .logout-btn { padding: 6px 10px; font-size: 12px; }
+}
+
+@media (max-width: 480px) {
+  .header-right .logout-btn { display: none; }
+  .nav-item { padding: 6px 8px; }
 }

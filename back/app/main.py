@@ -19,6 +19,7 @@ from app.core.exceptions import BaseAPIException, EXCEPTION_HANDLERS
 from app.core.logging import setup_logging, get_logger, log_api_request, log_api_response
 from app.core.rate_limit import limiter
 from jose import jwt, JWTError
+import asyncio
 
 # 로깅 설정 초기화
 setup_logging()
@@ -111,54 +112,57 @@ def setup_middleware(app: FastAPI) -> None:
 def setup_exception_handlers(app: FastAPI) -> None:
     """예외 핸들러 설정"""
     
+    from app.schemas.response import ErrorResponse
+
     # 커스텀 API 예외 핸들러
     @app.exception_handler(BaseAPIException)
     async def custom_exception_handler(request: Request, exc: BaseAPIException):
         logger.error(f"API 예외 발생: {exc.error_code} - {exc.detail}")
-        
+
         return JSONResponse(
             status_code=exc.status_code,
-            content={
-                "detail": exc.detail,
-                "error_code": exc.error_code,
-                "path": str(request.url.path),
-                "method": request.method
-            },
+            content=ErrorResponse(
+                error_code=exc.error_code or "API_ERROR",
+                detail=exc.detail,
+                path=str(request.url.path),
+                method=request.method,
+            ).model_dump(mode="json"),
             headers=exc.headers
         )
-    
+
     # 유효성 검사 예외 핸들러
     @app.exception_handler(RequestValidationError)
     async def validation_exception_handler(request: Request, exc: RequestValidationError):
         logger.warning(f"요청 유효성 검사 실패: {exc.errors()}")
-        
+
         return JSONResponse(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             content={
-                "detail": "요청 데이터의 유효성 검사에 실패했습니다.",
-                "error_code": "VALIDATION_ERROR",
+                **ErrorResponse(
+                    error_code="VALIDATION_ERROR",
+                    detail="요청 데이터의 유효성 검사에 실패했습니다.",
+                    path=str(request.url.path),
+                    method=request.method,
+                ).model_dump(mode="json"),
                 "errors": exc.errors(),
-                "path": str(request.url.path),
-                "method": request.method
             }
         )
-    
+
     # 일반 예외 핸들러
     @app.exception_handler(Exception)
     async def general_exception_handler(request: Request, exc: Exception):
         logger.error(f"예상치 못한 오류 발생: {type(exc).__name__}: {str(exc)}", exc_info=True)
-        
-        # 프로덕션 환경에서는 상세한 오류 정보 숨김
+
         detail = str(exc) if settings.debug else APIConstants.Messages.INTERNAL_ERROR
-        
+
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            content={
-                "detail": detail,
-                "error_code": "INTERNAL_SERVER_ERROR",
-                "path": str(request.url.path),
-                "method": request.method
-            }
+            content=ErrorResponse(
+                error_code="INTERNAL_SERVER_ERROR",
+                detail=detail,
+                path=str(request.url.path),
+                method=request.method,
+            ).model_dump(mode="json"),
         )
 
 
@@ -227,7 +231,21 @@ def setup_event_handlers(app: FastAPI) -> None:
         logger.info(f"{settings.app_name} 서버가 시작되었습니다.")
         logger.info(f"디버그 모드: {settings.debug}")
         logger.info(f"허용된 CORS origins: {settings.allowed_origins}")
-    
+
+        # S3 임시 파일 정리 백그라운드 태스크 (6시간마다)
+        async def periodic_s3_cleanup():
+            while True:
+                await asyncio.sleep(6 * 3600)
+                try:
+                    from app.services.s3_cleanup_service import S3CleanupService
+                    cleanup = S3CleanupService()
+                    result = await cleanup.cleanup_expired_temp_files()
+                    logger.info(f"S3 정리 완료: {result['deleted_count']}건 삭제")
+                except Exception as e:
+                    logger.error(f"S3 정리 실패: {e}")
+
+        asyncio.create_task(periodic_s3_cleanup())
+
     @app.on_event("shutdown")
     async def shutdown_event():
         """애플리케이션 종료시 실행"""

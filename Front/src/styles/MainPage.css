@@ -7,18 +7,70 @@
 .main-content {
   max-width: 975px;
   margin: 0 auto;
-  padding: 24px 20px;
+  padding: 0 20px 40px;
 }
 
+/* ── Hero Section ── */
+.hero-section {
+  padding: 48px 0 32px;
+  text-align: center;
+}
+
+.hero-content {
+  max-width: 540px;
+  margin: 0 auto;
+}
+
+.hero-title {
+  font-size: 28px;
+  font-weight: 800;
+  color: var(--text-primary);
+  margin: 0 0 12px;
+  letter-spacing: -0.5px;
+  line-height: 1.3;
+}
+
+.hero-subtitle {
+  font-size: 15px;
+  color: var(--text-secondary);
+  margin: 0 0 24px;
+  line-height: 1.5;
+}
+
+.hero-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 28px;
+  background: var(--accent-color);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  font-family: var(--font-sans);
+}
+.hero-cta:hover {
+  background: var(--accent-hover);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+.hero-cta:active {
+  transform: translateY(0);
+}
+
+/* ── Content Header ── */
 .content-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 24px;
-  padding: 0;
+  margin-bottom: 28px;
+  gap: 16px;
 }
 
-/* ── Tabs ── */
+/* ── Tabs (Instagram Explore Style) ── */
 .tab-container {
   display: flex;
   gap: 0;
@@ -26,27 +78,26 @@
 }
 
 .tab-btn {
-  padding: 12px 20px;
-  font-size: 14px;
+  padding: 14px 20px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--text-secondary);
   background: none;
   border: none;
-  border-bottom: 2px solid transparent;
+  border-bottom: 1px solid transparent;
   cursor: pointer;
   transition: all var(--transition-fast);
-  letter-spacing: 0.5px;
+  letter-spacing: 1px;
   text-transform: uppercase;
   white-space: nowrap;
+  margin-bottom: -1px;
+  font-family: var(--font-sans);
 }
-
-.tab-btn:hover {
-  color: var(--text-primary);
-}
-
+.tab-btn:hover { color: var(--text-primary); }
 .tab-btn.active {
   color: var(--text-primary);
   border-bottom-color: var(--text-primary);
+  font-weight: 700;
 }
 
 /* ── Sort & Actions ── */
@@ -66,56 +117,24 @@
   background: var(--bg-secondary) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%238e8e8e' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E") no-repeat right 10px center;
   cursor: pointer;
   transition: border-color var(--transition-fast);
+  font-family: var(--font-sans);
 }
-
-.sort-select:hover {
-  border-color: var(--text-secondary);
-}
-
-.sort-select:focus {
-  border-color: var(--accent-color);
-  outline: none;
-}
-
-.create-new-btn {
-  padding: 8px 20px;
-  background: var(--accent-color);
-  color: #fff;
-  border: none;
-  border-radius: var(--radius-sm);
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all var(--transition-fast);
-  white-space: nowrap;
-}
-
-.create-new-btn:hover {
-  background: var(--accent-hover);
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-sm);
-}
+.sort-select:hover { border-color: var(--text-secondary); }
+.sort-select:focus { border-color: var(--accent-color); outline: none; }
 
 .sections-container {
   display: flex;
   flex-direction: column;
-  gap: 32px;
+  gap: 40px;
 }
 
 @media (max-width: 768px) {
-  .main-content {
-    padding: 16px 12px;
-  }
-  .content-header {
-    flex-direction: column;
-    gap: 12px;
-    align-items: stretch;
-  }
-  .content-actions {
-    justify-content: space-between;
-  }
-  .tab-btn {
-    padding: 10px 14px;
-    font-size: 12px;
-  }
+  .main-content { padding: 0 12px 32px; }
+  .hero-section { padding: 32px 0 24px; }
+  .hero-title { font-size: 22px; }
+  .hero-subtitle { font-size: 14px; }
+  .hero-cta { padding: 10px 24px; font-size: 14px; }
+  .content-header { flex-direction: column; gap: 12px; align-items: stretch; }
+  .content-actions { justify-content: flex-end; }
+  .tab-btn { padding: 10px 14px; font-size: 11px; }
 }

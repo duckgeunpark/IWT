@@ -5,7 +5,7 @@
   user-select: none;
   position: absolute;
   z-index: 100;
-  width: 20px;
+  width: 16px;
   height: 100%;
   top: 0;
   transform: translateX(-50%);
@@ -19,8 +19,8 @@
 
 .resizer.horizontal::before {
   content: '';
-  width: 3px;
-  height: 40px;
+  width: 1px;
+  height: 32px;
   background: var(--border-color);
   border-radius: var(--radius-full);
   transition: all var(--transition-fast);
@@ -28,14 +28,12 @@
 
 .resizer:hover::before {
   background: var(--accent-color);
-  height: 60px;
-  width: 4px;
+  height: 48px;
 }
 
 .resizer:active::before {
   background: var(--accent-hover);
-  height: 80px;
-  width: 4px;
+  height: 64px;
 }
 
 /* Expanded hit area */
@@ -43,8 +41,8 @@
   content: '';
   position: absolute;
   top: 0;
-  left: -10px;
-  width: 40px;
+  left: -8px;
+  width: 32px;
   height: 100%;
   background: transparent;
   cursor: col-resize;
@@ -52,9 +50,9 @@
 }
 
 .resizer:hover {
-  background: rgba(0, 149, 246, 0.04);
+  background: rgba(0, 149, 246, 0.03);
 }
 
 .resizer:active {
-  background: rgba(0, 149, 246, 0.08);
+  background: rgba(0, 149, 246, 0.06);
 }

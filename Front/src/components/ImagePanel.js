@@ -2,10 +2,13 @@ import React, { useState, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import exifr from 'exifr';
 import { addPhoto, removePhoto, togglePhotoActive, activateAllPhotos, deactivateAllPhotos, setSelectedPhoto, updatePhotoExif, setLoading, setError, setUploadProgress } from '../store/photoSlice';
+import { fileStore } from '../store/fileStore';
 import DropdownMenu from './DropdownMenu';
 import ExifEditModal from './ExifEditModal';
 import getContrastColor from '../utils/getContrastColor';
+import { useToast } from './Toast';
 import { apiClient } from '../services/apiClient';
+import { compressImage, createThumbnail } from '../utils/imageCompressor';
 import '../styles/ImagePanel.css';
 
 /**
@@ -13,6 +16,7 @@ import '../styles/ImagePanel.css';
  */
 const ImagePanel = () => {
   const dispatch = useDispatch();
+  const toast = useToast();
   const { photos, locations, selectedPhotoId, uploadProgress } = useSelector(state => state.photos);
 
   const [openMenuId, setOpenMenuId] = useState(null);
@@ -169,11 +173,11 @@ const ImagePanel = () => {
       const isValidSize = file.size <= 10 * 1024 * 1024;
 
       if (!isImage) {
-        alert(`${file.name}은(는) 이미지 파일이 아닙니다.`);
+        toast.warning(`${file.name}은(는) 이미지 파일이 아닙니다.`);
         return false;
       }
       if (!isValidSize) {
-        alert(`${file.name}은(는) 파일 크기가 너무 큽니다. (최대 10MB)`);
+        toast.warning(`${file.name}은(는) 파일 크기가 너무 큽니다. (최대 10MB)`);
         return false;
       }
       return true;
@@ -191,15 +195,20 @@ const ImagePanel = () => {
         const file = validFiles[i];
         dispatch(setUploadProgress({ current: i + 1, total: validFiles.length }));
 
-        const url = URL.createObjectURL(file);
+        // EXIF는 원본에서 추출한 후 이미지를 압축한다
         const exifData = await extractExifData(file);
+        const compressed = await compressImage(file);
+        const thumbnail = await createThumbnail(file);
+
+        const photoId = Date.now() + Math.random();
+        fileStore.set(photoId, compressed);
 
         const photoData = {
-          file: file,
+          id: photoId,
           name: file.name,
-          size: file.size,
-          type: file.type,
-          preview: url
+          size: compressed.size,
+          type: compressed.type,
+          preview: thumbnail
         };
 
         dispatch(addPhoto({
@@ -252,6 +261,7 @@ const ImagePanel = () => {
       if (imageToDelete.preview) {
         URL.revokeObjectURL(imageToDelete.preview);
       }
+      fileStore.delete(imageId);
       dispatch(removePhoto(imageId));
     }
   };
@@ -311,7 +321,7 @@ const ImagePanel = () => {
       photoId: imageId,
       updatedBackendData: updatedBackendData
     }));
-    alert('EXIF 정보가 성공적으로 업데이트되었습니다!');
+    toast.success('EXIF 정보가 업데이트되었습니다.');
   };
 
   const handleImageClick = (imageId) => {

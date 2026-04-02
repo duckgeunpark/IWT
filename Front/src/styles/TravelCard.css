@@ -1,12 +1,12 @@
-/* ── Travel Card ── */
+/* ── Travel Card (Instagram Post Style) ── */
 .travel-card {
   display: flex;
   flex-direction: column;
-  min-height: 200px;
+  min-height: 240px;
   border-radius: var(--radius-lg);
-  padding: 20px;
+  padding: 22px;
   cursor: pointer;
-  transition: all var(--transition-normal);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
   position: relative;
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.15);
@@ -16,23 +16,16 @@
   content: '';
   position: absolute;
   inset: 0;
-  background: linear-gradient(180deg, transparent 40%, rgba(0, 0, 0, 0.08) 100%);
+  background: linear-gradient(180deg, transparent 20%, rgba(0, 0, 0, 0.08) 100%);
   pointer-events: none;
   transition: opacity var(--transition-normal);
 }
 
 .travel-card:hover {
   transform: translateY(-4px);
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--shadow-xl);
 }
-
-.travel-card:hover::before {
-  opacity: 0.6;
-}
-
-.travel-card:active {
-  transform: translateY(-2px);
-}
+.travel-card:active { transform: translateY(-1px); }
 
 /* ── Create Card ── */
 .create-card {
@@ -41,12 +34,9 @@
   justify-content: center;
   align-items: center;
   text-align: center;
+  gap: 8px;
 }
-
-.create-card::before {
-  display: none;
-}
-
+.create-card::before { display: none; }
 .create-card:hover {
   border-color: var(--accent-color);
   background: var(--accent-light);
@@ -60,12 +50,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 28px;
-  color: var(--text-secondary);
-  margin-bottom: 12px;
+  color: var(--text-muted);
   transition: all var(--transition-normal);
 }
-
 .create-card:hover .create-icon {
   background: var(--accent-color);
   color: #fff;
@@ -73,35 +60,38 @@
 }
 
 .create-text {
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
-  color: var(--text-secondary);
+  color: var(--text-primary);
+  margin-top: 4px;
 }
 
-/* ── Theme Gradients ── */
+.create-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+/* ── Theme Gradients (Diverse Instagram-like) ── */
 .green-theme {
-  background: linear-gradient(135deg, #a8e6cf 0%, #dcedc1 100%);
-  color: #2d5016;
+  background: linear-gradient(145deg, #a8e6cf 0%, #88d8b0 50%, #dcedc1 100%);
+  color: #1a3a2a;
 }
-
 .pink-theme {
-  background: linear-gradient(135deg, #ffc3a0 0%, #ffafbd 100%);
-  color: #6b2037;
+  background: linear-gradient(145deg, #ff9a9e 0%, #fecfef 50%, #fad0c4 100%);
+  color: #5c1a2a;
 }
-
 .purple-theme {
-  background: linear-gradient(135deg, #c3a0ff 0%, #e8d5ff 100%);
-  color: #3d1d6b;
+  background: linear-gradient(145deg, #a18cd1 0%, #c3a0ff 50%, #fbc2eb 100%);
+  color: #2d1854;
 }
-
 .blue-theme {
-  background: linear-gradient(135deg, #89c4f4 0%, #c8e6ff 100%);
-  color: #1a3f5c;
+  background: linear-gradient(145deg, #667eea 0%, #89c4f4 50%, #a8d8ea 100%);
+  color: #1a2d5c;
 }
-
 .yellow-theme {
-  background: linear-gradient(135deg, #ffd86f 0%, #fff4c1 100%);
-  color: #5c4813;
+  background: linear-gradient(145deg, #f6d365 0%, #fda085 50%, #ffd3a5 100%);
+  color: #5c3a13;
 }
 
 /* ── Card Content ── */
@@ -110,30 +100,44 @@
   gap: 6px;
   margin-bottom: 16px;
   flex-wrap: wrap;
+  position: relative;
+  z-index: 1;
+}
+
+.status-badge {
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  font-size: 11px;
+  font-weight: 700;
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--accent-color);
+  letter-spacing: 0.2px;
 }
 
 .date-badge,
 .duration-badge {
   padding: 4px 10px;
   border-radius: var(--radius-full);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
-  backdrop-filter: blur(8px);
-  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(12px);
+  background: rgba(255, 255, 255, 0.65);
   color: inherit;
-  letter-spacing: 0.2px;
+  letter-spacing: 0.3px;
 }
 
 .card-content {
   flex: 1;
   display: flex;
   align-items: flex-start;
+  position: relative;
+  z-index: 1;
 }
 
 .travel-title {
-  font-size: 16px;
+  font-size: 17px;
   font-weight: 700;
-  line-height: 1.5;
+  line-height: 1.4;
   margin: 0;
   color: inherit;
   word-break: keep-all;
@@ -145,18 +149,53 @@
 
 .card-footer {
   margin-top: auto;
-  padding-top: 12px;
+  padding-top: 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  position: relative;
+  z-index: 1;
+}
+
+.card-stats {
+  display: flex;
+  gap: 10px;
+}
+
+.stat-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: inherit;
+  opacity: 0.8;
+}
+.stat-item svg {
+  opacity: 0.7;
 }
 
 .author-badge {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 14px;
+  padding: 4px 12px 4px 4px;
   border-radius: var(--radius-full);
   font-size: 12px;
   font-weight: 600;
-  background: rgba(0, 0, 0, 0.15);
+  background: rgba(0, 0, 0, 0.12);
   color: inherit;
-  backdrop-filter: blur(4px);
+  backdrop-filter: blur(8px);
+}
+
+.author-avatar {
+  width: 20px;
+  height: 20px;
+  border-radius: var(--radius-full);
+  background: rgba(255, 255, 255, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
 }
