@@ -21,6 +21,9 @@ class Post(Base):
     # 관계
     photos = relationship("Photo", back_populates="post", cascade="all, delete-orphan")
     categories = relationship("Category", back_populates="post", cascade="all, delete-orphan")
+    likes = relationship("PostLike", back_populates="post", cascade="all, delete-orphan")
+    bookmarks = relationship("PostBookmark", back_populates="post", cascade="all, delete-orphan")
+    comments = relationship("Comment", back_populates="post", cascade="all, delete-orphan")
 
 class Photo(Base):
     __tablename__ = "photos"
@@ -145,15 +148,212 @@ class LLMAnalysis(Base):
     # 관계
     photo = relationship("Photo")
 
+class PostLike(Base):
+    __tablename__ = "post_likes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    post_id = Column(Integer, ForeignKey("posts.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(String(255), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    post = relationship("Post", back_populates="likes")
+    user = relationship("User")
+
+    __table_args__ = (
+        UniqueConstraint('post_id', 'user_id', name='_post_user_like_uc'),
+    )
+
+class PostBookmark(Base):
+    __tablename__ = "post_bookmarks"
+
+    id = Column(Integer, primary_key=True, index=True)
+    post_id = Column(Integer, ForeignKey("posts.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(String(255), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    post = relationship("Post", back_populates="bookmarks")
+    user = relationship("User")
+
+    __table_args__ = (
+        UniqueConstraint('post_id', 'user_id', name='_post_user_bookmark_uc'),
+    )
+
+class Comment(Base):
+    __tablename__ = "comments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    post_id = Column(Integer, ForeignKey("posts.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(String(255), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    content = Column(Text, nullable=False)
+    parent_id = Column(Integer, ForeignKey("comments.id", ondelete="CASCADE"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    post = relationship("Post", back_populates="comments")
+    user = relationship("User")
+    replies = relationship("Comment", backref="parent", remote_side=[id], cascade="all, delete-orphan", single_parent=True)
+
+class Follow(Base):
+    __tablename__ = "follows"
+
+    id = Column(Integer, primary_key=True, index=True)
+    follower_id = Column(String(255), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    following_id = Column(String(255), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    follower = relationship("User", foreign_keys=[follower_id], backref="following_relations")
+    following = relationship("User", foreign_keys=[following_id], backref="follower_relations")
+
+    __table_args__ = (
+        UniqueConstraint('follower_id', 'following_id', name='_follower_following_uc'),
+    )
+
+class Notification(Base):
+    __tablename__ = "notifications"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String(255), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    type = Column(String(50), nullable=False)  # like, comment, follow, reply
+    message = Column(Text, nullable=False)
+    actor_id = Column(String(255), ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
+    post_id = Column(Integer, ForeignKey("posts.id", ondelete="CASCADE"), nullable=True)
+    comment_id = Column(Integer, ForeignKey("comments.id", ondelete="CASCADE"), nullable=True)
+    is_read = Column(Boolean, default=False, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    user = relationship("User", foreign_keys=[user_id])
+    actor = relationship("User", foreign_keys=[actor_id])
+
+
 class ImageMetadata(Base):
     __tablename__ = "image_metadata"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     photo_id = Column(Integer, ForeignKey("photos.id"), nullable=False)
     metadata_type = Column(String(50), nullable=False)  # exif, llm_enhanced, manual
     metadata_data = Column(Text, nullable=False)  # 메타데이터를 JSON 문자열로 저장
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
+
     # 관계
-    photo = relationship("Photo") 
+    photo = relationship("Photo")
+
+
+# ═══════════════════════════════════════════
+# 데이터 정규화 테이블 (AI 학습용)
+# ═══════════════════════════════════════════
+
+class Place(Base):
+    """장소 마스터 테이블 - 재사용 가능한 장소 정보"""
+    __tablename__ = "places"
+
+    id = Column(Integer, primary_key=True, index=True)
+    google_place_id = Column(String(255), unique=True, nullable=True, index=True)
+    name = Column(String(255), nullable=False)
+    place_type = Column(String(100), nullable=True)  # restaurant, cafe, tourist_attraction, park, etc.
+    address = Column(Text, nullable=True)
+    latitude = Column(Float, nullable=False)
+    longitude = Column(Float, nullable=False)
+    country = Column(String(100), nullable=True)
+    city = Column(String(100), nullable=True)
+    region = Column(String(100), nullable=True)
+    avg_stay_duration = Column(Integer, nullable=True)  # 평균 체류 시간 (초)
+    visit_count = Column(Integer, default=0)  # 방문 횟수 (통계용)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # 관계
+    route_stops = relationship("RouteStop", back_populates="place")
+
+
+class Route(Base):
+    """경로 정보 - 하나의 여행(Post)에 하나의 경로"""
+    __tablename__ = "routes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    post_id = Column(Integer, ForeignKey("posts.id", ondelete="CASCADE"), nullable=False, index=True)
+    total_distance = Column(Float, nullable=True)  # 총 이동 거리 (미터)
+    total_duration = Column(Integer, nullable=True)  # 총 이동 시간 (초)
+    total_stops = Column(Integer, default=0)
+    start_date = Column(DateTime, nullable=True)
+    end_date = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # 관계
+    post = relationship("Post", backref="routes")
+    stops = relationship("RouteStop", back_populates="route", cascade="all, delete-orphan", order_by="RouteStop.stop_order")
+    segments = relationship("RouteSegment", back_populates="route", cascade="all, delete-orphan", order_by="RouteSegment.segment_order")
+
+
+class RouteStop(Base):
+    """경유지 - 경로 내 방문 장소"""
+    __tablename__ = "route_stops"
+
+    id = Column(Integer, primary_key=True, index=True)
+    route_id = Column(Integer, ForeignKey("routes.id", ondelete="CASCADE"), nullable=False, index=True)
+    place_id = Column(Integer, ForeignKey("places.id"), nullable=True)
+    stop_order = Column(Integer, nullable=False)  # 방문 순서
+    arrival_time = Column(DateTime, nullable=True)
+    departure_time = Column(DateTime, nullable=True)
+    stay_duration = Column(Integer, nullable=True)  # 체류 시간 (초)
+    stay_duration_source = Column(String(50), nullable=True)  # estimated, photo_based, user_input
+    latitude = Column(Float, nullable=True)
+    longitude = Column(Float, nullable=True)
+    name = Column(String(255), nullable=True)  # Place가 없을 때 사용
+    day_number = Column(Integer, nullable=True)  # N일차
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # 관계
+    route = relationship("Route", back_populates="stops")
+    place = relationship("Place", back_populates="route_stops")
+    photos = relationship("Photo", secondary="route_stop_photos")
+
+
+# 경유지-사진 다대다 관계 테이블
+from sqlalchemy import Table
+route_stop_photos = Table(
+    "route_stop_photos",
+    Base.metadata,
+    Column("route_stop_id", Integer, ForeignKey("route_stops.id", ondelete="CASCADE"), primary_key=True),
+    Column("photo_id", Integer, ForeignKey("photos.id", ondelete="CASCADE"), primary_key=True),
+)
+
+
+class RouteSegment(Base):
+    """이동 구간 - 두 경유지 사이의 이동 정보"""
+    __tablename__ = "route_segments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    route_id = Column(Integer, ForeignKey("routes.id", ondelete="CASCADE"), nullable=False, index=True)
+    segment_order = Column(Integer, nullable=False)  # 구간 순서
+    from_stop_id = Column(Integer, ForeignKey("route_stops.id", ondelete="CASCADE"), nullable=False)
+    to_stop_id = Column(Integer, ForeignKey("route_stops.id", ondelete="CASCADE"), nullable=False)
+    transport_mode = Column(String(50), nullable=True)  # driving, walking, bicycling, transit
+    transport_mode_source = Column(String(50), nullable=True)  # estimated, google_api, user_input
+    distance = Column(Float, nullable=True)  # 이동 거리 (미터)
+    duration = Column(Integer, nullable=True)  # 이동 시간 (초)
+    polyline = Column(Text, nullable=True)  # 인코딩된 경로 폴리라인
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # 관계
+    route = relationship("Route", back_populates="segments")
+    from_stop = relationship("RouteStop", foreign_keys=[from_stop_id])
+    to_stop = relationship("RouteStop", foreign_keys=[to_stop_id])
+
+
+class UserCorrection(Base):
+    """사용자 수정 이력 - AI 학습 라벨용"""
+    __tablename__ = "user_corrections"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String(255), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    entity_type = Column(String(50), nullable=False)  # route_stop, route_segment, place
+    entity_id = Column(Integer, nullable=False)
+    field_name = Column(String(100), nullable=False)  # transport_mode, stay_duration, name, etc.
+    original_value = Column(Text, nullable=True)
+    corrected_value = Column(Text, nullable=False)
+    correction_source = Column(String(50), default="user_input")  # user_input, suggested
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    user = relationship("User")

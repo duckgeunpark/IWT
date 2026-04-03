@@ -1,56 +1,52 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth0 } from '@auth0/auth0-react';
 import Header from '../components/Header';
 import TravelCard from '../components/TravelCard';
+import { apiClient } from '../services/apiClient';
 import '../styles/ProfilePage.css';
 
 const ProfilePage = ({ toggleTheme, theme }) => {
   const navigate = useNavigate();
   const { isAuthenticated, user, isLoading, loginWithRedirect } = useAuth0();
   const [activeTab, setActiveTab] = useState('trips');
+  const [myTrips, setMyTrips] = useState([]);
+  const [savedTrips, setSavedTrips] = useState([]);
+  const [followers, setFollowers] = useState([]);
+  const [following, setFollowing] = useState([]);
+  const [showUserList, setShowUserList] = useState(null); // 'followers' | 'following' | null
+  const [dataLoading, setDataLoading] = useState(true);
 
-  // 샘플 데이터 — 나중에 API로 대체
-  const myTrips = [
-    {
-      id: 2,
-      date: '25년 05월 02일',
-      title: '제주도 맛집 투어',
-      subtitle: '1박 2일',
-      status: '작성중',
-      colorTheme: 'pink',
-      photoCount: 34,
-      locationCount: 5,
-    },
-    {
-      id: 5,
-      date: '24년 12월 25일',
-      title: '유럽 크리스마스 마켓 투어',
-      subtitle: '5박 6일',
-      colorTheme: 'green',
-      photoCount: 156,
-      locationCount: 9,
-    },
-  ];
+  const loadProfileData = useCallback(async () => {
+    if (!isAuthenticated || !user?.sub) return;
+    setDataLoading(true);
+    try {
+      const [postsRes, bookmarksRes, followersRes, followingRes] = await Promise.allSettled([
+        apiClient.get(`/api/v1/search/posts?user_id=${encodeURIComponent(user.sub)}&limit=50`),
+        apiClient.get('/api/v1/posts/bookmarked?limit=50'),
+        apiClient.get(`/api/v1/users/${encodeURIComponent(user.sub)}/followers?limit=100`),
+        apiClient.get(`/api/v1/users/${encodeURIComponent(user.sub)}/following?limit=100`),
+      ]);
 
-  const savedTrips = [
-    {
-      id: 1,
-      date: '24년 05월 12일',
-      title: 'LA에서 시작하는 북미 횡단 여행',
-      subtitle: '5박 6일',
-      author: 'traveler_kim',
-      colorTheme: 'blue',
-      photoCount: 127,
-      locationCount: 8,
-    },
-  ];
+      if (postsRes.status === 'fulfilled') setMyTrips(postsRes.value.posts || []);
+      if (bookmarksRes.status === 'fulfilled') setSavedTrips(bookmarksRes.value.posts || []);
+      if (followersRes.status === 'fulfilled') setFollowers(followersRes.value.users || []);
+      if (followingRes.status === 'fulfilled') setFollowing(followingRes.value.users || []);
+    } catch (err) {
+      console.error('프로필 데이터 로드 실패:', err);
+    } finally {
+      setDataLoading(false);
+    }
+  }, [isAuthenticated, user?.sub]);
+
+  useEffect(() => {
+    loadProfileData();
+  }, [loadProfileData]);
 
   const stats = {
-    trips: myTrips.length,
-    photos: myTrips.reduce((sum, t) => sum + (t.photoCount || 0), 0),
-    locations: myTrips.reduce((sum, t) => sum + (t.locationCount || 0), 0),
-    saved: savedTrips.length,
+    posts: myTrips.length,
+    followers: followers.length,
+    following: following.length,
   };
 
   if (isLoading) {
@@ -113,20 +109,16 @@ const ProfilePage = ({ toggleTheme, theme }) => {
 
             <div className="profile-stats-row">
               <div className="profile-stat">
-                <strong>{stats.trips}</strong>
-                <span>여행</span>
+                <strong>{stats.posts}</strong>
+                <span>게시물</span>
               </div>
-              <div className="profile-stat">
-                <strong>{stats.photos}</strong>
-                <span>사진</span>
+              <div className="profile-stat clickable" onClick={() => setShowUserList('followers')}>
+                <strong>{stats.followers}</strong>
+                <span>팔로워</span>
               </div>
-              <div className="profile-stat">
-                <strong>{stats.locations}</strong>
-                <span>장소</span>
-              </div>
-              <div className="profile-stat">
-                <strong>{stats.saved}</strong>
-                <span>저장됨</span>
+              <div className="profile-stat clickable" onClick={() => setShowUserList('following')}>
+                <strong>{stats.following}</strong>
+                <span>팔로잉</span>
               </div>
             </div>
 
@@ -159,26 +151,26 @@ const ProfilePage = ({ toggleTheme, theme }) => {
 
         {/* Content */}
         <div className="profile-grid">
-          {activeTab === 'trips' && (
+          {dataLoading ? (
+            <div className="profile-loading-inline">
+              <div className="page-loading-spinner" />
+            </div>
+          ) : activeTab === 'trips' ? (
             <>
               <TravelCard type="create" onClick={() => navigate('/trip/new')} />
               {myTrips.map((trip) => (
                 <TravelCard
                   key={trip.id}
-                  date={trip.date}
+                  date={trip.created_at ? new Date(trip.created_at).toLocaleDateString('ko-KR') : ''}
                   title={trip.title}
-                  subtitle={trip.subtitle}
-                  status={trip.status}
-                  colorTheme={trip.colorTheme}
-                  photoCount={trip.photoCount}
-                  locationCount={trip.locationCount}
+                  subtitle={`${trip.photo_count || 0}장`}
+                  colorTheme={['blue', 'pink', 'green', 'purple', 'yellow'][trip.id % 5]}
+                  photoCount={trip.photo_count}
                   onClick={() => navigate(`/trip/${trip.id}`)}
                 />
               ))}
             </>
-          )}
-
-          {activeTab === 'saved' && (
+          ) : (
             <>
               {savedTrips.length === 0 ? (
                 <div className="profile-empty">
@@ -191,13 +183,11 @@ const ProfilePage = ({ toggleTheme, theme }) => {
                 savedTrips.map((trip) => (
                   <TravelCard
                     key={trip.id}
-                    date={trip.date}
+                    date={trip.created_at ? new Date(trip.created_at).toLocaleDateString('ko-KR') : ''}
                     title={trip.title}
-                    subtitle={trip.subtitle}
-                    author={trip.author}
-                    colorTheme={trip.colorTheme}
-                    photoCount={trip.photoCount}
-                    locationCount={trip.locationCount}
+                    subtitle={`${trip.photo_count || 0}장`}
+                    colorTheme={['blue', 'pink', 'green', 'purple', 'yellow'][trip.id % 5]}
+                    photoCount={trip.photo_count}
                     onClick={() => navigate(`/trip/${trip.id}`)}
                   />
                 ))
@@ -205,6 +195,45 @@ const ProfilePage = ({ toggleTheme, theme }) => {
             </>
           )}
         </div>
+
+        {/* Followers / Following Modal */}
+        {showUserList && (
+          <div className="user-list-overlay" onClick={() => setShowUserList(null)}>
+            <div className="user-list-modal" onClick={(e) => e.stopPropagation()}>
+              <div className="user-list-header">
+                <h3>{showUserList === 'followers' ? '팔로워' : '팔로잉'}</h3>
+                <button className="user-list-close" onClick={() => setShowUserList(null)}>&times;</button>
+              </div>
+              <div className="user-list-body">
+                {(showUserList === 'followers' ? followers : following).length === 0 ? (
+                  <p className="user-list-empty">
+                    {showUserList === 'followers' ? '아직 팔로워가 없습니다.' : '아직 팔로우하는 사람이 없습니다.'}
+                  </p>
+                ) : (
+                  (showUserList === 'followers' ? followers : following).map((u) => (
+                    <div key={u.id} className="user-list-item">
+                      <div className="user-list-avatar">
+                        {u.picture ? (
+                          <img src={u.picture} alt="" />
+                        ) : (
+                          <div className="user-list-avatar-default">
+                            {(u.name || u.id || '?')[0].toUpperCase()}
+                          </div>
+                        )}
+                      </div>
+                      <div className="user-list-info">
+                        <span className="user-list-name">{u.name || u.id}</span>
+                        <span className="user-list-meta">
+                          게시물 {u.posts_count || 0} &middot; 팔로워 {u.followers_count || 0}
+                        </span>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

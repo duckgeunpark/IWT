@@ -48,6 +48,11 @@
   color: var(--accent-color);
   border-color: var(--accent-color);
 }
+.map-control-btn.route-toggle.active {
+  background: var(--accent-color);
+  color: #fff;
+  border-color: var(--accent-color);
+}
 
 /* ── Map Container ── */
 .map-container {
@@ -462,6 +467,66 @@
   padding: 24px 16px;
   color: var(--text-muted);
   font-size: 13px;
+}
+
+/* ── Directions Settings ── */
+.directions-settings {
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.route-summary {
+  display: flex;
+  gap: 16px;
+}
+.route-summary-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.route-summary-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+.route-summary-value {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--accent-color);
+}
+
+.route-segments {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-color);
+}
+.route-segment-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.segment-index {
+  font-weight: 700;
+  color: var(--text-primary);
+  min-width: 50px;
+}
+.segment-distance {
+  min-width: 60px;
+  font-weight: 600;
+}
+.segment-duration {
+  color: var(--text-muted);
 }
 
 /* ── Responsive ── */

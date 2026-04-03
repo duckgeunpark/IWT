@@ -10,7 +10,7 @@ from fastapi.exceptions import RequestValidationError
 import time
 import logging
 
-from app.api.v1.endpoints import user_auth0, photo_route, llm_route, post_route, image_metadata
+from app.api.v1.endpoints import user_auth0, photo_route, llm_route, post_route, image_metadata, social_route, search_route, photo_filter_route, directions_route, notification_route
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
@@ -194,9 +194,34 @@ def setup_routers(app: FastAPI) -> None:
         tags=["포스트 관리"]
     )
     app.include_router(
-        image_metadata.router, 
+        image_metadata.router,
         prefix=f"{api_prefix}/images",
         tags=["이미지 메타데이터"]
+    )
+    app.include_router(
+        social_route.router,
+        prefix=api_prefix,
+        tags=["소셜"]
+    )
+    app.include_router(
+        search_route.router,
+        prefix=api_prefix,
+        tags=["검색"]
+    )
+    app.include_router(
+        photo_filter_route.router,
+        prefix=api_prefix,
+        tags=["사진 필터링"]
+    )
+    app.include_router(
+        directions_route.router,
+        prefix=api_prefix,
+        tags=["경로"]
+    )
+    app.include_router(
+        notification_route.router,
+        prefix=api_prefix,
+        tags=["알림"]
     )
     
     # 헬스체크 엔드포인트
@@ -228,6 +253,11 @@ def setup_event_handlers(app: FastAPI) -> None:
     @app.on_event("startup")
     async def startup_event():
         """애플리케이션 시작시 실행"""
+        # 새 테이블 자동 생성 (기존 테이블은 건드리지 않음)
+        from app.models.db_models import Base
+        from app.db.session import get_engine
+        Base.metadata.create_all(bind=get_engine(), checkfirst=True)
+
         logger.info(f"{settings.app_name} 서버가 시작되었습니다.")
         logger.info(f"디버그 모드: {settings.debug}")
         logger.info(f"허용된 CORS origins: {settings.allowed_origins}")

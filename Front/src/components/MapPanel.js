@@ -2,20 +2,23 @@ import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { togglePhotoActive, setSelectedPhoto, updatePhotoGPS } from '../store/photoSlice';
 import { Wrapper, Status } from "@googlemaps/react-wrapper";
+import { apiClient } from '../services/apiClient';
 import getContrastColor from '../utils/getContrastColor';
 import extractDate from '../utils/extractDate';
 import '../styles/MapPanel.css';
 
 // Google Maps 컴포넌트
-const GoogleMapComponent = ({ 
-  center, 
-  zoom, 
-  locations, 
-  selectedLocation, 
+const GoogleMapComponent = ({
+  center,
+  zoom,
+  locations,
+  selectedLocation,
   onLocationSelect,
   mapType,
   onMapClick,
-  showRoutes 
+  showRoutes,
+  directionsData,
+  useDirections,
 }) => {
   const ref = useRef();
   const [map, setMap] = useState();
@@ -127,33 +130,55 @@ const GoogleMapComponent = ({
     if (map && locations.length >= 2) {
       // 기존 경로 선 제거
       routeLines.forEach(line => line.setMap(null));
-      
+
       if (showRoutes) {
-        // 새 경로 선 생성
         const newRouteLines = [];
-        
-        for (let i = 0; i < locations.length - 1; i++) {
-          const routeLine = new window.google.maps.Polyline({
-            path: [
-              locations[i].coordinates,
-              locations[i + 1].coordinates
-            ],
-            geodesic: true,
-            strokeColor: locations[i].color || '#ff6b6b',
-            strokeOpacity: 0.8,
-            strokeWeight: 3,
-            map: map
-          });
-          
-          newRouteLines.push(routeLine);
+
+        // Directions API 데이터가 있으면 인코딩된 폴리라인 사용
+        if (useDirections && directionsData?.segments) {
+          for (const segment of directionsData.segments) {
+            if (segment.polyline) {
+              try {
+                const path = window.google.maps.geometry.encoding.decodePath(segment.polyline);
+                const routeLine = new window.google.maps.Polyline({
+                  path,
+                  strokeColor: '#4285F4',
+                  strokeOpacity: 0.9,
+                  strokeWeight: 4,
+                  map: map,
+                });
+                newRouteLines.push(routeLine);
+              } catch {
+                // 디코딩 실패 시 직선 폴백
+              }
+            }
+          }
         }
-        
+
+        // Directions 데이터가 없거나 비활성화면 직선 경로
+        if (newRouteLines.length === 0) {
+          for (let i = 0; i < locations.length - 1; i++) {
+            const routeLine = new window.google.maps.Polyline({
+              path: [
+                locations[i].coordinates,
+                locations[i + 1].coordinates
+              ],
+              geodesic: true,
+              strokeColor: locations[i].color || '#ff6b6b',
+              strokeOpacity: 0.8,
+              strokeWeight: 3,
+              map: map
+            });
+            newRouteLines.push(routeLine);
+          }
+        }
+
         setRouteLines(newRouteLines);
       } else {
         setRouteLines([]);
       }
     }
-  }, [map, locations, showRoutes]);
+  }, [map, locations, showRoutes, useDirections, directionsData]);
 
   return <div ref={ref} style={{ width: "100%", height: "100%" }} />;
 };
@@ -183,6 +208,47 @@ const MapPanel = () => {
   const [isAddingLocation, setIsAddingLocation] = useState(false);
   const [editingLocationId, setEditingLocationId] = useState(null);
   const [editForm, setEditForm] = useState({ lat: '', lng: '' });
+  const [useDirections, setUseDirections] = useState(false);
+  const [directionsData, setDirectionsData] = useState(null);
+  const [directionsLoading, setDirectionsLoading] = useState(false);
+  const [travelMode, setTravelMode] = useState('driving');
+
+  // Directions API 호출
+  const fetchDirections = useCallback(async () => {
+    if (locations.length < 2) {
+      setDirectionsData(null);
+      return;
+    }
+    setDirectionsLoading(true);
+    try {
+      const waypoints = locations.map(loc => ({
+        lat: loc.coordinates.lat,
+        lng: loc.coordinates.lng
+      }));
+      const res = await apiClient.post('/api/v1/routes/directions', {
+        waypoints,
+        mode: travelMode
+      });
+      if (res.data && !res.data.error) {
+        setDirectionsData(res.data);
+      } else {
+        setDirectionsData(null);
+      }
+    } catch {
+      setDirectionsData(null);
+    } finally {
+      setDirectionsLoading(false);
+    }
+  }, [locations, travelMode]);
+
+  // useDirections 토글 시 또는 locations/travelMode 변경 시 경로 조회
+  useEffect(() => {
+    if (useDirections && locations.length >= 2) {
+      fetchDirections();
+    } else {
+      setDirectionsData(null);
+    }
+  }, [useDirections, locations, travelMode, fetchDirections]);
 
   // selectedPhotoId가 변경될 때 해당 위치를 선택
   useEffect(() => {
@@ -313,18 +379,33 @@ const MapPanel = () => {
           >
             -
           </button>
-          <button 
+          <button
             className="map-control-btn"
             onClick={handleResetView}
             title="초기화"
           >
             ⌂
           </button>
+          <button
+            className={`map-control-btn route-toggle ${showRoutes ? 'active' : ''}`}
+            onClick={() => setShowRoutes(!showRoutes)}
+            title={showRoutes ? '경로 숨기기' : '경로 표시'}
+          >
+            ⟿
+          </button>
+          <button
+            className={`map-control-btn route-toggle ${useDirections ? 'active' : ''}`}
+            onClick={() => setUseDirections(!useDirections)}
+            title={useDirections ? '직선 경로로 전환' : '실제 도로 경로로 전환'}
+            disabled={directionsLoading}
+          >
+            {directionsLoading ? '…' : '🛣'}
+          </button>
         </div>
       </div>
 
       <div className="map-container">
-        <Wrapper apiKey={apiKey} render={MapLoadingComponent}>
+        <Wrapper apiKey={apiKey} libraries={['geometry']} render={MapLoadingComponent}>
           <GoogleMapComponent
             center={center}
             zoom={zoom}
@@ -334,9 +415,48 @@ const MapPanel = () => {
             mapType={mapType}
             onMapClick={handleMapClick}
             showRoutes={showRoutes}
+            directionsData={directionsData}
+            useDirections={useDirections}
           />
         </Wrapper>
       </div>
+
+      {useDirections && (
+        <div className="directions-settings">
+          <div className="travel-mode-selector">
+            <label>이동 수단:</label>
+            <select value={travelMode} onChange={(e) => setTravelMode(e.target.value)}>
+              <option value="driving">자동차</option>
+              <option value="walking">도보</option>
+              <option value="bicycling">자전거</option>
+              <option value="transit">대중교통</option>
+            </select>
+          </div>
+          {directionsData && (
+            <div className="route-summary">
+              <div className="route-summary-item">
+                <span className="route-summary-label">총 거리</span>
+                <span className="route-summary-value">{directionsData.total_distance_text}</span>
+              </div>
+              <div className="route-summary-item">
+                <span className="route-summary-label">총 시간</span>
+                <span className="route-summary-value">{directionsData.total_duration_text}</span>
+              </div>
+            </div>
+          )}
+          {directionsData?.segments && directionsData.segments.length > 0 && (
+            <div className="route-segments">
+              {directionsData.segments.map((seg, i) => (
+                <div key={i} className="route-segment-item">
+                  <span className="segment-index">{i + 1} → {i + 2}</span>
+                  <span className="segment-distance">{seg.distance_text}</span>
+                  <span className="segment-duration">{seg.duration_text}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="location-details">
         <div className="location-details-header">

@@ -37,6 +37,7 @@ const photoSlice = createSlice({
     isLoading: false,
     error: null,
     uploadProgress: { current: 0, total: 0 },
+    filterResult: null,  // 사진 필터링 파이프라인 결과
   },
   reducers: {
     addPhoto: (state, action) => {
@@ -135,6 +136,10 @@ const photoSlice = createSlice({
       state.selectedPhotoId = action.payload;
     },
 
+    setFilterResult: (state, action) => {
+      state.filterResult = action.payload;
+    },
+
     updatePhotoExif: (state, action) => {
       const { photoId, updatedBackendData } = action.payload;
       const photo = state.photos.find(p => p.id === photoId);
@@ -163,6 +168,7 @@ export const {
   deactivateAllPhotos,
   setSelectedPhoto,
   updatePhotoExif,
+  setFilterResult,
   setLoading,
   setError,
   setUploadProgress
