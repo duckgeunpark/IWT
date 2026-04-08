@@ -168,12 +168,24 @@ const MainPage = ({ toggleTheme, theme }) => {
         ) : (
           <div className="sections-container">
             {(activeTab === 'all' || activeTab === 'my') && (
-              <TravelSection
-                type="my"
-                travels={sortedMyTravels}
-                onCreateNew={handleCreateNew}
-                onTravelClick={handleTravelClick}
-              />
+              <>
+                <TravelSection
+                  type="my"
+                  travels={sortedMyTravels}
+                  onCreateNew={handleCreateNew}
+                  onTravelClick={handleTravelClick}
+                />
+                {isAuthenticated && sortedMyTravels.length === 0 && sortedRecommended.length > 0 && (
+                  <div className="follower-feed-empty">
+                    <p className="follower-feed-empty-msg">아직 팔로잉하는 사람이 없어요. 이런 여행은 어떠세요?</p>
+                    <TravelSection
+                      type="recommended"
+                      travels={sortedRecommended.slice(0, 6)}
+                      onTravelClick={handleTravelClick}
+                    />
+                  </div>
+                )}
+              </>
             )}
             {(activeTab === 'all' || activeTab === 'recommended') && (
               <TravelSection

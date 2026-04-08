@@ -1,8 +1,6 @@
-version: "3.9"
-
 services:
-  # ── MySQL ────────────────────────────────────────────────────────
-  db:
+  # ── MySQL (VM 내부 컨테이너) ──────────────────────────────────
+  mysql:
     image: mysql:8.0
     restart: always
     environment:
@@ -10,6 +8,8 @@ services:
       MYSQL_DATABASE: ${DB_NAME}
       MYSQL_USER: ${DB_USER}
       MYSQL_PASSWORD: ${DB_PASSWORD}
+      MYSQL_CHARSET: utf8mb4
+      MYSQL_COLLATION: utf8mb4_unicode_ci
     volumes:
       - mysql_data:/var/lib/mysql
     networks:
@@ -19,8 +19,9 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 30s
 
-  # ── Redis ────────────────────────────────────────────────────────
+  # ── Redis ─────────────────────────────────────────────────────
   redis:
     image: redis:7-alpine
     restart: always
@@ -34,26 +35,27 @@ services:
       timeout: 3s
       retries: 5
 
-  # ── Backend (FastAPI) ────────────────────────────────────────────
+  # ── Backend (FastAPI) ─────────────────────────────────────────
   backend:
     build:
       context: ./back
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.prod
     restart: always
     env_file:
       - .env.prod
     environment:
-      DB_HOST: db
+      # MySQL 컨테이너 호스트명으로 덮어쓰기
+      DB_HOST: mysql
       REDIS_URL: redis://redis:6379/0
     depends_on:
-      db:
+      mysql:
         condition: service_healthy
       redis:
         condition: service_healthy
     networks:
       - internal
 
-  # ── Frontend (nginx + React 빌드) ────────────────────────────────
+  # ── Frontend (nginx + React 빌드) ─────────────────────────────
   frontend:
     build:
       context: ./Front

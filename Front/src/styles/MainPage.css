@@ -1,3 +1,17 @@
+/* ── Follower Feed Empty State ── */
+.follower-feed-empty {
+  margin-top: 0;
+}
+.follower-feed-empty-msg {
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 14px;
+  padding: 8px 0 4px;
+  margin: 0 0 4px;
+  border-top: 1px dashed var(--border-color);
+  padding-top: 20px;
+}
+
 /* ── Main Page ── */
 .main-page {
   min-height: 100vh;

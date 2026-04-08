@@ -39,13 +39,20 @@ class Settings(BaseSettings):
     auth0_audience: Optional[str] = None
     auth0_algorithms: str = "RS256"
     
-    # AWS S3 설정
+    # AWS S3 설정 (레거시 — OCI Object Storage 우선)
     aws_access_key_id: Optional[str] = None
     aws_secret_access_key: Optional[str] = None
     aws_region: str = "ap-northeast-2"
     s3_bucket_name: Optional[str] = None
-    s3_presigned_url_expire: int = 3600  # 1시간 (다운로드용)
-    s3_upload_url_expire: int = 900  # 15분 (업로드용)
+    s3_presigned_url_expire: int = 3600
+    s3_upload_url_expire: int = 900
+
+    # OCI Object Storage 설정 (S3 호환)
+    oci_s3_endpoint: Optional[str] = None       # OCI_S3_ENDPOINT
+    oci_access_key_id: Optional[str] = None     # OCI_ACCESS_KEY_ID
+    oci_secret_access_key: Optional[str] = None # OCI_SECRET_ACCESS_KEY
+    oci_region: str = "ap-chuncheon-1"
+    oci_bucket_name: Optional[str] = None       # OCI_BUCKET_NAME
     
     # LLM 설정
     gemini_api_key: Optional[str] = None

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth0 } from '@auth0/auth0-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import ImagePanel from '../components/ImagePanel';
 import DocumentPanel from '../components/DocumentPanel';
 import MapPanel from '../components/MapPanel';
@@ -10,7 +10,11 @@ import '../styles/CreateTripPage.css';
 const CreateTripPage = ({ toggleTheme, theme }) => {
   const { user, isAuthenticated, isLoading, loginWithRedirect } = useAuth0();
   const navigate = useNavigate();
-  const [tripTitle, setTripTitle] = useState('이름의 2025. 05. 02 ~ 2025. 05. 02 여행 기록');
+  const routeLocation = useLocation();
+  const draft = routeLocation.state?.draft;
+  const [tripTitle, setTripTitle] = useState(
+    draft?.title || (user?.name ? `${user.name}의 여행 기록` : '새 여행 기록')
+  );
   const [isEditing, setIsEditing] = useState(false);
 
   // 인증되지 않은 사용자 리다이렉트
@@ -261,7 +265,7 @@ const CreateTripPage = ({ toggleTheme, theme }) => {
             className={`panel-wrapper center-panel ${isMobile && activeTab !== 'document' ? 'mobile-hidden' : ''}`} 
             style={{ width: isMobile ? '100%' : `${centerWidth}%` }}
           >
-            <DocumentPanel />
+            <DocumentPanel initialContent={draft?.content} />
           </div>
 
           {!isMobile && (

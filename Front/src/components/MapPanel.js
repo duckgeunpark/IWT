@@ -341,6 +341,15 @@ const MapPanel = () => {
     dispatch(togglePhotoActive(locationId));
   };
 
+  const formatTimeDiff = (msA, msB) => {
+    const diff = Math.abs(msB - msA);
+    const hours = Math.floor(diff / 3600000);
+    const minutes = Math.floor((diff % 3600000) / 60000);
+    if (hours > 0) return `${hours}시간 ${minutes}분`;
+    if (minutes > 0) return `${minutes}분`;
+    return '1분 미만';
+  };
+
   // 환경변수에서 API 키 가져오기
   const apiKey = process.env.REACT_APP_GOOGLE_MAPS_API_KEY;
 
@@ -515,9 +524,21 @@ const MapPanel = () => {
               );
             }
             
+            // 위치 간 이동 시간 표시
+            if (index > 0 && locations[index - 1].captureTimestamp && location.captureTimestamp) {
+              const travelTime = formatTimeDiff(locations[index - 1].captureTimestamp, location.captureTimestamp);
+              elements.push(
+                <div key={`travel-${location.id}`} className="travel-time-indicator">
+                  <div className="travel-time-line" />
+                  <span className="travel-time-label">↓ {travelTime} 후</span>
+                  <div className="travel-time-line" />
+                </div>
+              );
+            }
+
             // 위치 항목 추가
             elements.push(
-              <div 
+              <div
                 key={location.id}
                 className={`location-item ${selectedLocation === location.id ? 'selected' : ''}`}
                 onClick={() => handleLocationSelect(location.id)}

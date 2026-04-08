@@ -24,7 +24,14 @@
       "Bash(grep:*)",
       "Bash(wc:*)",
       "Bash(head:*)",
-      "Bash(del:*)"
+      "Bash(del:*)",
+      "Bash(ls \"C:\\\\Users\\\\DK\\\\Desktop\\\\project\\\\Project\\\\IWT\"/*.yml \"C:\\\\Users\\\\DK\\\\Desktop\\\\project\\\\Project\\\\IWT\"/*.yaml)",
+      "Bash(ls \"C:\\\\Users\\\\DK\\\\Desktop\\\\project\\\\Project\\\\IWT\"/Dockerfile*)",
+      "Bash(ls \"C:\\\\Users\\\\DK\\\\Desktop\\\\project\\\\Project\\\\IWT\"/back/Dockerfile* \"C:\\\\Users\\\\DK\\\\Desktop\\\\project\\\\Project\\\\IWT\"/Front/Dockerfile*)",
+      "Bash(ls \"C:\\\\Users\\\\DK\\\\Desktop\\\\project\\\\Project\\\\IWT\\\\back\"/.env*)",
+      "Bash(ls \"C:\\\\Users\\\\DK\\\\Desktop\\\\project\\\\Project\\\\IWT\"/.env*)",
+      "Bash(ls \"C:\\\\Users\\\\DK\\\\Desktop\\\\project\\\\Project\\\\IWT\\\\Front\\\\src\"/.env* \"C:\\\\Users\\\\DK\\\\Desktop\\\\project\\\\Project\\\\IWT\\\\Front\"/.env*)",
+      "Bash(ls \"C:\\\\Users\\\\DK\\\\Desktop\\\\project\\\\Project\\\\IWT\\\\back\\\\Dockerfile\"*)"
     ],
     "deny": [],
     "ask": []

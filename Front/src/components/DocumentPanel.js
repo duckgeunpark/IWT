@@ -24,10 +24,10 @@ const SAMPLE_CONTENT = `# 여행 기록
 *LLM 버튼을 눌러 AI가 여행 기록을 자동 생성하도록 할 수 있습니다.*
 `;
 
-const DocumentPanel = () => {
+const DocumentPanel = ({ initialContent, initialTitle }) => {
   const { photos, locations } = useSelector(state => state.photos);
   const toast = useToast();
-  const [content, setContent] = useState(SAMPLE_CONTENT);
+  const [content, setContent] = useState(initialContent || SAMPLE_CONTENT);
   const [mode, setMode] = useState('preview');
   const [isLLMProcessing, setIsLLMProcessing] = useState(false);
   const textareaRef = useRef(null);
@@ -119,7 +119,7 @@ const DocumentPanel = () => {
       });
 
       if (response.success && response.itinerary) {
-        setContent(prev => prev + '\n\n' + response.itinerary);
+        setContent(response.itinerary);
       } else {
         throw new Error(response.error_message || 'LLM 생성 실패');
       }
@@ -130,7 +130,7 @@ const DocumentPanel = () => {
         `${i + 1}. **${loc.name}** - ${loc.time} (${loc.coordinates.lat.toFixed(4)}, ${loc.coordinates.lng.toFixed(4)})`
       ).join('\n');
 
-      setContent(prev => prev + `\n\n## 여행 요약 (로컬 생성)
+      setContent(`## 여행 요약 (로컬 생성)
 
 > 총 ${photos.length}장의 사진, ${locations.length}개의 위치가 기록되었습니다.
 

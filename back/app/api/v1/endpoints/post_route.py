@@ -504,7 +504,7 @@ async def get_post_photos(
 
         photo_list = []
         for photo in photos:
-            url = await s3_service.generate_presigned_url(photo.file_key)
+            url = await s3_service.generate_download_url(photo.file_key)
             location = None
             if photo.location:
                 loc = photo.location

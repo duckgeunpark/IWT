@@ -14,20 +14,9 @@ const ExifEditModal = ({ isOpen, onClose, imageData, onSave }) => {
   
   // 편집 가능한 EXIF 데이터 상태
   const [editData, setEditData] = useState({
-    // 기본 이미지 정보
     originalFilename: '',
-    
-    // GPS 정보 (편집 가능)
-    gpsLat: '',
-    gpsLng: '',
-    gpsAlt: '',
-    gpsAccuracyM: '',
-    
-    // 시간 정보 (편집 가능)
     takenAtLocal: '',
     offsetMinutes: 0,
-    
-    // 기타 메타데이터
     imageWidth: '',
     imageHeight: '',
     orientation: '',
@@ -43,19 +32,9 @@ const ExifEditModal = ({ isOpen, onClose, imageData, onSave }) => {
       
       setEditData({
         originalFilename: backendData.originalFilename || imageData.name,
-        
-        // GPS 정보
-        gpsLat: backendData.gps?.lat?.toString() || '',
-        gpsLng: backendData.gps?.lng?.toString() || '',
-        gpsAlt: backendData.gps?.alt?.toString() || '',
-        gpsAccuracyM: backendData.gps?.accuracyM?.toString() || '',
-        
-        // 시간 정보
-        takenAtLocal: backendData.takenAtLocal ? 
+        takenAtLocal: backendData.takenAtLocal ?
           new Date(backendData.takenAtLocal).toISOString().slice(0, 16) : '',
         offsetMinutes: backendData.offsetMinutes || 0,
-        
-        // 기타 정보
         imageWidth: backendData.imageWidth?.toString() || '',
         imageHeight: backendData.imageHeight?.toString() || '',
         orientation: backendData.orientation?.toString() || '',
@@ -99,36 +78,19 @@ const ExifEditModal = ({ isOpen, onClose, imageData, onSave }) => {
     try {
       setIsSaving(true);
       
-      // 편집된 데이터 준비
+      // 편집된 데이터 준비 (GPS는 읽기 전용으로 원본 유지)
       const updatedBackendData = {
         ...imageData.exifData.backendData,
         originalFilename: editData.originalFilename,
-        
-        // GPS 정보 업데이트
-        gps: {
-          lat: editData.gpsLat ? parseFloat(editData.gpsLat) : null,
-          lng: editData.gpsLng ? parseFloat(editData.gpsLng) : null,
-          alt: editData.gpsAlt ? parseFloat(editData.gpsAlt) : null,
-          accuracyM: editData.gpsAccuracyM ? parseFloat(editData.gpsAccuracyM) : null
-        },
-        
-        // 시간 정보 업데이트
         takenAtLocal: editData.takenAtLocal ? new Date(editData.takenAtLocal).toISOString() : null,
         offsetMinutes: parseInt(editData.offsetMinutes) || 0,
-        takenAtUTC: editData.takenAtLocal && editData.offsetMinutes ? 
+        takenAtUTC: editData.takenAtLocal && editData.offsetMinutes ?
           new Date(new Date(editData.takenAtLocal).getTime() - (parseInt(editData.offsetMinutes) * 60000)).toISOString() : null,
-        
-        // 이미지 정보 업데이트
         imageWidth: editData.imageWidth ? parseInt(editData.imageWidth) : null,
         imageHeight: editData.imageHeight ? parseInt(editData.imageHeight) : null,
         orientation: editData.orientation ? parseInt(editData.orientation) : null,
         colorSpace: editData.colorSpace || null
       };
-      
-      // GPS 정보가 유효하지 않으면 null로 설정
-      if (!updatedBackendData.gps.lat || !updatedBackendData.gps.lng) {
-        updatedBackendData.gps = null;
-      }
       
       // 백엔드로 업데이트된 메타데이터 전송
       await apiClient.put(`/api/v1/images/metadata/${updatedBackendData.id}`, updatedBackendData);
@@ -171,51 +133,26 @@ const ExifEditModal = ({ isOpen, onClose, imageData, onSave }) => {
           </div>
           
           <div className="form-section">
-            <h3>🌍 GPS 위치 정보</h3>
-            <div className="form-row">
-              <div className="form-group">
-                <label>위도 (Latitude):</label>
-                <input
-                  type="number"
-                  step="any"
-                  value={editData.gpsLat}
-                  onChange={(e) => handleInputChange('gpsLat', e.target.value)}
-                  placeholder="예: 37.566535"
-                />
+            <h3>🌍 GPS 위치 정보 (읽기 전용)</h3>
+            {imageData?.exifData?.backendData?.gps ? (
+              <div className="gps-readonly">
+                <div className="gps-readonly-row">
+                  <span className="gps-label">위도</span>
+                  <span className="gps-value">{imageData.exifData.backendData.gps.lat?.toFixed(6)}</span>
+                  <span className="gps-label">경도</span>
+                  <span className="gps-value">{imageData.exifData.backendData.gps.lng?.toFixed(6)}</span>
+                </div>
+                {imageData.exifData.backendData.gps.alt && (
+                  <div className="gps-readonly-row">
+                    <span className="gps-label">고도</span>
+                    <span className="gps-value">{imageData.exifData.backendData.gps.alt?.toFixed(1)}m</span>
+                  </div>
+                )}
+                <p className="gps-note">GPS 좌표는 사진의 EXIF에서 자동 추출됩니다.</p>
               </div>
-              <div className="form-group">
-                <label>경도 (Longitude):</label>
-                <input
-                  type="number"
-                  step="any"
-                  value={editData.gpsLng}
-                  onChange={(e) => handleInputChange('gpsLng', e.target.value)}
-                  placeholder="예: 126.977969"
-                />
-              </div>
-            </div>
-            <div className="form-row">
-              <div className="form-group">
-                <label>고도 (Altitude, m):</label>
-                <input
-                  type="number"
-                  step="any"
-                  value={editData.gpsAlt}
-                  onChange={(e) => handleInputChange('gpsAlt', e.target.value)}
-                  placeholder="미터 단위"
-                />
-              </div>
-              <div className="form-group">
-                <label>GPS 정확도 (m):</label>
-                <input
-                  type="number"
-                  step="any"
-                  value={editData.gpsAccuracyM}
-                  onChange={(e) => handleInputChange('gpsAccuracyM', e.target.value)}
-                  placeholder="미터 단위"
-                />
-              </div>
-            </div>
+            ) : (
+              <p className="gps-empty">이 사진에는 GPS 정보가 없습니다.</p>
+            )}
           </div>
           
           <div className="form-section">

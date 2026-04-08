@@ -25,6 +25,7 @@ const ImagePanel = () => {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [lightboxPhoto, setLightboxPhoto] = useState(null);
 
   const fileInputRef = useRef(null);
 
@@ -359,6 +360,17 @@ const ImagePanel = () => {
     dispatch(setSelectedPhoto(imageId));
   };
 
+  const openLightbox = (image, e) => {
+    e.stopPropagation();
+    const file = fileStore.get(image.id);
+    const src = file ? URL.createObjectURL(file) : image.preview;
+    setLightboxPhoto({ src, name: image.name });
+  };
+
+  const closeLightbox = () => {
+    setLightboxPhoto(null);
+  };
+
   const handlePanelClick = (e) => {
     if (e.target === e.currentTarget || e.target.closest('.image-section')) {
       dispatch(setSelectedPhoto(null));
@@ -462,7 +474,13 @@ const ImagePanel = () => {
                     }}
                   >
                     <div className="image-preview">
-                      <img src={image.preview} alt={image.name} />
+                      <img
+                        src={image.preview}
+                        alt={image.name}
+                        onClick={(e) => openLightbox(image, e)}
+                        style={{ cursor: 'zoom-in' }}
+                        title="클릭하여 크게 보기"
+                      />
                       {image.isActive && mapOrderNumber > 0 && (
                         <div
                           className="map-order-number"
@@ -535,6 +553,19 @@ const ImagePanel = () => {
         imageData={editingImageId ? photos.find(photo => photo.id === editingImageId) : null}
         onSave={handleExifSave}
       />
+
+      {lightboxPhoto && (
+        <div className="lightbox-overlay" onClick={closeLightbox}>
+          <button className="lightbox-close" onClick={closeLightbox} title="닫기">×</button>
+          <img
+            src={lightboxPhoto.src}
+            alt={lightboxPhoto.name}
+            className="lightbox-image"
+            onClick={(e) => e.stopPropagation()}
+          />
+          <div className="lightbox-caption">{lightboxPhoto.name}</div>
+        </div>
+      )}
     </>
   );
 };

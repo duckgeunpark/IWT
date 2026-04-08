@@ -98,11 +98,16 @@ const ExplorePage = ({ toggleTheme, theme }) => {
         <div className="explore-hero">
           <div className="explore-hero-inner">
             <h1 className="explore-title">
-              <span className="gradient-text">AI</span>가 추천하는 여행 경로
+              <span className="gradient-text">AI 여행 계획</span>
             </h1>
             <p className="explore-subtitle">
-              커뮤니티의 실제 여행 데이터와 AI 분석을 기반으로 최적의 경로를 추천합니다
+              다른 여행자의 실제 기록을 바탕으로 AI가 나만의 최적 경로를 추천해 드립니다
             </p>
+            <div className="explore-hero-actions">
+              <button className="explore-plan-cta" onClick={() => navigate('/trip/new')}>
+                ✨ 내 여행 계획하기
+              </button>
+            </div>
           </div>
         </div>
 
@@ -259,65 +264,83 @@ const ExplorePage = ({ toggleTheme, theme }) => {
             </div>
           ) : (
             <div className="route-grid">
-              {posts.map((post) => (
-                <div
-                  key={post.id}
-                  className="route-card"
-                  onClick={() => navigate(`/trip/${post.id}`)}
-                >
-                  {/* Card Header */}
-                  <div className="route-card-header blue-gradient">
-                    <div className="route-card-overlay">
+              {posts.map((post, idx) => {
+                const gradients = [
+                  'linear-gradient(135deg,#667eea,#764ba2)',
+                  'linear-gradient(135deg,#f093fb,#f5576c)',
+                  'linear-gradient(135deg,#4facfe,#00f2fe)',
+                  'linear-gradient(135deg,#43e97b,#38f9d7)',
+                  'linear-gradient(135deg,#fa709a,#fee140)',
+                  'linear-gradient(135deg,#a18cd1,#fbc2eb)',
+                ];
+                const gradient = gradients[idx % gradients.length];
+                const tags = Array.isArray(post.tags) ? post.tags : [];
+                const cats = post.categories ? Object.values(post.categories).flat() : [];
+                const allTags = [...new Set([...cats, ...tags])].slice(0, 4);
+                return (
+                  <div
+                    key={post.id}
+                    className="route-card"
+                    onClick={() => navigate(`/trip/${post.id}`)}
+                  >
+                    {/* Card Thumbnail */}
+                    <div className="route-card-thumb" style={{ background: gradient }}>
+                      {post.thumbnail_url ? (
+                        <img src={post.thumbnail_url} alt={post.title} className="route-thumb-img" />
+                      ) : (
+                        <span className="route-thumb-icon">✈️</span>
+                      )}
+                      {post.photo_count > 0 && (
+                        <span className="route-thumb-count">📷 {post.photo_count}</span>
+                      )}
+                    </div>
+
+                    {/* Card Body */}
+                    <div className="route-card-body">
+                      <h3 className="route-card-title">{post.title}</h3>
+
                       {post.locations && post.locations.length > 0 && (
-                        <div className="route-card-stops">
+                        <div className="route-card-route">
                           {post.locations.slice(0, 3).map((loc, j) => (
                             <React.Fragment key={j}>
-                              <span>{loc.city || loc.country || '위치'}</span>
-                              {j < Math.min(post.locations.length, 3) - 1 && <span className="stop-arrow-sm">→</span>}
+                              <span className="route-stop">{loc.city || loc.country || '위치'}</span>
+                              {j < Math.min(post.locations.length, 3) - 1 && (
+                                <span className="route-arrow">→</span>
+                              )}
                             </React.Fragment>
+                          ))}
+                          {post.locations.length > 3 && (
+                            <span className="route-more">+{post.locations.length - 3}</span>
+                          )}
+                        </div>
+                      )}
+
+                      {post.description && (
+                        <p className="route-card-desc">
+                          {post.description.slice(0, 80)}{post.description.length > 80 ? '...' : ''}
+                        </p>
+                      )}
+
+                      {allTags.length > 0 && (
+                        <div className="route-card-tags">
+                          {allTags.map(tag => (
+                            <span key={tag} className="route-tag">#{tag}</span>
                           ))}
                         </div>
                       )}
+
+                      <div className="route-card-footer">
+                        <span className="route-footer-date">
+                          {new Date(post.created_at).toLocaleDateString('ko-KR')}
+                        </span>
+                        {post.likes_count > 0 && (
+                          <span className="route-footer-likes">♥ {post.likes_count}</span>
+                        )}
+                      </div>
                     </div>
                   </div>
-
-                  {/* Card Body */}
-                  <div className="route-card-body">
-                    <h3 className="route-card-title">{post.title}</h3>
-                    <p className="route-card-desc">
-                      {post.description ? post.description.slice(0, 100) + (post.description.length > 100 ? '...' : '') : ''}
-                    </p>
-
-                    <div className="route-card-meta">
-                      <span className="route-meta-item">{post.photo_count}장</span>
-                      {post.likes_count > 0 && (
-                        <span className="route-meta-item">♥ {post.likes_count}</span>
-                      )}
-                      <span className="route-meta-item">
-                        {new Date(post.created_at).toLocaleDateString('ko-KR')}
-                      </span>
-                    </div>
-
-                    {/* Categories */}
-                    {post.categories && Object.keys(post.categories).length > 0 && (
-                      <div className="route-card-tags">
-                        {Object.values(post.categories).flat().slice(0, 4).map(cat => (
-                          <span key={cat} className="route-tag">#{cat}</span>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* Tags */}
-                    {post.tags && (
-                      <div className="route-card-tags">
-                        {(Array.isArray(post.tags) ? post.tags : []).slice(0, 3).map(tag => (
-                          <span key={tag} className="route-tag">#{tag}</span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </section>

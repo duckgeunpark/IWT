@@ -24,8 +24,10 @@ class S3PresignedURLService:
             # OCI Object Storage (S3 호환 API)
             access_key = os.getenv('OCI_ACCESS_KEY_ID')
             secret_key = os.getenv('OCI_SECRET_ACCESS_KEY')
-            region = os.getenv('OCI_REGION', 'ap-seoul-1')
+            region = os.getenv('OCI_REGION', 'ap-chuncheon-1')
             self.bucket_name = os.getenv('OCI_BUCKET_NAME')
+            self.is_oci = True
+            self.endpoint_url = oci_endpoint
 
             if not access_key or not secret_key:
                 raise ValueError("OCI_ACCESS_KEY_ID and OCI_SECRET_ACCESS_KEY are required")
@@ -37,7 +39,8 @@ class S3PresignedURLService:
                 aws_access_key_id=access_key,
                 aws_secret_access_key=secret_key,
                 region_name=region,
-                endpoint_url=oci_endpoint
+                endpoint_url=oci_endpoint,
+                config=boto3.session.Config(signature_version='s3v4'),
             )
             logger.info(f"OCI Object Storage 초기화 완료 - Bucket: {self.bucket_name}, Region: {region}")
         else:
@@ -46,6 +49,8 @@ class S3PresignedURLService:
             secret_key = os.getenv('AWS_SECRET_ACCESS_KEY')
             region = os.getenv('AWS_REGION', 'ap-northeast-2')
             self.bucket_name = os.getenv('S3_BUCKET_NAME')
+            self.is_oci = False
+            self.endpoint_url = None
 
             if not access_key or not secret_key:
                 raise ValueError("AWS credentials are required")
@@ -56,7 +61,7 @@ class S3PresignedURLService:
                 's3',
                 aws_access_key_id=access_key,
                 aws_secret_access_key=secret_key,
-                region_name=region
+                region_name=region,
             )
             logger.info(f"AWS S3 초기화 완료 - Bucket: {self.bucket_name}, Region: {region}")
     
@@ -188,6 +193,35 @@ class S3PresignedURLService:
             logger.error(f"파일 삭제 중 예상치 못한 오류: {str(e)}")
             return False
     
+    async def generate_download_url(
+        self,
+        file_key: str,
+        expiration: int = 3600,
+    ) -> Optional[str]:
+        """
+        파일 조회(GET)용 presigned URL 생성
+
+        Args:
+            file_key: 조회할 파일 키
+            expiration: URL 만료 시간 (초)
+
+        Returns:
+            presigned URL 문자열 (실패 시 None)
+        """
+        try:
+            url = self.s3_client.generate_presigned_url(
+                'get_object',
+                Params={'Bucket': self.bucket_name, 'Key': file_key},
+                ExpiresIn=expiration,
+            )
+            return url
+        except ClientError as e:
+            logger.error(f"다운로드 URL 생성 실패: {e.response['Error']['Code']}")
+            return None
+        except Exception as e:
+            logger.error(f"다운로드 URL 생성 중 오류: {str(e)}")
+            return None
+
     async def get_file_info(self, file_key: str) -> Optional[Dict]:
         """
         S3 파일 정보 조회

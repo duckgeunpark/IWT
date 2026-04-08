@@ -52,6 +52,7 @@ const NewTripPage = ({ toggleTheme, theme }) => {
   // ── 필터링 상태 ──
   const [filterSummary, setFilterSummary] = useState(null);
   const [isFiltering, setIsFiltering] = useState(false);
+  const [generatedDraft, setGeneratedDraft] = useState(null);
 
   // ── 계획 모드 상태 ──
   const [destination, setDestination] = useState('');
@@ -216,11 +217,13 @@ const NewTripPage = ({ toggleTheme, theme }) => {
 
       // 사진 필터링 파이프라인 실행
       setIsFiltering(true);
+      let filterSummaryResult = null;
       try {
         const filterResponse = await apiClient.post('/api/v1/photos/filter', {
           photos: filterInput,
           enable_ai_quality: false,
         });
+        filterSummaryResult = filterResponse.summary;
         setFilterSummary(filterResponse.summary);
         dispatch(setFilterResult(filterResponse));
 
@@ -242,12 +245,42 @@ const NewTripPage = ({ toggleTheme, theme }) => {
         setIsFiltering(false);
       }
 
+      // AI 초안 생성
+      let draft = null;
+      try {
+        const photoData = filterInput.map(p => ({
+          name: p.file_name,
+          captureTime: p.taken_at,
+          gps: p.gps,
+        }));
+        const locationData = filterInput
+          .filter(p => p.gps)
+          .map((p, i) => ({ name: p.file_name, coordinates: p.gps, time: p.taken_at }));
+
+        const llmRes = await apiClient.post('/api/v1/llm/generate-itinerary', {
+          route_data: {
+            photos: photoData,
+            locations: locationData,
+            total_photos: filterInput.length,
+          },
+          user_preferences: { language: 'ko', format: 'markdown' },
+        });
+
+        if (llmRes.success && llmRes.itinerary) {
+          draft = { content: llmRes.itinerary, title: llmRes.title || null };
+          toast.success('AI 초안 생성 완료! 내용을 검토하고 수정하세요.');
+        }
+      } catch (llmErr) {
+        console.warn('AI 초안 생성 실패 (무시하고 계속):', llmErr);
+      }
+
       // 필터 결과가 있으면 리뷰 단계로, 없으면 바로 이동
-      if (filterSummary) {
+      if (filterSummaryResult) {
+        setGeneratedDraft(draft);
         setStep(2); // 필터 결과 리뷰 단계
         return;
       }
-      goToEditPage();
+      goToEditPage(draft);
     } catch (err) {
       toast.error('처리 중 오류가 발생했습니다.');
       console.error(err);
@@ -256,9 +289,9 @@ const NewTripPage = ({ toggleTheme, theme }) => {
     }
   };
 
-  const goToEditPage = () => {
+  const goToEditPage = (draft) => {
     uploadedFiles.forEach(f => { if (f.preview) URL.revokeObjectURL(f.preview); });
-    navigate('/trip/new/edit', { state: { fromRecord: true } });
+    navigate('/trip/new/edit', { state: { fromRecord: true, draft: draft || generatedDraft } });
   };
 
   // ═══════════════════════════════════════════
