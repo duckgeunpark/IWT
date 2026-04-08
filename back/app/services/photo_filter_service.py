@@ -1,7 +1,7 @@
 """
 사진 필터링 파이프라인 서비스
 
-7단계 파이프라인:
+7단계 파이프라인 (flat 리스트 처리):
 1. 중복 제거 (파일 해시 비교)
 2. 연사/버스트 그룹화
 3. GPS 없는 사진 분리
@@ -9,6 +9,8 @@
 5. AI 품질 분석 (선택)
 6. 쓰레기 데이터 구분
 7. 데이터 활용 내역 표기
+
++ clean_batch(): 2단계 묶음 정제 파이프라인 (GPS 이상치 + 시간 구간 분리)
 """
 
 import hashlib
@@ -17,6 +19,31 @@ from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional, Tuple
 from dataclasses import dataclass, field
 import logging
+
+# ── 묶음 정제 상수 ─────────────────────────────────────────────
+MAX_SPEED_KMH = 900        # 허용 최대 이동 속도 (상업 항공기 기준, km/h)
+BURST_SECS = 3             # 연사 판단 시간 차이 (초)
+BURST_RADIUS_M = 50        # 연사 판단 GPS 반경 (미터)
+SEGMENT_GAP_HOURS = 6      # 여행 구간 분리 간격 (시간)
+OUTLIER_MAD_FACTOR = 3.0   # GPS 이상치 MAD 배수
+MIN_YEAR = 2000            # 유효 최소 촬영 연도
+
+# 활용 코드
+_CODE_USED = "used"
+_CODE_NO_GPS = "0001"
+_CODE_TIME_MISMATCH = "0002"
+_CODE_BURST = "0003"
+_CODE_GPS_OUTLIER = "0004"
+_CODE_NO_DATE = "0005"
+
+
+def _median(values: List[float]) -> float:
+    if not values:
+        return 0.0
+    s = sorted(values)
+    n = len(s)
+    mid = n // 2
+    return s[mid] if n % 2 else (s[mid - 1] + s[mid]) / 2
 
 logger = logging.getLogger(__name__)
 
@@ -391,6 +418,280 @@ class PhotoFilterService:
         """파일 MD5 해시 계산"""
         return hashlib.md5(file_bytes).hexdigest()
 
+    # ═══════════════════════════════════════════
+    # 묶음 정제 파이프라인 (2단계: GPS 이상치 + 구간 분리)
+    # ═══════════════════════════════════════════
+
+    def clean_batch(self, photos: List[Dict]) -> Dict:
+        """
+        2단계 묶음 정제 파이프라인 — post_route.py에서 사용
+
+        처리 순서:
+          1. 시간 파싱 + 정렬 / 날짜 없는 사진 분리
+          2. GPS 있는 사진 / 없는 사진 분리
+          3. 연사/중복 제거
+          4. GPS 이상치 탐지 및 제거 (속도 기반 + MAD 기반)
+          5. 시간 간격 기반 여행 구간 분리
+          6. 시간대 불일치 구간 필터
+
+        Returns:
+            {
+              "segments": [...],          # 활용 구간별 사진 목록
+              "no_gps_photos": [...],     # GPS 없음 (경로 미사용)
+              "removed": [...],           # 제거된 사진 목록
+              "usage_report": [...],      # 사진별 활용 내역
+              "summary": {...}            # 요약 통계
+            }
+        """
+        if not photos:
+            return self._empty_clean_result()
+
+        removed: List[Dict] = []
+
+        # 1. 시간 파싱 + 정렬
+        dated_photos, no_date_photos = self._cb_parse_and_sort(photos)
+        for p in no_date_photos:
+            removed.append({"photo": p, "reason": "날짜 정보 없음", "code": _CODE_NO_DATE})
+
+        # 2. GPS 분리
+        gps_photos, no_gps_photos = self._cb_split_by_gps(dated_photos)
+
+        # 3. 연사/중복 제거
+        deduped, burst_removed = self._cb_remove_burst(gps_photos)
+        for p in burst_removed:
+            removed.append({"photo": p, "reason": "연사/중복 사진", "code": _CODE_BURST})
+
+        # 4. GPS 이상치 제거
+        clean_photos, gps_outliers = self._cb_detect_gps_outliers(deduped)
+        for p in gps_outliers:
+            removed.append({"photo": p, "reason": "GPS 이상치 (경로 이탈 좌표)", "code": _CODE_GPS_OUTLIER})
+
+        # 5. 시간 간격 기반 구간 분리
+        segments = self._cb_split_segments(clean_photos)
+
+        # 6. 시간대 불일치 구간 필터
+        segments, time_outliers = self._cb_filter_outlier_segments(segments)
+        for p in time_outliers:
+            removed.append({"photo": p, "reason": "시간대 불일치 구간", "code": _CODE_TIME_MISMATCH})
+
+        usage_report = self._cb_build_usage_report(photos, removed, no_gps_photos)
+
+        summary = {
+            "total_input": len(photos),
+            "total_usable": sum(len(s["photos"]) for s in segments),
+            "total_removed": len(removed),
+            "no_date": len(no_date_photos),
+            "no_gps": len(no_gps_photos),
+            "segment_count": len(segments),
+        }
+
+        logger.info(
+            f"clean_batch 완료 | 입력 {summary['total_input']}장 → "
+            f"활용 {summary['total_usable']}장 / 제거 {summary['total_removed']}장 / "
+            f"GPS없음 {summary['no_gps']}장 / 구간 {summary['segment_count']}개"
+        )
+
+        return {
+            "segments": segments,
+            "no_gps_photos": no_gps_photos,
+            "removed": removed,
+            "usage_report": usage_report,
+            "summary": summary,
+        }
+
+    def _cb_parse_and_sort(self, photos: List[Dict]) -> Tuple[List[Dict], List[Dict]]:
+        dated, no_date = [], []
+        for photo in photos:
+            dt = self._cb_extract_datetime(photo)
+            if dt:
+                p = dict(photo)
+                p["_dt"] = dt
+                dated.append(p)
+            else:
+                no_date.append(photo)
+        dated.sort(key=lambda x: x["_dt"])
+        return dated, no_date
+
+    def _cb_split_by_gps(self, photos: List[Dict]) -> Tuple[List[Dict], List[Dict]]:
+        with_gps, without_gps = [], []
+        for photo in photos:
+            lat, lon = self._cb_extract_gps(photo)
+            if lat is not None:
+                p = dict(photo)
+                p["_lat"], p["_lon"] = lat, lon
+                with_gps.append(p)
+            else:
+                without_gps.append(photo)
+        return with_gps, without_gps
+
+    def _cb_remove_burst(self, photos: List[Dict]) -> Tuple[List[Dict], List[Dict]]:
+        if len(photos) <= 1:
+            return list(photos), []
+        kept, removed = [], []
+        i = 0
+        while i < len(photos):
+            group = [photos[i]]
+            j = i + 1
+            while j < len(photos):
+                secs = (photos[j]["_dt"] - photos[i]["_dt"]).total_seconds()
+                if secs > BURST_SECS:
+                    break
+                dist = self._haversine(
+                    photos[i]["_lat"], photos[i]["_lon"],
+                    photos[j]["_lat"], photos[j]["_lon"],
+                )
+                if dist <= BURST_RADIUS_M:
+                    group.append(photos[j])
+                    j += 1
+                else:
+                    break
+            rep = max(group, key=lambda p: p.get("file_size", 0))
+            kept.append(rep)
+            removed.extend(p for p in group if p is not rep)
+            i = j
+        return kept, removed
+
+    def _cb_detect_gps_outliers(self, photos: List[Dict]) -> Tuple[List[Dict], List[Dict]]:
+        if len(photos) <= 2:
+            return list(photos), []
+        outlier_idx: set = set()
+        # 방법 A: 속도 기반
+        for i in range(1, len(photos)):
+            prev, curr = photos[i - 1], photos[i]
+            dist_km = self._haversine(
+                prev["_lat"], prev["_lon"], curr["_lat"], curr["_lon"]
+            ) / 1000.0
+            hours = (curr["_dt"] - prev["_dt"]).total_seconds() / 3600
+            if hours > 0 and (dist_km / hours) > MAX_SPEED_KMH:
+                outlier_idx.add(i)
+        # 방법 B: MAD 기반
+        lats = [p["_lat"] for p in photos]
+        lons = [p["_lon"] for p in photos]
+        med_lat = _median(lats)
+        med_lon = _median(lons)
+        dists = [self._haversine(p["_lat"], p["_lon"], med_lat, med_lon) / 1000.0 for p in photos]
+        med_d = _median(dists)
+        mad = _median([abs(d - med_d) for d in dists])
+        threshold = med_d + OUTLIER_MAD_FACTOR * mad * 1.4826
+        if threshold > 0:
+            for i, d in enumerate(dists):
+                if d > threshold:
+                    outlier_idx.add(i)
+        clean = [p for i, p in enumerate(photos) if i not in outlier_idx]
+        outliers = [p for i, p in enumerate(photos) if i in outlier_idx]
+        return clean, outliers
+
+    def _cb_split_segments(self, photos: List[Dict]) -> List[Dict]:
+        if not photos:
+            return []
+        segments, current = [], [photos[0]]
+        for i in range(1, len(photos)):
+            gap_h = (photos[i]["_dt"] - photos[i - 1]["_dt"]).total_seconds() / 3600
+            if gap_h >= SEGMENT_GAP_HOURS:
+                segments.append(self._cb_build_segment(current))
+                current = [photos[i]]
+            else:
+                current.append(photos[i])
+        if current:
+            segments.append(self._cb_build_segment(current))
+        return segments
+
+    def _cb_filter_outlier_segments(self, segments: List[Dict]) -> Tuple[List[Dict], List[Dict]]:
+        if len(segments) <= 1:
+            return segments, []
+        avg = sum(len(s["photos"]) for s in segments) / len(segments)
+        threshold = max(2, avg * 0.1)
+        kept, outlier_photos = [], []
+        for seg in segments:
+            if len(seg["photos"]) < threshold:
+                outlier_photos.extend(seg["photos"])
+            else:
+                kept.append(seg)
+        return (kept if kept else segments), outlier_photos
+
+    def _cb_build_segment(self, photos: List[Dict]) -> Dict:
+        times = [p["_dt"] for p in photos]
+        lats = [p["_lat"] for p in photos]
+        lons = [p["_lon"] for p in photos]
+        return {
+            "photos": photos,
+            "start_time": min(times).isoformat(),
+            "end_time": max(times).isoformat(),
+            "duration_hours": round((max(times) - min(times)).total_seconds() / 3600, 2),
+            "photo_count": len(photos),
+            "center": {
+                "lat": round(sum(lats) / len(lats), 6),
+                "lon": round(sum(lons) / len(lons), 6),
+            },
+        }
+
+    def _cb_build_usage_report(
+        self, original: List[Dict], removed: List[Dict], no_gps: List[Dict]
+    ) -> List[Dict]:
+        removed_map: Dict[str, Dict] = {
+            item["photo"].get("file_key", ""): item for item in removed
+        }
+        no_gps_keys = {p.get("file_key", "") for p in no_gps}
+        report = []
+        for i, photo in enumerate(original, start=1):
+            fk = photo.get("file_key", "")
+            if fk in removed_map:
+                info = removed_map[fk]
+                report.append({"index": i, "file_key": fk, "used": False, "code": info["code"], "reason": info["reason"]})
+            elif fk in no_gps_keys:
+                report.append({"index": i, "file_key": fk, "used": False, "code": _CODE_NO_GPS, "reason": "GPS 없음 (경로 미사용, 갤러리 포함 가능)"})
+            else:
+                report.append({"index": i, "file_key": fk, "used": True, "code": _CODE_USED, "reason": "GPS 및 게시글 경로에 활용됨"})
+        return report
+
+    def _cb_extract_datetime(self, photo: Dict) -> Optional[datetime]:
+        try:
+            exif = photo.get("exif_data") or {}
+            raw = exif.get("datetime") or photo.get("datetime")
+            if not raw:
+                return None
+            dt = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+            now = datetime.now(tz=dt.tzinfo) if dt.tzinfo else datetime.now()
+            if dt.year < MIN_YEAR or dt > now:
+                return None
+            return dt
+        except Exception:
+            return None
+
+    def _cb_extract_gps(self, photo: Dict) -> Tuple[Optional[float], Optional[float]]:
+        try:
+            exif = photo.get("exif_data") or {}
+            gps = exif.get("gps") or {}
+            lat = gps.get("latitude") or photo.get("latitude")
+            lon = gps.get("longitude") or photo.get("longitude")
+            if lat is None or lon is None:
+                return None, None
+            lat, lon = float(lat), float(lon)
+            if lat == 0.0 and lon == 0.0:
+                return None, None
+            if not (-90 <= lat <= 90 and -180 <= lon <= 180):
+                return None, None
+            return lat, lon
+        except Exception:
+            return None, None
+
+    @staticmethod
+    def _empty_clean_result() -> Dict:
+        return {
+            "segments": [],
+            "no_gps_photos": [],
+            "removed": [],
+            "usage_report": [],
+            "summary": {
+                "total_input": 0,
+                "total_usable": 0,
+                "total_removed": 0,
+                "no_date": 0,
+                "no_gps": 0,
+                "segment_count": 0,
+            },
+        }
+
     def _parse_input(self, photos: List[Dict[str, Any]]) -> List[PhotoItem]:
         """입력 데이터를 PhotoItem 리스트로 변환"""
         items = []
@@ -442,3 +743,7 @@ class PhotoFilterService:
             "gps": p.gps,
             "taken_at": p.taken_at.isoformat() if p.taken_at else None,
         }
+
+
+# 싱글톤 인스턴스
+photo_filter = PhotoFilterService()

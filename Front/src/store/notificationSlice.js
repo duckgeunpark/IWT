@@ -4,8 +4,8 @@ import { apiClient } from '../services/apiClient';
 export const fetchNotifications = createAsyncThunk(
   'notifications/fetchNotifications',
   async ({ limit = 50, offset = 0 } = {}) => {
-    const res = await apiClient.get(`/api/v1/notifications?limit=${limit}&offset=${offset}`);
-    return res.data;
+    // apiClient.get()은 파싱된 JSON을 직접 반환 (res.data 아님)
+    return await apiClient.get(`/api/v1/notifications?limit=${limit}&offset=${offset}`);
   }
 );
 
@@ -13,7 +13,7 @@ export const fetchUnreadCount = createAsyncThunk(
   'notifications/fetchUnreadCount',
   async () => {
     const res = await apiClient.get('/api/v1/notifications/unread-count');
-    return res.data.unread_count;
+    return res.unread_count;
   }
 );
 

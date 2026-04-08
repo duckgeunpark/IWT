@@ -48,8 +48,10 @@ class Settings(BaseSettings):
     s3_upload_url_expire: int = 900  # 15분 (업로드용)
     
     # LLM 설정
+    gemini_api_key: Optional[str] = None
     groq_api_key: Optional[str] = None
-    llm_model_name: str = "llama3-8b-8192"
+    llm_provider: str = "gemini"
+    llm_model_name: str = "gemini-3.1-flash-lite-preview"
     llm_temperature: float = 0.1
     llm_max_tokens: int = 500
     

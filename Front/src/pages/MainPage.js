@@ -1,105 +1,100 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth0 } from '@auth0/auth0-react';
 import Header from '../components/Header';
 import TravelSection from '../components/TravelSection';
+import { apiClient } from '../services/apiClient';
 import '../styles/MainPage.css';
+
+const COLOR_THEMES = ['blue', 'pink', 'purple', 'yellow', 'green', 'orange'];
+
+function formatDate(isoString) {
+  if (!isoString) return '';
+  const d = new Date(isoString);
+  const y = String(d.getFullYear()).slice(2);
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}년 ${m}월 ${day}일`;
+}
+
+function mapPost(post, index, isMyTravel) {
+  return {
+    id: post.id,
+    date: formatDate(post.created_at),
+    title: post.title,
+    subtitle: post.tags?.[0] || `${post.photo_count || 0}장`,
+    author: isMyTravel ? undefined : (post.user_id || '').split('|').pop()?.slice(0, 12),
+    colorTheme: COLOR_THEMES[index % COLOR_THEMES.length],
+    isMyTravel,
+    photoCount: post.photo_count || 0,
+    locationCount: 0,
+    status: undefined,
+  };
+}
 
 const sortTravels = (travels, sortType) => {
   const sorted = [...travels];
   switch (sortType) {
     case 'oldest':
-      return sorted.sort((a, b) => {
-        const dateA = a.date.replace(/[년월일\s]/g, '-').replace(/-$/, '');
-        const dateB = b.date.replace(/[년월일\s]/g, '-').replace(/-$/, '');
-        return new Date(dateA) - new Date(dateB);
-      });
+      return sorted.sort((a, b) => new Date(a.date.replace(/[년월일\s]/g, '-').replace(/-$/, '')) - new Date(b.date.replace(/[년월일\s]/g, '-').replace(/-$/, '')));
     case 'name':
       return sorted.sort((a, b) => a.title.localeCompare(b.title, 'ko'));
     case 'latest':
     default:
-      return sorted.sort((a, b) => {
-        const dateA = a.date.replace(/[년월일\s]/g, '-').replace(/-$/, '');
-        const dateB = b.date.replace(/[년월일\s]/g, '-').replace(/-$/, '');
-        return new Date(dateB) - new Date(dateA);
-      });
+      return sorted.sort((a, b) => new Date(b.date.replace(/[년월일\s]/g, '-').replace(/-$/, '')) - new Date(a.date.replace(/[년월일\s]/g, '-').replace(/-$/, '')));
   }
 };
 
 const MainPage = ({ toggleTheme, theme }) => {
   const navigate = useNavigate();
-  const { isAuthenticated, isLoading, loginWithRedirect } = useAuth0();
+  const { isAuthenticated, isLoading: authLoading, loginWithRedirect, user } = useAuth0();
   const [activeTab, setActiveTab] = useState('all');
   const [sortBy, setSortBy] = useState('latest');
+  const [myPosts, setMyPosts] = useState([]);
+  const [publicPosts, setPublicPosts] = useState([]);
+  const [dataLoading, setDataLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  const allTravels = [
-    {
-      id: 1,
-      date: '24년 05월 12일',
-      title: 'LA에서 시작하는 북미 횡단 여행',
-      subtitle: '5박 6일',
-      author: 'traveler_kim',
-      colorTheme: 'blue',
-      isMyTravel: false,
-      photoCount: 127,
-      locationCount: 8
-    },
-    {
-      id: 2,
-      date: '25년 05월 02일',
-      title: '제주도 맛집 투어',
-      subtitle: '1박 2일',
-      status: '작성중',
-      colorTheme: 'pink',
-      isMyTravel: true,
-      photoCount: 34,
-      locationCount: 5
-    },
-    {
-      id: 3,
-      date: '25년 03월 20일',
-      title: '도쿄 벚꽃 여행기',
-      subtitle: '3박 4일',
-      author: 'sakura_fan',
-      colorTheme: 'purple',
-      isMyTravel: false,
-      photoCount: 89,
-      locationCount: 12
-    },
-    {
-      id: 4,
-      date: '25년 01월 15일',
-      title: '방콕 & 치앙마이 배낭여행',
-      subtitle: '7박 8일',
-      author: 'backpacker_lee',
-      colorTheme: 'yellow',
-      isMyTravel: false,
-      photoCount: 203,
-      locationCount: 15
-    },
-    {
-      id: 5,
-      date: '24년 12월 25일',
-      title: '유럽 크리스마스 마켓 투어',
-      subtitle: '5박 6일',
-      colorTheme: 'green',
-      isMyTravel: true,
-      photoCount: 156,
-      locationCount: 9
-    }
-  ];
+  useEffect(() => {
+    if (authLoading) return;
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const myTravels = useMemo(() => sortTravels(allTravels.filter(t => t.isMyTravel), sortBy), [sortBy]);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const recommendedTravels = useMemo(() => sortTravels(allTravels.filter(t => !t.isMyTravel), sortBy), [sortBy]);
+    const loadData = async () => {
+      setDataLoading(true);
+      setError(null);
+      try {
+        // 공개 게시글 (추천 여행)
+        const publicRes = await apiClient.get('/api/v1/posts?skip=0&limit=20');
+        const allPublic = (publicRes?.posts || []).map((p, i) => mapPost(p, i, false));
+
+        if (isAuthenticated && user?.sub) {
+          // 내 게시글
+          const myRes = await apiClient.get(`/api/v1/posts/user/${encodeURIComponent(user.sub)}?skip=0&limit=50`);
+          const myIds = new Set((myRes?.posts || []).map(p => p.id));
+          setMyPosts((myRes?.posts || []).map((p, i) => mapPost(p, i, true)));
+          // 추천: 내 게시글 제외
+          setPublicPosts(allPublic.filter(p => !myIds.has(p.id)));
+        } else {
+          setMyPosts([]);
+          setPublicPosts(allPublic);
+        }
+      } catch (err) {
+        console.error('게시글 로드 실패:', err);
+        setError('게시글을 불러오는 데 실패했습니다.');
+      } finally {
+        setDataLoading(false);
+      }
+    };
+
+    loadData();
+  }, [authLoading, isAuthenticated, user]);
+
+  const sortedMyTravels = useMemo(() => sortTravels(myPosts, sortBy), [myPosts, sortBy]);
+  const sortedRecommended = useMemo(() => sortTravels(publicPosts, sortBy), [publicPosts, sortBy]);
 
   const handleCreateNew = () => {
     if (!isAuthenticated) {
       const shouldLogin = window.confirm('여행 기록을 만들려면 로그인이 필요합니다. 로그인하시겠습니까?');
-      if (shouldLogin) {
-        loginWithRedirect();
-      }
+      if (shouldLogin) loginWithRedirect();
       return;
     }
     navigate('/trip/new');
@@ -109,7 +104,7 @@ const MainPage = ({ toggleTheme, theme }) => {
     navigate(`/trip/${travel.id}`);
   };
 
-  if (isLoading) {
+  if (authLoading) {
     return (
       <div className="main-page">
         <Header toggleTheme={toggleTheme} theme={theme} />
@@ -146,32 +141,12 @@ const MainPage = ({ toggleTheme, theme }) => {
         {/* Tab Navigation */}
         <div className="content-header">
           <div className="tab-container">
-            <button
-              className={`tab-btn ${activeTab === 'all' ? 'active' : ''}`}
-              onClick={() => setActiveTab('all')}
-            >
-              전체
-            </button>
-            <button
-              className={`tab-btn ${activeTab === 'my' ? 'active' : ''}`}
-              onClick={() => setActiveTab('my')}
-            >
-              내 여행
-            </button>
-            <button
-              className={`tab-btn ${activeTab === 'recommended' ? 'active' : ''}`}
-              onClick={() => setActiveTab('recommended')}
-            >
-              추천 여행
-            </button>
+            <button className={`tab-btn ${activeTab === 'all' ? 'active' : ''}`} onClick={() => setActiveTab('all')}>전체</button>
+            <button className={`tab-btn ${activeTab === 'my' ? 'active' : ''}`} onClick={() => setActiveTab('my')}>내 여행</button>
+            <button className={`tab-btn ${activeTab === 'recommended' ? 'active' : ''}`} onClick={() => setActiveTab('recommended')}>추천 여행</button>
           </div>
-
           <div className="content-actions">
-            <select
-              className="sort-select"
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value)}
-            >
+            <select className="sort-select" value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
               <option value="latest">최신 순</option>
               <option value="oldest">오래된 순</option>
               <option value="name">이름 순</option>
@@ -179,24 +154,36 @@ const MainPage = ({ toggleTheme, theme }) => {
           </div>
         </div>
 
-        <div className="sections-container">
-          {(activeTab === 'all' || activeTab === 'my') && (
-            <TravelSection
-              type="my"
-              travels={myTravels}
-              onCreateNew={handleCreateNew}
-              onTravelClick={handleTravelClick}
-            />
-          )}
+        {error && (
+          <div className="error-banner" style={{ padding: '12px 24px', color: 'var(--color-error)', background: 'var(--color-error-bg, #fff0f0)', borderRadius: '8px', margin: '0 0 16px' }}>
+            {error}
+          </div>
+        )}
 
-          {(activeTab === 'all' || activeTab === 'recommended') && (
-            <TravelSection
-              type="recommended"
-              travels={recommendedTravels}
-              onTravelClick={handleTravelClick}
-            />
-          )}
-        </div>
+        {dataLoading ? (
+          <div className="page-loading" style={{ padding: '48px 0' }}>
+            <div className="page-loading-spinner" />
+            <p>게시글을 불러오는 중...</p>
+          </div>
+        ) : (
+          <div className="sections-container">
+            {(activeTab === 'all' || activeTab === 'my') && (
+              <TravelSection
+                type="my"
+                travels={sortedMyTravels}
+                onCreateNew={handleCreateNew}
+                onTravelClick={handleTravelClick}
+              />
+            )}
+            {(activeTab === 'all' || activeTab === 'recommended') && (
+              <TravelSection
+                type="recommended"
+                travels={sortedRecommended}
+                onTravelClick={handleTravelClick}
+              />
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

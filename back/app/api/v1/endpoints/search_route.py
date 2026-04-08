@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends, Query
 from typing import Optional, List
 import logging
+import json
 
-from app.core.auth import get_current_user
 from app.models.db_models import Post, Photo, Location, Category, PostLike
 from app.db.session import get_db
 from sqlalchemy.orm import Session, joinedload
@@ -22,7 +22,6 @@ async def search_posts(
     sort: Optional[str] = Query("newest", description="정렬: newest, popular, most_liked"),
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
-    current_user=Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """
@@ -156,12 +155,20 @@ async def search_posts(
             .all()
         )
 
+        # tags가 JSON 문자열로 저장된 경우 파싱
+        tags = p.tags
+        if isinstance(tags, str):
+            try:
+                tags = json.loads(tags)
+            except (json.JSONDecodeError, TypeError):
+                tags = []
+
         results.append(
             {
                 "id": p.id,
                 "title": p.title,
                 "description": p.description,
-                "tags": p.tags,
+                "tags": tags,
                 "created_at": p.created_at.isoformat(),
                 "user_id": p.user_id,
                 "photo_count": len(p.photos),
@@ -196,7 +203,6 @@ async def search_posts(
 @router.get("/suggestions")
 async def get_search_suggestions(
     q: str = Query(..., min_length=1, description="자동완성 검색어"),
-    current_user=Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """검색 자동완성 제안"""
@@ -226,7 +232,6 @@ async def get_search_suggestions(
     for (tags_str,) in posts_with_tags:
         if tags_str:
             try:
-                import json
                 tags = json.loads(tags_str) if isinstance(tags_str, str) else tags_str
                 if isinstance(tags, list):
                     for t in tags:

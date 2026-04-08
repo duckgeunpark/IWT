@@ -1,0 +1,42 @@
+name: Deploy to OCI
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to OCI VM via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.OCI_VM_IP }}
+          username: ${{ secrets.OCI_VM_USER }}
+          key: ${{ secrets.OCI_SSH_PRIVATE_KEY }}
+          script: |
+            set -e
+            cd /opt/iwt
+
+            # 최신 코드 가져오기
+            git pull origin main
+
+            # 프로덕션 환경변수 확인 (.env.prod는 서버에서 직접 관리)
+            if [ ! -f .env.prod ]; then
+              echo "ERROR: .env.prod 파일이 없습니다. 서버에서 직접 생성하세요."
+              exit 1
+            fi
+
+            # 이미지 재빌드 및 컨테이너 재시작
+            docker compose -f docker-compose.prod.yml build --no-cache
+            docker compose -f docker-compose.prod.yml up -d
+
+            # 오래된 이미지 정리
+            docker image prune -f
+
+            echo "✅ 배포 완료"

@@ -276,24 +276,28 @@ EXIF 데이터:
             }
     
     def _parse_json_response(self, response: str, lat: Optional[float] = None, lon: Optional[float] = None) -> Dict:
-        """JSON 응답 파싱"""
+        """JSON 응답 파싱 (Gemini 마크다운 코드블록 포함 처리)"""
         import json
+        import re
         try:
-            result = response.strip()
-            location_data = json.loads(result)
-            
+            text = response.strip()
+
+            # ```json ... ``` 또는 ``` ... ``` 블록 추출
+            code_block = re.search(r"```(?:json)?\s*([\s\S]*?)```", text)
+            if code_block:
+                text = code_block.group(1).strip()
+
+            data = json.loads(text)
+
             if lat is not None and lon is not None:
-                location_data["coordinates"] = {
-                    "latitude": lat,
-                    "longitude": lon
-                }
-            
-            return location_data
+                data["coordinates"] = {"latitude": lat, "longitude": lon}
+
+            return data
         except json.JSONDecodeError:
             logger.error(f"JSON 파싱 실패: {response}")
             return {
                 "error": "응답 파싱에 실패했습니다.",
-                "coordinates": {"latitude": lat, "longitude": lon} if lat and lon else None
+                "coordinates": {"latitude": lat, "longitude": lon} if lat and lon else None,
             }
     
     def _format_exif_data(self, exif_data: Optional[Dict]) -> str:
@@ -313,4 +317,61 @@ EXIF 데이터:
         import json
         if preferences:
             return json.dumps(preferences, indent=2, ensure_ascii=False)
-        return "특별한 선호도 없음" 
+        return "특별한 선호도 없음"
+
+    # ── 올바른 LLM 역할: 정제된 구조화 데이터 → 자연어 게시글 ──
+
+    async def generate_post_content(self, structured_data: Dict) -> Dict:
+        """
+        정제·구조화된 여행 데이터를 받아 자연어 게시글 콘텐츠 생성
+
+        LLM은 GPS 분석·경로 계산을 하지 않는다.
+        Nominatim + 코드 처리로 완성된 구조화 데이터만 입력으로 받는다.
+
+        Args:
+            structured_data: {
+                "segments": [{"start_time", "end_time", "duration_hours",
+                               "places": [{"name", "city", "country", "stay_minutes"}]}],
+                "total_distance_km": float,
+                "total_duration_hours": float,
+                "photo_count": int,
+            }
+
+        Returns:
+            {"title", "description", "tags", "photo_comments"}
+        """
+        import json
+        try:
+            prompt = f"""
+다음은 여행 데이터입니다. 이 데이터를 바탕으로 여행 게시글 콘텐츠를 생성해주세요.
+
+여행 데이터:
+{json.dumps(structured_data, ensure_ascii=False, indent=2)}
+
+다음 JSON 형식으로만 응답해주세요. JSON 외 다른 설명은 포함하지 마세요.
+{{
+    "title": "여행 제목 (20자 이내, 감성적으로)",
+    "description": "여행 전체 설명 (150자 이내, 자연스럽게)",
+    "tags": ["태그1", "태그2", "태그3", "태그4", "태그5"],
+    "photo_comments": [
+        {{"place_name": "장소명", "comment": "이 장소에 대한 한줄 감상 (30자 이내)"}}
+    ]
+}}
+"""
+            response = await self.provider.chat_completion(
+                messages=[
+                    {"role": "system", "content": "당신은 여행 게시글을 감성적으로 작성하는 전문 작가입니다. 주어진 데이터를 바탕으로 정확하고 자연스러운 글을 작성합니다."},
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=0.4,
+                max_tokens=600,
+            )
+            return self._parse_json_response(response)
+        except Exception as e:
+            logger.error(f"게시글 콘텐츠 생성 실패: {str(e)}")
+            return {
+                "title": "나의 여행 기록",
+                "description": "사진으로 기록한 소중한 여행입니다.",
+                "tags": ["여행", "사진"],
+                "photo_comments": [],
+            }

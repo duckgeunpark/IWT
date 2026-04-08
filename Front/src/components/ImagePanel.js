@@ -162,11 +162,26 @@ const ImagePanel = () => {
     fileInputRef.current?.click();
   };
 
+  // GPS 좌표 유효성 검사
+  const isValidGPS = (lat, lng) => {
+    return (
+      typeof lat === 'number' && typeof lng === 'number' &&
+      !isNaN(lat) && !isNaN(lng) &&
+      lat >= -90 && lat <= 90 &&
+      lng >= -180 && lng <= 180
+    );
+  };
+
   const handleFileUpload = async (event) => {
     const files = Array.from(event.target.files);
     if (files.length === 0) return;
 
     dispatch(setLoading(true));
+
+    // 기존 사진 해시 목록 (중복 감지용)
+    const existingHashes = new Set(
+      photos.map(p => p.exifData?.backendData?.fileHash).filter(Boolean)
+    );
 
     const validFiles = files.filter(file => {
       const isImage = file.type.startsWith('image/');
@@ -197,6 +212,22 @@ const ImagePanel = () => {
 
         // EXIF는 원본에서 추출한 후 이미지를 압축한다
         const exifData = await extractExifData(file);
+
+        // 중복 사진 감지 (파일 해시 비교)
+        const fileHash = exifData.backendData?.fileHash;
+        if (fileHash && existingHashes.has(fileHash)) {
+          toast.warning(`${file.name}은(는) 이미 추가된 사진입니다.`);
+          continue;
+        }
+        if (fileHash) existingHashes.add(fileHash);
+
+        // GPS 좌표 범위 검증
+        const gps = exifData.backendData?.gps;
+        if (gps && !isValidGPS(gps.lat, gps.lng)) {
+          toast.warning(`${file.name}의 GPS 좌표가 유효하지 않아 위치 정보가 제외됩니다.`);
+          if (exifData.backendData) exifData.backendData.gps = null;
+        }
+
         const compressed = await compressImage(file);
         const thumbnail = await createThumbnail(file);
 
@@ -213,7 +244,7 @@ const ImagePanel = () => {
 
         dispatch(addPhoto({
           photo: photoData,
-          gpsData: exifData.backendData?.gps,
+          gpsData: exifData.backendData?.gps || null,
           exifData: exifData
         }));
 

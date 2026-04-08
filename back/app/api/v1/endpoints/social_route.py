@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import Optional
 import logging
+import json
 
 from app.core.auth import get_current_user
 from app.schemas.social import (
@@ -533,12 +534,20 @@ async def get_feed(
             is not None
         )
 
+        # tags가 JSON 문자열로 저장된 경우 파싱
+        tags = p.tags
+        if isinstance(tags, str):
+            try:
+                tags = json.loads(tags)
+            except (json.JSONDecodeError, TypeError):
+                tags = []
+
         result.append(
             {
                 "id": p.id,
                 "title": p.title,
                 "description": p.description,
-                "tags": p.tags,
+                "tags": tags,
                 "created_at": p.created_at.isoformat(),
                 "user_id": p.user_id,
                 "photo_count": len(p.photos),

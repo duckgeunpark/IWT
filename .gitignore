@@ -21,6 +21,9 @@
 .env.test.local
 .env.production.local
 
+# Production secrets (서버에서 직접 관리)
+.env.prod
+
 
 npm-debug.log*
 yarn-debug.log*

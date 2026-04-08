@@ -16,6 +16,8 @@ from sqlalchemy.orm import Session, joinedload
 from app.services.llm_route_recommend import LLMRouteRecommendService
 from app.services.s3_presigned_url import S3PresignedURLService
 from app.services.labeling_service import LabelingService
+from app.services.photo_filter_service import photo_filter
+from app.services.reverse_geocoder import geocoder_service
 
 router = APIRouter(prefix="/posts", tags=["posts"])
 
@@ -88,7 +90,7 @@ async def create_post(
                     await labeling_service.save_llm_analysis(
                         db, photo.id, analysis_type, analysis_data, 
                         confidence=analysis_data.get('confidence', 0.8), 
-                        model_used="groq"
+                        model_used="gemini"
                     )
                 
                 # LLM 라벨 저장
@@ -145,8 +147,42 @@ async def auto_create_post(
         # PhotoData 객체로 변환
         from app.schemas.photo import PhotoData, LocationInfo, Coordinates
         
+        # ── 1단계: 묶음 데이터 정제 (GPS 이상치 + 구간 분리) ────
+        clean_result = photo_filter.clean_batch(photos)
+        logger.info(
+            f"사진 정제 완료 | 입력 {clean_result['summary']['total_input']}장 → "
+            f"활용 {clean_result['summary']['total_usable']}장 / "
+            f"제거 {clean_result['summary']['total_removed']}장"
+        )
+
+        # 활용 가능한 사진만 추출 (전체 구간 펼치기)
+        usable_photos = [
+            p for seg in clean_result["segments"] for p in seg["photos"]
+        ]
+
+        if not usable_photos:
+            raise HTTPException(status_code=422, detail="활용 가능한 사진이 없습니다. GPS 데이터 또는 촬영 날짜를 확인해주세요.")
+
+        # ── 2단계: Nominatim으로 GPS → 위치명 변환 ──────────────
+        for photo_dict in usable_photos:
+            lat = photo_dict.get("_lat")
+            lon = photo_dict.get("_lon")
+            if lat and lon and not photo_dict.get("location_info"):
+                try:
+                    addr = await geocoder_service.reverse_geocode(lat, lon)
+                    photo_dict["location_info"] = {
+                        "country": addr.get("country"),
+                        "city": addr.get("city"),
+                        "region": addr.get("state"),
+                        "address": addr.get("full_address"),
+                        "coordinates": {"latitude": lat, "longitude": lon},
+                    }
+                except Exception as geo_err:
+                    logger.warning(f"역지오코딩 실패: {geo_err}")
+
+        # ── 3단계: PhotoData 객체 변환 ───────────────────────────
         photo_data_list = []
-        for photo_dict in photos:
+        for photo_dict in usable_photos:
             location_info = None
             if photo_dict.get("location_info"):
                 loc = photo_dict["location_info"]
@@ -154,7 +190,7 @@ async def auto_create_post(
                 if loc.get("coordinates"):
                     coordinates = Coordinates(
                         latitude=loc["coordinates"]["latitude"],
-                        longitude=loc["coordinates"]["longitude"]
+                        longitude=loc["coordinates"]["longitude"],
                     )
                 location_info = LocationInfo(
                     country=loc.get("country"),
@@ -163,20 +199,20 @@ async def auto_create_post(
                     landmark=loc.get("landmark"),
                     address=loc.get("address"),
                     coordinates=coordinates,
-                    confidence=loc.get("confidence")
+                    confidence=loc.get("confidence"),
                 )
-            
+
             photo_data = PhotoData(
                 file_key=photo_dict["file_key"],
                 file_name=photo_dict["file_name"],
                 file_size=photo_dict["file_size"],
                 content_type=photo_dict["content_type"],
                 location_info=location_info,
-                exif_data=photo_dict.get("exif_data")
+                exif_data=photo_dict.get("exif_data"),
             )
             photo_data_list.append(photo_data)
-        
-        # LLM을 통한 자동 분석
+
+        # ── 4단계: LLM — 정제된 데이터로 게시글 콘텐츠 생성 ─────
         travel_summary = await llm_service.generate_travel_summary(photo_data_list)
         travel_tags = await llm_service.generate_travel_tags(photo_data_list)
         route_analysis = await llm_service.analyze_travel_route(photo_data_list)
@@ -189,7 +225,12 @@ async def auto_create_post(
             user_id=current_user['sub'],
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow(),
-            recommended_route=route_analysis
+            recommended_route={
+                **route_analysis,
+                "segments": clean_result["segments"],
+                "usage_report": clean_result["usage_report"],
+                "clean_summary": clean_result["summary"],
+            },
         )
         
         db.add(post)
@@ -243,7 +284,7 @@ async def auto_create_post(
                         await labeling_service.save_llm_analysis(
                             db, photo.id, analysis_type, analysis_data, 
                             confidence=analysis_data.get('confidence', 0.8), 
-                            model_used="groq"
+                            model_used="gemini"
                         )
                     
                     # LLM 라벨 저장
@@ -444,6 +485,54 @@ async def get_post(
     except Exception as e:
         logger.error(f"게시글 조회 실패: {str(e)}")
         raise HTTPException(status_code=500, detail="게시글 조회에 실패했습니다.")
+
+@router.get("/{post_id}/photos")
+async def get_post_photos(
+    post_id: int,
+    current_user = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    게시글 사진 목록 조회 (S3 presigned URL 포함)
+    """
+    try:
+        post = db.query(Post).filter(Post.id == post_id).first()
+        if not post:
+            raise HTTPException(status_code=404, detail="게시글을 찾을 수 없습니다.")
+
+        photos = db.query(Photo).filter(Photo.post_id == post_id).order_by(Photo.upload_time).all()
+
+        photo_list = []
+        for photo in photos:
+            url = await s3_service.generate_presigned_url(photo.file_key)
+            location = None
+            if photo.location:
+                loc = photo.location
+                location = {
+                    "lat": loc.latitude,
+                    "lng": loc.longitude,
+                    "country": loc.country,
+                    "city": loc.city,
+                    "address": loc.address,
+                }
+            photo_list.append({
+                "id": photo.id,
+                "file_name": photo.file_name,
+                "file_size": photo.file_size,
+                "content_type": photo.content_type,
+                "url": url,
+                "location": location,
+                "upload_time": photo.upload_time.isoformat() if photo.upload_time else None,
+            })
+
+        return {"photos": photo_list, "total": len(photo_list)}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"게시글 사진 조회 실패: {str(e)}")
+        raise HTTPException(status_code=500, detail="게시글 사진 조회에 실패했습니다.")
+
 
 @router.put("/{post_id}", response_model=PostResponse)
 async def update_post(

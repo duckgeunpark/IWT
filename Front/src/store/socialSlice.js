@@ -129,12 +129,23 @@ const socialSlice = createSlice({
         if (!state.postSocial[postId]) state.postSocial[postId] = {};
         state.postSocial[postId].is_liked = liked;
         state.postSocial[postId].likes_count = likes_count;
+        // feed.posts도 동기화 (FeedPage 카드 UI 즉시 반영)
+        const feedPost = state.feed.posts.find(p => p.id === postId);
+        if (feedPost) {
+          feedPost.is_liked = liked;
+          feedPost.likes_count = likes_count;
+        }
       })
       .addCase(toggleBookmark.fulfilled, (state, action) => {
         const { postId, bookmarked, bookmarks_count } = action.payload;
         if (!state.postSocial[postId]) state.postSocial[postId] = {};
         state.postSocial[postId].is_bookmarked = bookmarked;
         state.postSocial[postId].bookmarks_count = bookmarks_count;
+        // feed.posts도 동기화
+        const feedPost = state.feed.posts.find(p => p.id === postId);
+        if (feedPost) {
+          feedPost.is_bookmarked = bookmarked;
+        }
       })
       .addCase(fetchComments.fulfilled, (state, action) => {
         const { postId, comments, total } = action.payload;

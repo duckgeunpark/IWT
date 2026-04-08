@@ -7,6 +7,7 @@ import os
 from typing import Optional
 from .llm_base import LLMService, LLMProvider
 from .providers.groq_provider import GroqProvider
+from .providers.gemini_provider import GeminiProvider
 
 
 class LLMFactory:
@@ -24,8 +25,8 @@ class LLMFactory:
             LLMService 인스턴스
         """
         if provider_name is None:
-            provider_name = os.getenv('LLM_PROVIDER', 'groq').lower()
-        
+            provider_name = os.getenv('LLM_PROVIDER', 'gemini').lower()
+
         try:
             provider = LLMFactory._create_provider(provider_name)
             return LLMService(provider)
@@ -33,7 +34,7 @@ class LLMFactory:
             print(f"LLM 서비스 생성 실패: {str(e)}")
             # 기본 제공자로 재시도
             try:
-                provider = GroqProvider()
+                provider = GeminiProvider()
                 return LLMService(provider)
             except Exception as fallback_error:
                 print(f"기본 LLM 제공자도 실패: {str(fallback_error)}")
@@ -50,7 +51,9 @@ class LLMFactory:
         Returns:
             LLMProvider 인스턴스
         """
-        if provider_name == 'groq':
+        if provider_name == 'gemini':
+            return GeminiProvider()
+        elif provider_name == 'groq':
             return GroqProvider()
         elif provider_name == 'openai':
             from .providers.openai_provider import OpenAIProvider
@@ -64,7 +67,11 @@ class LLMFactory:
     @staticmethod
     def get_available_providers() -> list:
         """사용 가능한 제공자 목록 반환"""
-        available = ['groq']
+        available = []
+        if os.getenv('GEMINI_API_KEY'):
+            available.append('gemini')
+        if os.getenv('GROQ_API_KEY'):
+            available.append('groq')
         if os.getenv('OPENAI_API_KEY'):
             available.append('openai')
         if os.getenv('ANTHROPIC_API_KEY'):

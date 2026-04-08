@@ -113,13 +113,19 @@ const FeedPage = ({ toggleTheme, theme }) => {
                         {post.description.slice(0, 150)}{post.description.length > 150 ? '...' : ''}
                       </p>
                     )}
-                    {post.tags && Array.isArray(post.tags) && post.tags.length > 0 && (
-                      <div className="feed-card-tags">
-                        {post.tags.slice(0, 5).map((tag) => (
-                          <span key={tag} className="feed-tag">#{tag}</span>
-                        ))}
-                      </div>
-                    )}
+                    {(() => {
+                      let tags = post.tags;
+                      if (typeof tags === 'string') {
+                        try { tags = JSON.parse(tags); } catch { tags = []; }
+                      }
+                      return Array.isArray(tags) && tags.length > 0 ? (
+                        <div className="feed-card-tags">
+                          {tags.slice(0, 5).map((tag) => (
+                            <span key={tag} className="feed-tag">#{tag}</span>
+                          ))}
+                        </div>
+                      ) : null;
+                    })()}
                   </div>
 
                   {/* Card Footer - Actions */}
@@ -134,7 +140,11 @@ const FeedPage = ({ toggleTheme, theme }) => {
                         </svg>
                         {post.likes_count > 0 && <span>{post.likes_count}</span>}
                       </button>
-                      <button className="feed-action-btn">
+                      <button
+                        className="feed-action-btn"
+                        onClick={(e) => { e.stopPropagation(); navigate(`/trip/${post.id}`); }}
+                        title="댓글 보기"
+                      >
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                           <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
                         </svg>

@@ -1,6 +1,7 @@
 import React from 'react';
 import { useAuth0 } from '@auth0/auth0-react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import NotificationDropdown from './NotificationDropdown';
 import '../styles/Header.css';
 
 const Header = ({ toggleTheme, theme }) => {
@@ -118,6 +119,7 @@ const Header = ({ toggleTheme, theme }) => {
             {theme === 'light' ? '\uD83C\uDF19' : '\u2600\uFE0F'}
           </button>
         )}
+        {isAuthenticated && <NotificationDropdown />}
         {isLoading ? (
           <span className="header-loading">...</span>
         ) : isAuthenticated ? (

@@ -235,7 +235,7 @@ class LLMRouteRecommendService:
 방문한 장소들:
 {location_text}
 
-다음 JSON 형식으로 응답해주세요:
+다음 JSON 형식으로만 응답해주세요. JSON 외 다른 설명은 포함하지 마세요.
 {{
     "title": "여행 제목 (간결하고 매력적으로)",
     "description": "여행에 대한 간단한 설명 (100자 이내)",
@@ -250,24 +250,22 @@ class LLMRouteRecommendService:
         
         if not location_info or not location_info.coordinates:
             return """
-다음 사진에 대한 설명을 생성해주세요:
-
 위치 정보가 없는 사진입니다.
 
-다음 JSON 형식으로 응답해주세요:
+다음 JSON 형식으로만 응답해주세요. JSON 외 다른 설명은 포함하지 마세요.
 {
     "description": "사진에 대한 간단한 설명 (50자 이내)",
     "tags": ["태그1", "태그2"]
 }
 """
-        
+
         return f"""
-다음 사진에 대한 설명을 생성해주세요:
+다음 사진에 대한 설명을 생성해주세요.
 
 위치: {location_info.landmark or 'Unknown'} ({location_info.city or 'Unknown'}, {location_info.country or 'Unknown'})
 좌표: {location_info.coordinates.latitude}, {location_info.coordinates.longitude}
 
-다음 JSON 형식으로 응답해주세요:
+다음 JSON 형식으로만 응답해주세요. JSON 외 다른 설명은 포함하지 마세요.
 {{
     "description": "사진에 대한 간단한 설명 (50자 이내)",
     "tags": ["태그1", "태그2"]
@@ -277,18 +275,17 @@ class LLMRouteRecommendService:
     def _create_tag_generation_prompt(self, countries: List[str], cities: List[str], landmarks: List[str]) -> str:
         """태그 생성을 위한 프롬프트 생성"""
         return f"""
-다음 여행 정보를 바탕으로 적절한 태그들을 생성해주세요:
+다음 여행 정보를 바탕으로 적절한 태그들을 생성해주세요.
 
 방문한 국가: {', '.join(countries) if countries else '없음'}
 방문한 도시: {', '.join(cities) if cities else '없음'}
 방문한 장소: {', '.join(landmarks) if landmarks else '없음'}
 
-다음 JSON 형식으로 응답해주세요:
+태그는 여행의 성격, 방문한 장소, 활동 등을 반영해야 합니다.
+다음 JSON 형식으로만 응답해주세요. JSON 외 다른 설명은 포함하지 마세요.
 {{
     "tags": ["태그1", "태그2", "태그3", "태그4", "태그5"]
 }}
-
-태그는 여행의 성격, 방문한 장소, 활동 등을 반영해야 합니다.
 """
     
     def _calculate_total_distance(self, route_points: List[Dict[str, Any]]) -> float:
@@ -310,6 +307,138 @@ class LLMRouteRecommendService:
         
         return total_distance
     
+    async def recommend_attractions(
+        self,
+        location_info: Dict[str, Any],
+        categories: Optional[List[str]] = None,
+        max_attractions: int = 5,
+    ) -> List[Dict[str, Any]]:
+        """특정 지역의 명소 추천"""
+        try:
+            cat_text = ", ".join(categories) if categories else "전반적인 관광"
+            prompt = f"""
+다음 지역의 명소를 추천해주세요.
+
+지역 정보: {json.dumps(location_info, ensure_ascii=False)}
+추천 카테고리: {cat_text}
+추천 개수: {max_attractions}개
+
+다음 JSON 형식으로만 응답해주세요. JSON 외 다른 설명은 포함하지 마세요.
+{{
+    "attractions": [
+        {{
+            "name": "명소명",
+            "category": "카테고리",
+            "description": "간단한 설명 (50자 이내)",
+            "estimated_duration_hours": 1.5
+        }}
+    ]
+}}
+"""
+            response = await self.llm.provider.chat_completion(
+                messages=[
+                    {"role": "system", "content": "당신은 여행 명소를 추천하는 전문가입니다. 실제 존재하는 유명 명소만 추천합니다."},
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=0.3,
+                max_tokens=500,
+            )
+            data = self._parse_llm_json(response)
+            return data.get("attractions", [])
+        except Exception as e:
+            logger.error(f"명소 추천 실패: {str(e)}")
+            return []
+
+    async def generate_travel_itinerary(
+        self,
+        route_data: Dict[str, Any],
+        user_preferences: Optional[Dict[str, Any]] = None,
+    ) -> str:
+        """
+        구조화된 경로 데이터 → 상세 여행 일정 텍스트 생성
+        (블로그 생성에도 재사용)
+        """
+        try:
+            pref_text = json.dumps(user_preferences, ensure_ascii=False) if user_preferences else "없음"
+            prompt = route_data.get("prompt") or f"""
+다음 여행 경로 데이터를 바탕으로 상세 여행 일정을 마크다운 형식으로 작성해주세요.
+
+경로 데이터:
+{json.dumps(route_data, ensure_ascii=False, indent=2)}
+
+사용자 선호도: {pref_text}
+
+요구사항:
+- 마크다운 형식으로 작성
+- 일자별 일정 구성
+- 각 장소 이동 수단 및 소요 시간 포함
+- 자연스러운 문체
+"""
+            response = await self.llm.provider.chat_completion(
+                messages=[
+                    {"role": "system", "content": "당신은 여행 일정을 감성적으로 작성하는 전문 여행 작가입니다."},
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=0.4,
+                max_tokens=1000,
+            )
+            return response
+        except Exception as e:
+            logger.error(f"여행 일정 생성 실패: {str(e)}")
+            return "여행 일정을 생성할 수 없습니다."
+
+    async def get_category_recommendations(
+        self,
+        categories: List[str],
+        location_info: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """카테고리 기반 여행 추천"""
+        try:
+            loc_text = json.dumps(location_info, ensure_ascii=False) if location_info else "미지정"
+            prompt = f"""
+다음 카테고리와 지역을 기반으로 여행 추천 정보를 제공해주세요.
+
+카테고리: {', '.join(categories)}
+지역: {loc_text}
+
+다음 JSON 형식으로만 응답해주세요. JSON 외 다른 설명은 포함하지 마세요.
+{{
+    "recommendations": [
+        {{
+            "category": "카테고리명",
+            "places": ["장소1", "장소2"],
+            "tips": "이 카테고리 여행 팁 (50자 이내)"
+        }}
+    ],
+    "overall_tip": "전체 여행 팁"
+}}
+"""
+            response = await self.llm.provider.chat_completion(
+                messages=[
+                    {"role": "system", "content": "당신은 카테고리별 여행 정보를 제공하는 전문가입니다."},
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=0.3,
+                max_tokens=400,
+            )
+            return self._parse_llm_json(response)
+        except Exception as e:
+            logger.error(f"카테고리 추천 실패: {str(e)}")
+            return {"recommendations": [], "overall_tip": ""}
+
+    def _parse_llm_json(self, response: str) -> Dict[str, Any]:
+        """LLM JSON 응답 파싱 (마크다운 코드블록 포함 처리)"""
+        import re
+        try:
+            text = response.strip()
+            block = re.search(r"```(?:json)?\s*([\s\S]*?)```", text)
+            if block:
+                text = block.group(1).strip()
+            return json.loads(text)
+        except json.JSONDecodeError:
+            logger.error(f"JSON 파싱 실패: {response}")
+            return {}
+
     def _calculate_travel_duration(self, route_points: List[Dict[str, Any]]) -> Optional[str]:
         """여행 기간 계산"""
         timestamps = [point.get("timestamp") for point in route_points if point.get("timestamp")]

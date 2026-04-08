@@ -22,7 +22,9 @@
       "Bash(python -m pytest test/test_exif_service.py -v)",
       "Bash(python -m pytest test/test_exif_service.py test/test_response_schema.py -v)",
       "Bash(grep:*)",
-      "Bash(wc:*)"
+      "Bash(wc:*)",
+      "Bash(head:*)",
+      "Bash(del:*)"
     ],
     "deny": [],
     "ask": []

@@ -14,27 +14,51 @@ logger = logging.getLogger(__name__)
 
 
 class S3PresignedURLService:
-    """S3 Presigned URL 관리 서비스"""
-    
+    """S3 / OCI Object Storage Presigned URL 관리 서비스"""
+
     def __init__(self):
-        self.s3_client = boto3.client(
-            's3',
-            aws_access_key_id=os.getenv('AWS_ACCESS_KEY_ID'),
-            aws_secret_access_key=os.getenv('AWS_SECRET_ACCESS_KEY'),
-            region_name=os.getenv('AWS_REGION', 'ap-northeast-2')
-        )
-        self.bucket_name = os.getenv('S3_BUCKET_NAME')
-        
-        # 환경 변수 검증
-        if not self.bucket_name:
-            logger.error("S3_BUCKET_NAME environment variable is required")
-            raise ValueError("S3_BUCKET_NAME environment variable is required")
-        
-        if not os.getenv('AWS_ACCESS_KEY_ID') or not os.getenv('AWS_SECRET_ACCESS_KEY'):
-            logger.error("AWS credentials are required")
-            raise ValueError("AWS credentials are required")
-        
-        logger.info(f"S3 서비스 초기화 완료 - Bucket: {self.bucket_name}, Region: {os.getenv('AWS_REGION', 'ap-northeast-2')}")
+        # OCI Object Storage 설정이 있으면 우선 사용, 없으면 AWS S3 사용
+        oci_endpoint = os.getenv('OCI_S3_ENDPOINT')
+
+        if oci_endpoint:
+            # OCI Object Storage (S3 호환 API)
+            access_key = os.getenv('OCI_ACCESS_KEY_ID')
+            secret_key = os.getenv('OCI_SECRET_ACCESS_KEY')
+            region = os.getenv('OCI_REGION', 'ap-seoul-1')
+            self.bucket_name = os.getenv('OCI_BUCKET_NAME')
+
+            if not access_key or not secret_key:
+                raise ValueError("OCI_ACCESS_KEY_ID and OCI_SECRET_ACCESS_KEY are required")
+            if not self.bucket_name:
+                raise ValueError("OCI_BUCKET_NAME environment variable is required")
+
+            self.s3_client = boto3.client(
+                's3',
+                aws_access_key_id=access_key,
+                aws_secret_access_key=secret_key,
+                region_name=region,
+                endpoint_url=oci_endpoint
+            )
+            logger.info(f"OCI Object Storage 초기화 완료 - Bucket: {self.bucket_name}, Region: {region}")
+        else:
+            # AWS S3 (기본)
+            access_key = os.getenv('AWS_ACCESS_KEY_ID')
+            secret_key = os.getenv('AWS_SECRET_ACCESS_KEY')
+            region = os.getenv('AWS_REGION', 'ap-northeast-2')
+            self.bucket_name = os.getenv('S3_BUCKET_NAME')
+
+            if not access_key or not secret_key:
+                raise ValueError("AWS credentials are required")
+            if not self.bucket_name:
+                raise ValueError("S3_BUCKET_NAME environment variable is required")
+
+            self.s3_client = boto3.client(
+                's3',
+                aws_access_key_id=access_key,
+                aws_secret_access_key=secret_key,
+                region_name=region
+            )
+            logger.info(f"AWS S3 초기화 완료 - Bucket: {self.bucket_name}, Region: {region}")
     
     async def generate_presigned_url(
         self, 
