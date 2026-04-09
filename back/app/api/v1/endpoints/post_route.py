@@ -1,16 +1,19 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import List, Optional
 import logging
+import json
 from datetime import datetime
 
-from app.core.auth import get_current_user
+from app.core.auth import get_current_user, get_optional_current_user
+from app.models.db_models import PostLike, PostBookmark, Comment
+from sqlalchemy import func, or_
 from app.schemas.post import (
     PostCreateRequest,
     PostResponse,
     PostListResponse,
     PostUpdateRequest
 )
-from app.models.db_models import Post, Photo, Location, Category
+from app.models.db_models import Post, Photo, Location, Category, User
 from app.db.session import get_db
 from sqlalchemy.orm import Session, joinedload
 from app.services.llm_route_recommend import LLMRouteRecommendService
@@ -28,6 +31,57 @@ llm_service = LLMRouteRecommendService()
 s3_service = S3PresignedURLService()
 labeling_service = LabelingService()
 
+
+def _build_post_response(post: Post, db: Session, current_user_id: Optional[str] = None) -> PostResponse:
+    """Post 모델 → PostResponse 변환 (소셜 정보 포함)"""
+    likes_count = db.query(func.count(PostLike.id)).filter(PostLike.post_id == post.id).scalar() or 0
+    comments_count = db.query(func.count(Comment.id)).filter(Comment.post_id == post.id).scalar() or 0
+
+    is_liked = False
+    is_bookmarked = False
+    if current_user_id:
+        is_liked = db.query(PostLike).filter(
+            PostLike.post_id == post.id, PostLike.user_id == current_user_id
+        ).first() is not None
+        is_bookmarked = db.query(PostBookmark).filter(
+            PostBookmark.post_id == post.id, PostBookmark.user_id == current_user_id
+        ).first() is not None
+
+    # 썸네일: 첫 번째 사진의 presigned URL (동기)
+    thumbnail_url = None
+    if post.photos:
+        thumbnail_url = s3_service.generate_download_url_sync(post.photos[0].file_key)
+
+    # 작성자 정보
+    author_obj = db.query(User).filter(User.id == post.user_id).first()
+    from app.schemas.post import PostAuthor
+    if author_obj:
+        _display_name = (
+            author_obj.name
+            or (author_obj.email.split('@')[0] if author_obj.email else None)
+            or post.user_id.split('|')[-1]
+        )
+        author = PostAuthor(id=author_obj.id, name=_display_name, picture=author_obj.picture)
+    else:
+        author = None
+
+    return PostResponse(
+        id=post.id,
+        title=post.title,
+        description=post.description,
+        tags=json.loads(post.tags) if post.tags else [],
+        created_at=post.created_at,
+        updated_at=post.updated_at,
+        photo_count=len(post.photos),
+        user_id=post.user_id,
+        thumbnail_url=thumbnail_url,
+        likes_count=likes_count,
+        comments_count=comments_count,
+        is_liked=is_liked,
+        is_bookmarked=is_bookmarked,
+        author=author,
+    )
+
 @router.post("/", response_model=PostResponse)
 async def create_post(
     request: PostCreateRequest,
@@ -38,12 +92,25 @@ async def create_post(
     새로운 여행 게시글 생성
     """
     try:
+        # 사용자 자동 등록 (FK 제약 조건 충족)
+        user_id = current_user['sub']
+        existing_user = db.query(User).filter(User.id == user_id).first()
+        if not existing_user:
+            new_user = User(
+                id=user_id,
+                email=current_user.get('email', f'{user_id}@unknown.com'),
+                name=current_user.get('name'),
+                picture=current_user.get('picture'),
+            )
+            db.add(new_user)
+            db.flush()
+
         # 게시글 생성
         post = Post(
             title=request.title,
             description=request.description,
-            tags=request.tags,
-            user_id=current_user['sub'],
+            tags=json.dumps(request.tags, ensure_ascii=False),
+            user_id=user_id,
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow()
         )
@@ -119,11 +186,12 @@ async def create_post(
         
         db.commit()
         
+        tags_list = json.loads(post.tags) if post.tags else []
         return PostResponse(
             id=post.id,
             title=post.title,
             description=post.description,
-            tags=post.tags,
+            tags=tags_list,
             created_at=post.created_at,
             photo_count=len(request.photos),
             user_id=post.user_id
@@ -328,7 +396,7 @@ async def auto_create_post(
             id=post.id,
             title=post.title,
             description=post.description,
-            tags=post.tags,
+            tags=json.loads(post.tags) if post.tags else [],
             created_at=post.created_at,
             photo_count=len(photo_data_list),
             user_id=post.user_id
@@ -403,83 +471,118 @@ async def preview_post(
         logger.error(f"게시글 미리보기 생성 실패: {str(e)}")
         raise HTTPException(status_code=500, detail="게시글 미리보기 생성에 실패했습니다.")
 
+@router.get("/user/{user_id}", response_model=PostListResponse)
+async def get_user_posts(
+    user_id: str,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(10, ge=1, le=100),
+    current_user = Depends(get_optional_current_user),
+    db: Session = Depends(get_db)
+):
+    """특정 사용자의 게시글 목록 조회"""
+    try:
+        query = db.query(Post).options(joinedload(Post.photos)).filter(
+            Post.user_id == user_id
+        ).order_by(Post.created_at.desc())
+
+        total = db.query(func.count(Post.id)).filter(Post.user_id == user_id).scalar()
+        posts = query.offset(skip).limit(limit).all()
+        current_user_id = current_user["sub"] if current_user else None
+
+        return PostListResponse(
+            posts=[_build_post_response(p, db, current_user_id) for p in posts],
+            total=total,
+            skip=skip,
+            limit=limit,
+        )
+    except Exception as e:
+        logger.error(f"사용자 게시글 목록 조회 실패: {str(e)}")
+        raise HTTPException(status_code=500, detail="사용자 게시글 목록 조회에 실패했습니다.")
+
+
 @router.get("/", response_model=PostListResponse)
 async def get_posts(
     skip: int = Query(0, ge=0),
     limit: int = Query(10, ge=1, le=100),
     user_id: Optional[str] = None,
     category: Optional[str] = None,
-    current_user = Depends(get_current_user),
+    current_user = Depends(get_optional_current_user),
     db: Session = Depends(get_db)
 ):
-    """
-    게시글 목록 조회
-    """
+    """게시글 목록 조회"""
     try:
         count_query = db.query(Post)
 
-        # 사용자별 필터링
         if user_id:
             count_query = count_query.filter(Post.user_id == user_id)
-
-        # 카테고리별 필터링
         if category:
             count_query = count_query.join(Category).filter(Category.category_name == category)
 
         total = count_query.count()
-
         posts = count_query.options(
             joinedload(Post.photos)
-        ).order_by(
-            Post.created_at.desc()
-        ).offset(skip).limit(limit).all()
-        
+        ).order_by(Post.created_at.desc()).offset(skip).limit(limit).all()
+
+        current_user_id = current_user["sub"] if current_user else None
         return PostListResponse(
-            posts=[
-                PostResponse(
-                    id=post.id,
-                    title=post.title,
-                    description=post.description,
-                    tags=post.tags,
-                    created_at=post.created_at,
-                    photo_count=len(post.photos),
-                    user_id=post.user_id
-                ) for post in posts
-            ],
+            posts=[_build_post_response(p, db, current_user_id) for p in posts],
             total=total,
             skip=skip,
-            limit=limit
+            limit=limit,
         )
-        
+
     except Exception as e:
         logger.error(f"게시글 목록 조회 실패: {str(e)}")
         raise HTTPException(status_code=500, detail="게시글 목록 조회에 실패했습니다.")
 
+@router.get("/bookmarked", response_model=dict)
+async def get_bookmarked_posts(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(10, ge=1, le=100),
+    current_user = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """북마크한 게시글 목록 (post_route에서 /{post_id} 보다 먼저 처리)"""
+    user_id = current_user["sub"]
+    total = (
+        db.query(func.count(PostBookmark.id))
+        .filter(PostBookmark.user_id == user_id)
+        .scalar()
+    )
+    bookmarks = (
+        db.query(PostBookmark)
+        .filter(PostBookmark.user_id == user_id)
+        .order_by(PostBookmark.created_at.desc())
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
+    post_ids = [b.post_id for b in bookmarks]
+    posts = db.query(Post).filter(Post.id.in_(post_ids)).all() if post_ids else []
+    return {
+        "posts": [_build_post_response(p, db, user_id) for p in posts],
+        "total": total,
+        "skip": skip,
+        "limit": limit,
+    }
+
+
 @router.get("/{post_id}", response_model=PostResponse)
 async def get_post(
     post_id: int,
-    current_user = Depends(get_current_user),
+    current_user = Depends(get_optional_current_user),
     db: Session = Depends(get_db)
 ):
-    """
-    특정 게시글 조회
-    """
+    """특정 게시글 조회"""
     try:
-        post = db.query(Post).filter(Post.id == post_id).first()
-        
+        post = db.query(Post).options(joinedload(Post.photos)).filter(Post.id == post_id).first()
+
         if not post:
             raise HTTPException(status_code=404, detail="게시글을 찾을 수 없습니다.")
-        
-        return PostResponse(
-            id=post.id,
-            title=post.title,
-            description=post.description,
-            tags=post.tags,
-            created_at=post.created_at,
-            photo_count=len(post.photos),
-            user_id=post.user_id
-        )
-        
+
+        current_user_id = current_user["sub"] if current_user else None
+        return _build_post_response(post, db, current_user_id)
+
     except HTTPException:
         raise
     except Exception as e:
@@ -489,7 +592,7 @@ async def get_post(
 @router.get("/{post_id}/photos")
 async def get_post_photos(
     post_id: int,
-    current_user = Depends(get_current_user),
+    current_user = Depends(get_optional_current_user),
     db: Session = Depends(get_db)
 ):
     """
@@ -534,6 +637,118 @@ async def get_post_photos(
         raise HTTPException(status_code=500, detail="게시글 사진 조회에 실패했습니다.")
 
 
+@router.get("/{post_id}/similar")
+async def get_similar_posts(
+    post_id: int,
+    limit: int = Query(6, ge=1, le=20),
+    db: Session = Depends(get_db),
+):
+    """
+    유사 여행 추천: 같은 나라/도시 방문, 공통 태그, 비슷한 시기 기준
+    """
+    try:
+        post = db.query(Post).filter(Post.id == post_id).first()
+        if not post:
+            raise HTTPException(status_code=404, detail="게시글을 찾을 수 없습니다.")
+
+        # 이 게시글의 태그와 방문 국가/도시 수집
+        post_tags = []
+        if post.tags:
+            try:
+                post_tags = json.loads(post.tags) if isinstance(post.tags, str) else post.tags
+            except Exception:
+                pass
+
+        locations = (
+            db.query(Location)
+            .join(Photo, Photo.id == Location.photo_id)
+            .filter(Photo.post_id == post_id)
+            .all()
+        )
+        countries = list({loc.country for loc in locations if loc.country})
+        cities = list({loc.city for loc in locations if loc.city})
+
+        # 유사 게시글 쿼리: 공통 나라/도시 또는 공통 태그
+        conditions = []
+        for tag in post_tags[:5]:
+            if tag:
+                conditions.append(Post.tags.ilike(f"%{tag}%"))
+        for country in countries[:3]:
+            post_ids_country = (
+                db.query(Photo.post_id)
+                .join(Location, Location.photo_id == Photo.id)
+                .filter(Location.country == country)
+                .subquery()
+            )
+            conditions.append(Post.id.in_(post_ids_country))
+        for city in cities[:3]:
+            post_ids_city = (
+                db.query(Photo.post_id)
+                .join(Location, Location.photo_id == Photo.id)
+                .filter(Location.city == city)
+                .subquery()
+            )
+            conditions.append(Post.id.in_(post_ids_city))
+
+        if not conditions:
+            # 공통점이 없으면 최신 인기 게시글
+            similar = (
+                db.query(Post)
+                .filter(Post.id != post_id)
+                .order_by(Post.created_at.desc())
+                .limit(limit)
+                .all()
+            )
+        else:
+            similar = (
+                db.query(Post)
+                .filter(Post.id != post_id, or_(*conditions))
+                .order_by(Post.created_at.desc())
+                .limit(limit * 2)
+                .all()
+            )
+
+        # 중복 제거 및 결과 구성
+        seen = set()
+        results = []
+        for p in similar:
+            if p.id in seen or len(results) >= limit:
+                continue
+            seen.add(p.id)
+            likes_count = db.query(func.count(PostLike.id)).filter(PostLike.post_id == p.id).scalar()
+            p_tags = p.tags
+            if isinstance(p_tags, str):
+                try:
+                    p_tags = json.loads(p_tags)
+                except Exception:
+                    p_tags = []
+            thumbnail_url = None
+            if p.photos:
+                try:
+                    thumbnail_url = await s3_service.generate_download_url(p.photos[0].file_key)
+                except Exception:
+                    pass
+            results.append({
+                "id": p.id,
+                "title": p.title,
+                "description": (p.description or "")[:100],
+                "tags": p_tags,
+                "created_at": p.created_at.isoformat(),
+                "user_id": p.user_id,
+                "photo_count": len(p.photos),
+                "likes_count": likes_count,
+                "thumbnail_url": thumbnail_url,
+            })
+
+        return {"posts": results, "total": len(results)}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"유사 게시글 조회 실패: {str(e)}")
+        raise HTTPException(status_code=500, detail="유사 게시글 조회에 실패했습니다.")
+
+
 @router.put("/{post_id}", response_model=PostResponse)
 async def update_post(
     post_id: int,
@@ -554,23 +769,42 @@ async def update_post(
         if post.user_id != current_user['sub']:
             raise HTTPException(status_code=403, detail="게시글을 수정할 권한이 없습니다.")
         
-        # 업데이트
+        # 제목/내용/태그 업데이트
         if request.title is not None:
             post.title = request.title
         if request.description is not None:
             post.description = request.description
         if request.tags is not None:
-            post.tags = request.tags
-        
+            post.tags = json.dumps(request.tags, ensure_ascii=False)
+
+        # 사진 업데이트 (keep_photo_ids가 전달된 경우)
+        if request.keep_photo_ids is not None:
+            # 유지 목록에 없는 기존 사진 삭제
+            for photo in list(post.photos):
+                if photo.id not in request.keep_photo_ids:
+                    db.delete(photo)
+
+            # 새 사진 추가
+            if request.new_photos:
+                for photo_data in request.new_photos:
+                    new_photo = Photo(
+                        post_id=post.id,
+                        file_key=photo_data['file_key'],
+                        file_name=photo_data['file_name'],
+                        file_size=photo_data.get('file_size', 0),
+                        content_type=photo_data.get('content_type', 'image/jpeg'),
+                    )
+                    db.add(new_photo)
+
         post.updated_at = datetime.utcnow()
-        
         db.commit()
-        
+        db.refresh(post)
+
         return PostResponse(
             id=post.id,
             title=post.title,
             description=post.description,
-            tags=post.tags,
+            tags=json.loads(post.tags) if post.tags else [],
             created_at=post.created_at,
             photo_count=len(post.photos),
             user_id=post.user_id
@@ -615,45 +849,3 @@ async def delete_post(
         logger.error(f"게시글 삭제 실패: {str(e)}")
         raise HTTPException(status_code=500, detail="게시글 삭제에 실패했습니다.")
 
-@router.get("/user/{user_id}", response_model=PostListResponse)
-async def get_user_posts(
-    user_id: str,
-    skip: int = Query(0, ge=0),
-    limit: int = Query(10, ge=1, le=100),
-    current_user = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """
-    특정 사용자의 게시글 목록 조회
-    """
-    try:
-        posts = db.query(Post).options(
-            joinedload(Post.photos)
-        ).filter(
-            Post.user_id == user_id
-        ).order_by(
-            Post.created_at.desc()
-        ).offset(skip).limit(limit).all()
-        
-        total = db.query(Post).filter(Post.user_id == user_id).count()
-        
-        return PostListResponse(
-            posts=[
-                PostResponse(
-                    id=post.id,
-                    title=post.title,
-                    description=post.description,
-                    tags=post.tags,
-                    created_at=post.created_at,
-                    photo_count=len(post.photos),
-                    user_id=post.user_id
-                ) for post in posts
-            ],
-            total=total,
-            skip=skip,
-            limit=limit
-        )
-        
-    except Exception as e:
-        logger.error(f"사용자 게시글 목록 조회 실패: {str(e)}")
-        raise HTTPException(status_code=500, detail="사용자 게시글 목록 조회에 실패했습니다.") 

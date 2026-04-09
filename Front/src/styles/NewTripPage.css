@@ -792,6 +792,87 @@
 .legend-dot.trash { background: #ff9f43; }
 .legend-dot.dup { background: #ee5a24; }
 
+/* ── 사진별 상태 목록 ── */
+.photo-status-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 24px;
+  max-height: 360px;
+  overflow-y: auto;
+}
+.photo-status-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  transition: background var(--transition-fast);
+}
+.photo-status-thumb {
+  width: 48px;
+  height: 48px;
+  object-fit: cover;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+.photo-status-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.photo-status-name {
+  font-size: 13px;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.photo-status-badge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 20px;
+  width: fit-content;
+}
+.badge-used    { background: rgba(0,149,246,0.12); color: var(--accent-color); }
+.badge-no-gps  { background: rgba(150,150,150,0.15); color: var(--text-muted); }
+.badge-trash   { background: rgba(255,159,67,0.15); color: #ff9f43; }
+.badge-burst   { background: rgba(108,92,231,0.12); color: #6c5ce7; }
+.badge-dup     { background: rgba(238,90,36,0.12); color: #ee5a24; }
+.badge-neutral { background: rgba(150,150,150,0.1); color: var(--text-muted); }
+.photo-status-delete {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+.photo-status-delete:hover {
+  background: rgba(238,90,36,0.12);
+  color: #ee5a24;
+}
+
+/* neutral stat card */
+.filter-stat-card.neutral {
+  background: var(--bg-tertiary);
+  border-color: var(--border-color);
+}
+
 .filter-review-actions {
   display: flex;
   gap: 12px;

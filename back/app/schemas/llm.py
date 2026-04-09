@@ -46,7 +46,52 @@ class ItineraryRequest(BaseModel):
 
 class ItineraryResponse(BaseModel):
     success: bool
-    itinerary: Optional[Dict[str, Any]] = None
+    itinerary: Optional[str] = None
+    title: Optional[str] = None
+    tags: Optional[List[str]] = None
+    error_message: Optional[str] = None
+
+
+class HighlightPhotosRequest(BaseModel):
+    photos: List[Dict[str, Any]]  # [{id, file_name, gps, taken_at, file_size}]
+    max_highlights: int = 5
+
+
+class HighlightPhotosResponse(BaseModel):
+    success: bool
+    highlighted_ids: Optional[List[str]] = None
+    error_message: Optional[str] = None
+
+
+class TagGenerateRequest(BaseModel):
+    locations: List[Dict[str, Any]]  # [{country, city, landmark}]
+    content: Optional[str] = None   # existing description text
+
+
+class TagGenerateResponse(BaseModel):
+    success: bool
+    tags: Optional[List[str]] = None
+    error_message: Optional[str] = None
+
+
+class SimilarTripsRequest(BaseModel):
+    post_id: int
+    limit: int = 6
+
+
+class SimilarTripsResponse(BaseModel):
+    success: bool
+    similar_posts: Optional[List[Dict[str, Any]]] = None
+    error_message: Optional[str] = None
+
+
+class TravelPatternRequest(BaseModel):
+    user_id: str
+
+
+class TravelPatternResponse(BaseModel):
+    success: bool
+    pattern: Optional[Dict[str, Any]] = None
     error_message: Optional[str] = None
 
 class CategoryRecommendationsRequest(BaseModel):

@@ -31,7 +31,15 @@
       "Bash(ls \"C:\\\\Users\\\\DK\\\\Desktop\\\\project\\\\Project\\\\IWT\\\\back\"/.env*)",
       "Bash(ls \"C:\\\\Users\\\\DK\\\\Desktop\\\\project\\\\Project\\\\IWT\"/.env*)",
       "Bash(ls \"C:\\\\Users\\\\DK\\\\Desktop\\\\project\\\\Project\\\\IWT\\\\Front\\\\src\"/.env* \"C:\\\\Users\\\\DK\\\\Desktop\\\\project\\\\Project\\\\IWT\\\\Front\"/.env*)",
-      "Bash(ls \"C:\\\\Users\\\\DK\\\\Desktop\\\\project\\\\Project\\\\IWT\\\\back\\\\Dockerfile\"*)"
+      "Bash(ls \"C:\\\\Users\\\\DK\\\\Desktop\\\\project\\\\Project\\\\IWT\\\\back\\\\Dockerfile\"*)",
+      "Bash(docker compose:*)",
+      "Bash(python -c ':*)",
+      "Bash(python3 -c ':*)",
+      "Bash(findstr /n \"router\\\\.\" \"C:\\\\Users\\\\DK\\\\Desktop\\\\project\\\\Project\\\\IWT\\\\Back\\\\app\\\\api\\\\v1\\\\endpoints\\\\post_route.py\")",
+      "Bash(findstr \"get\\\\|post\\\\|put\\\\|delete\")",
+      "Bash(node -e ':*)",
+      "Bash(findstr /n \".\")",
+      "Bash(more +88)"
     ],
     "deny": [],
     "ask": []

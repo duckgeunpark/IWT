@@ -100,3 +100,15 @@ async def verify_jwt_token(token: str) -> Dict:
 
 async def get_current_user(token: str = Depends(get_token_auth_header)) -> Dict:
     return await verify_jwt_token(token)
+
+
+async def get_optional_current_user(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(HTTPBearer(auto_error=False)),
+) -> Optional[Dict]:
+    """인증 선택적 - 토큰 없어도 None 반환, 있으면 검증"""
+    if not credentials:
+        return None
+    try:
+        return await verify_jwt_token(credentials.credentials)
+    except HTTPException:
+        return None

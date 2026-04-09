@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from typing import Optional, List
 import logging
 import json
@@ -7,6 +7,9 @@ from app.models.db_models import Post, Photo, Location, Category, PostLike
 from app.db.session import get_db
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func, or_, and_, distinct
+from app.services.llm_route_recommend import LLMRouteRecommendService
+
+llm_route_service = LLMRouteRecommendService()
 
 router = APIRouter(prefix="/search", tags=["검색"])
 logger = logging.getLogger(__name__)
@@ -243,4 +246,83 @@ async def get_search_suggestions(
     return {
         "regions": [r[0] for r in regions],
         "tags": list(tag_set)[:limit],
+    }
+
+
+@router.get("/semantic")
+async def semantic_search(
+    q: str = Query(..., min_length=1, description="자연어 검색어 (예: 바다 보이는 카페)"),
+    limit: int = Query(12, ge=1, le=50),
+    db: Session = Depends(get_db),
+):
+    """
+    LLM 기반 의미 검색: 자연어 질의 → 키워드 확장 → DB 검색
+    예) "바다 보이는 카페" → [바다, 카페, 해변, 오션뷰, 해안, ...]
+    """
+    try:
+        # LLM으로 검색어 확장
+        expand_prompt = f"""다음 여행 검색어를 한국어 검색 키워드 목록으로 확장해주세요.
+
+검색어: "{q}"
+
+아래 JSON 형식으로만 응답하세요. 관련 장소/테마/활동을 포함한 5~10개의 키워드:
+{{"keywords": ["키워드1", "키워드2", "키워드3"]}}"""
+
+        response = await llm_route_service.llm.provider.chat_completion(
+            messages=[
+                {"role": "system", "content": "당신은 여행 검색 전문가입니다. 검색어를 관련 키워드로 확장합니다."},
+                {"role": "user", "content": expand_prompt},
+            ],
+            temperature=0.1,
+            max_tokens=150,
+        )
+        data = llm_route_service._parse_llm_json(response)
+        keywords = data.get("keywords", [q])
+    except Exception:
+        keywords = [q]
+
+    # 확장된 키워드로 DB 검색
+    conditions = []
+    for kw in keywords[:8]:  # 최대 8개 키워드
+        kw_like = f"%{kw}%"
+        conditions.append(Post.title.ilike(kw_like))
+        conditions.append(Post.description.ilike(kw_like))
+        conditions.append(Post.tags.ilike(kw_like))
+
+    query = db.query(Post).filter(or_(*conditions)) if conditions else db.query(Post)
+    query = query.order_by(Post.created_at.desc())
+
+    posts = query.limit(limit * 2).all()
+
+    # 중복 제거 + 결과 구성
+    seen = set()
+    results = []
+    for p in posts:
+        if p.id in seen or len(results) >= limit:
+            continue
+        seen.add(p.id)
+        likes_count = db.query(func.count(PostLike.id)).filter(PostLike.post_id == p.id).scalar()
+        tags = p.tags
+        if isinstance(tags, str):
+            try:
+                tags = json.loads(tags)
+            except Exception:
+                tags = []
+        thumbnail = next((ph for ph in p.photos if ph.file_key), None)
+        results.append({
+            "id": p.id,
+            "title": p.title,
+            "description": p.description,
+            "tags": tags,
+            "created_at": p.created_at.isoformat(),
+            "user_id": p.user_id,
+            "photo_count": len(p.photos),
+            "likes_count": likes_count,
+        })
+
+    return {
+        "posts": results,
+        "query": q,
+        "expanded_keywords": keywords,
+        "total": len(results),
     }

@@ -39,6 +39,9 @@ const TravelSection = ({ type, travels = [], onCreateNew, onTravelClick }) => {
             colorTheme={travel.colorTheme}
             photoCount={travel.photoCount}
             locationCount={travel.locationCount}
+            thumbnailUrl={travel.thumbnailUrl}
+            likesCount={travel.likesCount}
+            commentsCount={travel.commentsCount}
             onClick={() => onTravelClick && onTravelClick(travel)}
           />
         ))}

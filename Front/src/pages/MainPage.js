@@ -1,55 +1,98 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth0 } from '@auth0/auth0-react';
+import { parseDate } from '../utils/dateUtils';
 import Header from '../components/Header';
-import TravelSection from '../components/TravelSection';
 import { apiClient } from '../services/apiClient';
 import '../styles/MainPage.css';
 
-const COLOR_THEMES = ['blue', 'pink', 'purple', 'yellow', 'green', 'orange'];
+// 그라디언트 팔레트 (썸네일 없을 때)
+const GRADIENTS = [
+  'linear-gradient(135deg,#667eea,#764ba2)',
+  'linear-gradient(135deg,#f093fb,#f5576c)',
+  'linear-gradient(135deg,#4facfe,#00f2fe)',
+  'linear-gradient(135deg,#43e97b,#38f9d7)',
+  'linear-gradient(135deg,#fa709a,#fee140)',
+  'linear-gradient(135deg,#a18cd1,#fbc2eb)',
+  'linear-gradient(135deg,#ffecd2,#fcb69f)',
+  'linear-gradient(135deg,#a1c4fd,#c2e9fb)',
+];
 
 function formatDate(isoString) {
   if (!isoString) return '';
-  const d = new Date(isoString);
-  const y = String(d.getFullYear()).slice(2);
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}년 ${m}월 ${day}일`;
+  const d = parseDate(isoString);
+  return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`;
 }
 
-function mapPost(post, index, isMyTravel) {
-  return {
-    id: post.id,
-    date: formatDate(post.created_at),
-    title: post.title,
-    subtitle: post.tags?.[0] || `${post.photo_count || 0}장`,
-    author: isMyTravel ? undefined : (post.user_id || '').split('|').pop()?.slice(0, 12),
-    colorTheme: COLOR_THEMES[index % COLOR_THEMES.length],
-    isMyTravel,
-    photoCount: post.photo_count || 0,
-    locationCount: 0,
-    status: undefined,
-  };
-}
-
-const sortTravels = (travels, sortType) => {
-  const sorted = [...travels];
-  switch (sortType) {
-    case 'oldest':
-      return sorted.sort((a, b) => new Date(a.date.replace(/[년월일\s]/g, '-').replace(/-$/, '')) - new Date(b.date.replace(/[년월일\s]/g, '-').replace(/-$/, '')));
-    case 'name':
-      return sorted.sort((a, b) => a.title.localeCompare(b.title, 'ko'));
-    case 'latest':
-    default:
-      return sorted.sort((a, b) => new Date(b.date.replace(/[년월일\s]/g, '-').replace(/-$/, '')) - new Date(a.date.replace(/[년월일\s]/g, '-').replace(/-$/, '')));
-  }
+// ── 내 여행 컴팩트 카드 ──
+const MyTripCard = ({ post, onClick, index }) => {
+  const gradient = GRADIENTS[index % GRADIENTS.length];
+  return (
+    <div className="my-trip-card" onClick={onClick}>
+      <div className="my-trip-thumb" style={{ background: gradient }}>
+        {post.thumbnail_url && (
+          <img src={post.thumbnail_url} alt={post.title} className="my-trip-thumb-img" />
+        )}
+      </div>
+      <div className="my-trip-info">
+        <p className="my-trip-title">{post.title}</p>
+        <p className="my-trip-date">{formatDate(post.created_at)}</p>
+        {post.photo_count > 0 && (
+          <p className="my-trip-count">사진 {post.photo_count}장</p>
+        )}
+      </div>
+    </div>
+  );
 };
 
+// ── 탐색 그리드 카드 ──
+const DiscoverCard = ({ post, onClick, index }) => {
+  const gradient = GRADIENTS[index % GRADIENTS.length];
+  const authorName = post.author?.name || (post.user_id || '').split('|').pop()?.slice(0, 10);
+  const authorInitial = authorName?.[0]?.toUpperCase() || '?';
+
+  return (
+    <div className="discover-card" onClick={onClick}>
+      <div className="discover-card-thumb" style={{ background: gradient }}>
+        {post.thumbnail_url ? (
+          <img src={post.thumbnail_url} alt={post.title} className="discover-thumb-img" />
+        ) : (
+          <span className="discover-thumb-icon">✈️</span>
+        )}
+        {post.photo_count > 0 && (
+          <span className="discover-thumb-count">📷 {post.photo_count}</span>
+        )}
+      </div>
+      <div className="discover-card-body">
+        <h3 className="discover-card-title">{post.title}</h3>
+        {post.description && (
+          <p className="discover-card-desc">
+            {post.description.replace(/[#*`>]/g, '').slice(0, 60)}
+            {post.description.length > 60 ? '…' : ''}
+          </p>
+        )}
+        <div className="discover-card-footer">
+          <div className="discover-author">
+            {post.author?.picture ? (
+              <img src={post.author.picture} alt="" className="discover-avatar-img" />
+            ) : (
+              <div className="discover-avatar-default">{authorInitial}</div>
+            )}
+            <span className="discover-author-name">{authorName}</span>
+          </div>
+          {post.likes_count > 0 && (
+            <span className="discover-likes">♥ {post.likes_count}</span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ── 메인 페이지 ──
 const MainPage = ({ toggleTheme, theme }) => {
   const navigate = useNavigate();
   const { isAuthenticated, isLoading: authLoading, loginWithRedirect, user } = useAuth0();
-  const [activeTab, setActiveTab] = useState('all');
-  const [sortBy, setSortBy] = useState('latest');
   const [myPosts, setMyPosts] = useState([]);
   const [publicPosts, setPublicPosts] = useState([]);
   const [dataLoading, setDataLoading] = useState(true);
@@ -62,16 +105,13 @@ const MainPage = ({ toggleTheme, theme }) => {
       setDataLoading(true);
       setError(null);
       try {
-        // 공개 게시글 (추천 여행)
-        const publicRes = await apiClient.get('/api/v1/posts?skip=0&limit=20');
-        const allPublic = (publicRes?.posts || []).map((p, i) => mapPost(p, i, false));
+        const publicRes = await apiClient.get('/api/v1/posts?skip=0&limit=12');
+        const allPublic = publicRes?.posts || [];
 
         if (isAuthenticated && user?.sub) {
-          // 내 게시글
-          const myRes = await apiClient.get(`/api/v1/posts/user/${encodeURIComponent(user.sub)}?skip=0&limit=50`);
+          const myRes = await apiClient.get(`/api/v1/posts/user/${encodeURIComponent(user.sub)}?skip=0&limit=6`);
           const myIds = new Set((myRes?.posts || []).map(p => p.id));
-          setMyPosts((myRes?.posts || []).map((p, i) => mapPost(p, i, true)));
-          // 추천: 내 게시글 제외
+          setMyPosts(myRes?.posts || []);
           setPublicPosts(allPublic.filter(p => !myIds.has(p.id)));
         } else {
           setMyPosts([]);
@@ -88,22 +128,6 @@ const MainPage = ({ toggleTheme, theme }) => {
     loadData();
   }, [authLoading, isAuthenticated, user]);
 
-  const sortedMyTravels = useMemo(() => sortTravels(myPosts, sortBy), [myPosts, sortBy]);
-  const sortedRecommended = useMemo(() => sortTravels(publicPosts, sortBy), [publicPosts, sortBy]);
-
-  const handleCreateNew = () => {
-    if (!isAuthenticated) {
-      const shouldLogin = window.confirm('여행 기록을 만들려면 로그인이 필요합니다. 로그인하시겠습니까?');
-      if (shouldLogin) loginWithRedirect();
-      return;
-    }
-    navigate('/trip/new');
-  };
-
-  const handleTravelClick = (travel) => {
-    navigate(`/trip/${travel.id}`);
-  };
-
   if (authLoading) {
     return (
       <div className="main-page">
@@ -111,91 +135,116 @@ const MainPage = ({ toggleTheme, theme }) => {
         <div className="main-content">
           <div className="page-loading">
             <div className="page-loading-spinner" />
-            <p>인증 상태를 확인하는 중...</p>
+            <p>로딩 중...</p>
           </div>
         </div>
       </div>
     );
   }
 
+  const firstName = user?.name?.split(' ')[0] || user?.nickname || null;
+
   return (
     <div className="main-page">
       <Header toggleTheme={toggleTheme} theme={theme} />
 
       <div className="main-content">
-        {/* Hero Section */}
-        <div className="hero-section">
-          <div className="hero-content">
-            <h2 className="hero-title">
-              여행의 순간을 <span className="gradient-text">기록</span>하세요
+        {/* ── 인사말 (로그인 시) ── */}
+        {isAuthenticated && (
+          <div className="home-greeting">
+            <h2 className="home-greeting-text">
+              안녕하세요{firstName ? `, ${firstName}님` : ''}
             </h2>
-            <p className="hero-subtitle">
-              사진을 업로드하면 AI가 자동으로 여행 기록을 만들어 드립니다
-            </p>
-            <button className="hero-cta" onClick={handleCreateNew}>
-              새 여행 기록 만들기
+            <p className="home-greeting-sub">오늘도 새로운 여행을 기록해 보세요</p>
+          </div>
+        )}
+
+        {/* ── 비로그인 웰컴 ── */}
+        {!isAuthenticated && (
+          <div className="home-welcome">
+            <h2 className="home-welcome-title">I Want. I Went. Trip.</h2>
+            <p className="home-welcome-sub">사진을 업로드하면 AI가 자동으로 여행 기록을 만들어드려요</p>
+            <button className="home-welcome-cta" onClick={() => loginWithRedirect()}>
+              시작하기
             </button>
           </div>
-        </div>
-
-        {/* Tab Navigation */}
-        <div className="content-header">
-          <div className="tab-container">
-            <button className={`tab-btn ${activeTab === 'all' ? 'active' : ''}`} onClick={() => setActiveTab('all')}>전체</button>
-            <button className={`tab-btn ${activeTab === 'my' ? 'active' : ''}`} onClick={() => setActiveTab('my')}>내 여행</button>
-            <button className={`tab-btn ${activeTab === 'recommended' ? 'active' : ''}`} onClick={() => setActiveTab('recommended')}>추천 여행</button>
-          </div>
-          <div className="content-actions">
-            <select className="sort-select" value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
-              <option value="latest">최신 순</option>
-              <option value="oldest">오래된 순</option>
-              <option value="name">이름 순</option>
-            </select>
-          </div>
-        </div>
-
-        {error && (
-          <div className="error-banner" style={{ padding: '12px 24px', color: 'var(--color-error)', background: 'var(--color-error-bg, #fff0f0)', borderRadius: '8px', margin: '0 0 16px' }}>
-            {error}
-          </div>
         )}
 
-        {dataLoading ? (
-          <div className="page-loading" style={{ padding: '48px 0' }}>
-            <div className="page-loading-spinner" />
-            <p>게시글을 불러오는 중...</p>
+        {/* ── 내 여행 (수평 스크롤, 로그인 시) ── */}
+        {isAuthenticated && (
+          <section className="home-section">
+            <div className="home-section-header">
+              <h3 className="home-section-title">내 여행</h3>
+              <button className="home-section-more" onClick={() => navigate('/profile')}>
+                전체 보기
+              </button>
+            </div>
+            {dataLoading ? (
+              <div className="home-strip-loading">
+                {[...Array(4)].map((_, i) => (
+                  <div key={i} className="my-trip-card skeleton" />
+                ))}
+              </div>
+            ) : myPosts.length === 0 ? (
+              <div className="home-my-empty">
+                <p>아직 기록한 여행이 없어요.</p>
+                <button className="home-my-create-btn" onClick={() => navigate('/trip/new')}>
+                  첫 여행 기록하기
+                </button>
+              </div>
+            ) : (
+              <div className="my-trips-strip">
+                {myPosts.map((post, i) => (
+                  <MyTripCard
+                    key={post.id}
+                    post={post}
+                    index={i}
+                    onClick={() => navigate(`/trip/${post.id}`)}
+                  />
+                ))}
+              </div>
+            )}
+          </section>
+        )}
+
+        {/* ── 발견하기 그리드 ── */}
+        <section className="home-section">
+          <div className="home-section-header">
+            <h3 className="home-section-title">
+              {isAuthenticated ? '이런 여행 어때요?' : '인기 여행 기록'}
+            </h3>
+            <button className="home-section-more" onClick={() => navigate('/explore')}>
+              탐색 더 보기
+            </button>
           </div>
-        ) : (
-          <div className="sections-container">
-            {(activeTab === 'all' || activeTab === 'my') && (
-              <>
-                <TravelSection
-                  type="my"
-                  travels={sortedMyTravels}
-                  onCreateNew={handleCreateNew}
-                  onTravelClick={handleTravelClick}
+
+          {error && (
+            <p className="home-error">{error}</p>
+          )}
+
+          {dataLoading ? (
+            <div className="discover-grid">
+              {[...Array(6)].map((_, i) => (
+                <div key={i} className="discover-card skeleton" />
+              ))}
+            </div>
+          ) : publicPosts.length === 0 ? (
+            <div className="home-discover-empty">
+              <p>아직 공개된 여행이 없어요.</p>
+            </div>
+          ) : (
+            <div className="discover-grid">
+              {publicPosts.slice(0, 9).map((post, i) => (
+                <DiscoverCard
+                  key={post.id}
+                  post={post}
+                  index={i}
+                  onClick={() => navigate(`/trip/${post.id}`)}
                 />
-                {isAuthenticated && sortedMyTravels.length === 0 && sortedRecommended.length > 0 && (
-                  <div className="follower-feed-empty">
-                    <p className="follower-feed-empty-msg">아직 팔로잉하는 사람이 없어요. 이런 여행은 어떠세요?</p>
-                    <TravelSection
-                      type="recommended"
-                      travels={sortedRecommended.slice(0, 6)}
-                      onTravelClick={handleTravelClick}
-                    />
-                  </div>
-                )}
-              </>
-            )}
-            {(activeTab === 'all' || activeTab === 'recommended') && (
-              <TravelSection
-                type="recommended"
-                travels={sortedRecommended}
-                onTravelClick={handleTravelClick}
-              />
-            )}
-          </div>
-        )}
+              ))}
+            </div>
+          )}
+        </section>
       </div>
     </div>
   );

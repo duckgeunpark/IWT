@@ -14,7 +14,7 @@ import '../styles/ImagePanel.css';
 /**
  * 이미지 업로드 및 관리 패널
  */
-const ImagePanel = () => {
+const ImagePanel = ({ readOnly = false }) => {
   const dispatch = useDispatch();
   const toast = useToast();
   const { photos, locations, selectedPhotoId, uploadProgress } = useSelector(state => state.photos);
@@ -397,9 +397,11 @@ const ImagePanel = () => {
         />
 
         <div className="action-buttons">
-          <button className="add-btn" onClick={handleAddImage} aria-label="이미지 추가">
-            이미지 추가 ({photos.length})
-          </button>
+          {!readOnly && (
+            <button className="add-btn" onClick={handleAddImage} aria-label="이미지 추가">
+              이미지 추가 ({photos.length})
+            </button>
+          )}
           <button className={`explore-btn ${isSearchOpen ? 'active' : ''}`} onClick={handleExploreImage} aria-label="이미지 탐색">탐색</button>
         </div>
 
@@ -463,10 +465,21 @@ const ImagePanel = () => {
                 const mapOrderNumber = activatedPhotos.findIndex(p => p.id === image.id) + 1;
                 const location = locations.find(loc => loc.photoId === image.id);
 
+                // 다음 위치와의 시간 차이 (체류 시간 힌트)
+                const locIndex = locations.findIndex(loc => loc.photoId === image.id);
+                const nextLoc = locIndex >= 0 ? locations[locIndex + 1] : null;
+                let dwellLabel = null;
+                if (location && nextLoc && location.captureTimestamp && nextLoc.captureTimestamp) {
+                  const diffMs = Math.abs(nextLoc.captureTimestamp - location.captureTimestamp);
+                  const mins = Math.floor(diffMs / 60000);
+                  const hrs = Math.floor(mins / 60);
+                  dwellLabel = hrs > 0 ? `${hrs}h ${mins % 60}m 후 이동` : mins > 0 ? `${mins}분 후 이동` : null;
+                }
+
                 return (
                   <div
                     key={image.id}
-                    className={`image-item ${selectedPhotoId === image.id ? 'selected' : ''}`}
+                    className={`image-item ${selectedPhotoId === image.id ? 'selected' : ''} ${image.isHighlight ? 'highlight' : ''}`}
                     role="listitem"
                     onClick={(e) => {
                       e.stopPropagation();
@@ -481,6 +494,9 @@ const ImagePanel = () => {
                         style={{ cursor: 'zoom-in' }}
                         title="클릭하여 크게 보기"
                       />
+                      {image.isHighlight && (
+                        <div className="highlight-badge" title="AI 추천 하이라이트 사진">⭐</div>
+                      )}
                       {image.isActive && mapOrderNumber > 0 && (
                         <div
                           className="map-order-number"
@@ -496,6 +512,17 @@ const ImagePanel = () => {
 
                     <div className="image-info">
                       <span className="image-name" title={image.name}>{image.name}</span>
+                      <div className="image-meta">
+                        <span className={`gps-badge ${image.gpsData ? 'gps-ok' : 'gps-none'}`}>
+                          {image.gpsData ? 'GPS' : 'GPS없음'}
+                        </span>
+                        {image.captureTime && (
+                          <span className="capture-time">{image.captureTime}</span>
+                        )}
+                      </div>
+                      {dwellLabel && (
+                        <span className="dwell-label">{dwellLabel}</span>
+                      )}
                     </div>
 
                     <div className="map-checkbox">

@@ -16,6 +16,7 @@ const TripDetailPage = React.lazy(() => import('./pages/TripDetailPage'));
 const ExplorePage = React.lazy(() => import('./pages/ExplorePage'));
 const ProfilePage = React.lazy(() => import('./pages/ProfilePage'));
 const FeedPage = React.lazy(() => import('./pages/FeedPage'));
+const UserProfilePage = React.lazy(() => import('./pages/UserProfilePage'));
 
 const LoadingFallback = () => (
   <div className="page-loading">
@@ -25,13 +26,43 @@ const LoadingFallback = () => (
 );
 
 function TokenBridge() {
-  const { getAccessTokenSilently, isAuthenticated } = useAuth0();
+  const { getAccessTokenSilently, isAuthenticated, user } = useAuth0();
 
   useEffect(() => {
-    if (isAuthenticated) {
-      setTokenProvider(getAccessTokenSilently);
-    }
-  }, [isAuthenticated, getAccessTokenSilently]);
+    if (!isAuthenticated || !user) return;
+    setTokenProvider(getAccessTokenSilently);
+
+    // 최초 로그인 시에만 DB에 저장, 이후 로그인은 확인만 (DB 변경 없음)
+    // 단, picture가 NULL인 경우(버그로 저장 못 했던 기존 계정)는 한 번만 채워줌
+    const ensureUserExists = async () => {
+      try {
+        const { apiClient } = await import('./services/apiClient');
+        const meData = await apiClient.get('/api/v1/users/me');
+        // 기존 사용자인데 picture가 없으면(과거 버그) 한 번만 채워줌
+        if (!meData.picture && user.picture) {
+          await apiClient.put(`/api/v1/users/profile/${encodeURIComponent(user.sub)}`, {
+            picture: user.picture,
+          }).catch(() => {});
+        }
+      } catch (err) {
+        if (err?.status === 404 || err?.response?.status === 404 || err?.message?.includes('404')) {
+          // 최초 로그인 → Auth0 데이터로 DB에 저장
+          try {
+            const { apiClient } = await import('./services/apiClient');
+            await apiClient.post('/api/v1/users/auth0', {
+              id: user.sub,
+              email: user.email || `${user.sub}@unknown.com`,
+              name: user.name || user.nickname || null,
+              picture: user.picture || null,
+            });
+          } catch (createErr) {
+            console.warn('User creation failed:', createErr);
+          }
+        }
+      }
+    };
+    ensureUserExists();
+  }, [isAuthenticated, user, getAccessTokenSilently]);
 
   return null;
 }
@@ -55,6 +86,7 @@ function AppContent() {
                 <Route path="/trip/:id" element={<TripDetailPage toggleTheme={toggleTheme} theme={theme} />} />
                 <Route path="/trip/:id/edit" element={<CreateTripPage toggleTheme={toggleTheme} theme={theme} />} />
                 <Route path="/profile" element={<ProfilePage toggleTheme={toggleTheme} theme={theme} />} />
+                <Route path="/profile/:userId" element={<UserProfilePage toggleTheme={toggleTheme} theme={theme} />} />
                 {/* 레거시 경로 호환 */}
                 <Route path="/create-trip" element={<CreateTripPage toggleTheme={toggleTheme} theme={theme} />} />
               </Routes>

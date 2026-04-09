@@ -7,6 +7,61 @@ import getContrastColor from '../utils/getContrastColor';
 import extractDate from '../utils/extractDate';
 import '../styles/MapPanel.css';
 
+// ── 지구 거리 계산 (미터) ──
+const haversineDistanceM = (c1, c2) => {
+  const R = 6371000;
+  const φ1 = c1.lat * Math.PI / 180, φ2 = c2.lat * Math.PI / 180;
+  const Δφ = (c2.lat - c1.lat) * Math.PI / 180;
+  const Δλ = (c2.lng - c1.lng) * Math.PI / 180;
+  const a = Math.sin(Δφ/2)**2 + Math.cos(φ1)*Math.cos(φ2)*Math.sin(Δλ/2)**2;
+  return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+};
+
+// ── 연속 위치 클러스터링 (50m 이내 인접 그룹화) ──
+const clusterAdjacentLocations = (locs, radiusM = 50) => {
+  if (locs.length === 0) return [];
+  const clusters = [];
+  let group = [locs[0]];
+  for (let i = 1; i < locs.length; i++) {
+    const dist = haversineDistanceM(group[group.length - 1].coordinates, locs[i].coordinates);
+    if (dist <= radiusM) {
+      group.push(locs[i]);
+    } else {
+      clusters.push(group);
+      group = [locs[i]];
+    }
+  }
+  clusters.push(group);
+  return clusters.map(group => ({
+    ...group[0],
+    coordinates: {
+      lat: group.reduce((s, l) => s + l.coordinates.lat, 0) / group.length,
+      lng: group.reduce((s, l) => s + l.coordinates.lng, 0) / group.length,
+    },
+    photoCount: group.length,
+    allIds: group.map(l => l.id),
+  }));
+};
+
+// ── GPS 시간/거리로 이동 수단 자동 추정 ──
+const estimateTravelMode = (locs) => {
+  if (locs.length < 2) return 'driving';
+  const speeds = [];
+  for (let i = 0; i < locs.length - 1; i++) {
+    const a = locs[i], b = locs[i + 1];
+    if (!a.captureTimestamp || !b.captureTimestamp) continue;
+    const timeDiffH = Math.abs(b.captureTimestamp - a.captureTimestamp) / 3600000;
+    if (timeDiffH < 0.001) continue;
+    const distKm = haversineDistanceM(a.coordinates, b.coordinates) / 1000;
+    speeds.push(distKm / timeDiffH);
+  }
+  if (speeds.length === 0) return 'driving';
+  const avg = speeds.reduce((s, v) => s + v, 0) / speeds.length;
+  if (avg < 6) return 'walking';
+  if (avg < 25) return 'bicycling';
+  return 'driving';
+};
+
 // Google Maps 컴포넌트
 const GoogleMapComponent = ({
   center,
@@ -127,57 +182,55 @@ const GoogleMapComponent = ({
 
   // 경로 선 업데이트
   useEffect(() => {
-    if (map && locations.length >= 2) {
-      // 기존 경로 선 제거
-      routeLines.forEach(line => line.setMap(null));
+    if (!map) return;
 
-      if (showRoutes) {
-        const newRouteLines = [];
+    // 기존 경로 선 항상 제거
+    routeLines.forEach(line => line.setMap(null));
 
-        // Directions API 데이터가 있으면 인코딩된 폴리라인 사용
-        if (useDirections && directionsData?.segments) {
-          for (const segment of directionsData.segments) {
-            if (segment.polyline) {
-              try {
-                const path = window.google.maps.geometry.encoding.decodePath(segment.polyline);
-                const routeLine = new window.google.maps.Polyline({
-                  path,
-                  strokeColor: '#4285F4',
-                  strokeOpacity: 0.9,
-                  strokeWeight: 4,
-                  map: map,
-                });
-                newRouteLines.push(routeLine);
-              } catch {
-                // 디코딩 실패 시 직선 폴백
-              }
-            }
-          }
-        }
+    if (locations.length < 2 || !showRoutes) {
+      setRouteLines([]);
+      return;
+    }
 
-        // Directions 데이터가 없거나 비활성화면 직선 경로
-        if (newRouteLines.length === 0) {
-          for (let i = 0; i < locations.length - 1; i++) {
+    const newRouteLines = [];
+
+    // Directions API 데이터가 있으면 인코딩된 폴리라인 사용
+    if (useDirections && directionsData?.segments) {
+      for (const segment of directionsData.segments) {
+        if (segment.polyline) {
+          try {
+            const path = window.google.maps.geometry.encoding.decodePath(segment.polyline);
             const routeLine = new window.google.maps.Polyline({
-              path: [
-                locations[i].coordinates,
-                locations[i + 1].coordinates
-              ],
-              geodesic: true,
-              strokeColor: locations[i].color || '#ff6b6b',
-              strokeOpacity: 0.8,
-              strokeWeight: 3,
-              map: map
+              path,
+              strokeColor: '#4285F4',
+              strokeOpacity: 0.9,
+              strokeWeight: 4,
+              map: map,
             });
             newRouteLines.push(routeLine);
+          } catch {
+            // 디코딩 실패 시 직선 폴백
           }
         }
-
-        setRouteLines(newRouteLines);
-      } else {
-        setRouteLines([]);
       }
     }
+
+    // Directions 데이터가 없거나 비활성화면 직선 경로
+    if (newRouteLines.length === 0) {
+      for (let i = 0; i < locations.length - 1; i++) {
+        const routeLine = new window.google.maps.Polyline({
+          path: [locations[i].coordinates, locations[i + 1].coordinates],
+          geodesic: true,
+          strokeColor: locations[i].color || '#ff6b6b',
+          strokeOpacity: 0.8,
+          strokeWeight: 3,
+          map: map,
+        });
+        newRouteLines.push(routeLine);
+      }
+    }
+
+    setRouteLines(newRouteLines);
   }, [map, locations, showRoutes, useDirections, directionsData]);
 
   return <div ref={ref} style={{ width: "100%", height: "100%" }} />;
@@ -213,15 +266,26 @@ const MapPanel = () => {
   const [directionsLoading, setDirectionsLoading] = useState(false);
   const [travelMode, setTravelMode] = useState('driving');
 
+  // 클러스터링된 표시용 위치 목록
+  const displayLocations = clusterAdjacentLocations(locations);
+
+  // 위치/타임스탬프 변경 시 이동 수단 자동 감지
+  useEffect(() => {
+    if (locations.length >= 2) {
+      const detected = estimateTravelMode(locations);
+      setTravelMode(detected);
+    }
+  }, [locations]);
+
   // Directions API 호출
   const fetchDirections = useCallback(async () => {
-    if (locations.length < 2) {
+    if (displayLocations.length < 2) {
       setDirectionsData(null);
       return;
     }
     setDirectionsLoading(true);
     try {
-      const waypoints = locations.map(loc => ({
+      const waypoints = displayLocations.map(loc => ({
         lat: loc.coordinates.lat,
         lng: loc.coordinates.lng
       }));
@@ -239,6 +303,7 @@ const MapPanel = () => {
     } finally {
       setDirectionsLoading(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [locations, travelMode]);
 
   // useDirections 토글 시 또는 locations/travelMode 변경 시 경로 조회
@@ -418,7 +483,7 @@ const MapPanel = () => {
           <GoogleMapComponent
             center={center}
             zoom={zoom}
-            locations={locations}
+            locations={displayLocations}
             selectedLocation={selectedLocation}
             onLocationSelect={handleLocationSelect}
             mapType={mapType}
@@ -430,46 +495,31 @@ const MapPanel = () => {
         </Wrapper>
       </div>
 
-      {useDirections && (
+      {/* 도로 경로 요약 (이동 수단 자동 감지, 드롭다운 없음) */}
+      {useDirections && directionsData && (
         <div className="directions-settings">
-          <div className="travel-mode-selector">
-            <label>이동 수단:</label>
-            <select value={travelMode} onChange={(e) => setTravelMode(e.target.value)}>
-              <option value="driving">자동차</option>
-              <option value="walking">도보</option>
-              <option value="bicycling">자전거</option>
-              <option value="transit">대중교통</option>
-            </select>
+          <div className="route-summary">
+            <div className="route-summary-item">
+              <span className="route-summary-label">총 거리</span>
+              <span className="route-summary-value">{directionsData.total_distance_text}</span>
+            </div>
+            <div className="route-summary-item">
+              <span className="route-summary-label">총 시간</span>
+              <span className="route-summary-value">{directionsData.total_duration_text}</span>
+            </div>
+            <div className="route-summary-item">
+              <span className="route-summary-label">수단</span>
+              <span className="route-summary-value">
+                {{ driving: '자동차', walking: '도보', bicycling: '자전거', transit: '대중교통' }[travelMode] || travelMode}
+              </span>
+            </div>
           </div>
-          {directionsData && (
-            <div className="route-summary">
-              <div className="route-summary-item">
-                <span className="route-summary-label">총 거리</span>
-                <span className="route-summary-value">{directionsData.total_distance_text}</span>
-              </div>
-              <div className="route-summary-item">
-                <span className="route-summary-label">총 시간</span>
-                <span className="route-summary-value">{directionsData.total_duration_text}</span>
-              </div>
-            </div>
-          )}
-          {directionsData?.segments && directionsData.segments.length > 0 && (
-            <div className="route-segments">
-              {directionsData.segments.map((seg, i) => (
-                <div key={i} className="route-segment-item">
-                  <span className="segment-index">{i + 1} → {i + 2}</span>
-                  <span className="segment-distance">{seg.distance_text}</span>
-                  <span className="segment-duration">{seg.duration_text}</span>
-                </div>
-              ))}
-            </div>
-          )}
         </div>
       )}
 
       <div className="location-details">
         <div className="location-details-header">
-          <h4>위치별 상세 정보</h4>
+          <h4>경로 요약 ({displayLocations.length}개 지점)</h4>
           <button
             className={`add-location-btn ${isAddingLocation ? 'active' : ''}`}
             onClick={() => setIsAddingLocation(!isAddingLocation)}
@@ -484,49 +534,48 @@ const MapPanel = () => {
           </div>
         )}
         <div className="location-list">
-          {locations.map((location, index) => {
+          {displayLocations.map((location, index) => {
             const shouldShowDaySeparator = index > 0 && (() => {
               const currentDate = extractDate(location.time);
-              const previousDate = extractDate(locations[index - 1].time);
+              const previousDate = extractDate(displayLocations[index - 1].time);
               return currentDate && previousDate && currentDate !== previousDate;
             })();
 
-            const getDayNumber = (locationIndex) => {
-              if (locations.length === 0) return 1;
-              const firstDate = extractDate(locations[0].time);
-              const currentDate = extractDate(locations[locationIndex].time);
+            const getDayNumber = (idx) => {
+              const firstDate = extractDate(displayLocations[0].time);
+              const currentDate = extractDate(displayLocations[idx].time);
               if (!firstDate || !currentDate) return 1;
-              const diffTime = new Date(currentDate) - new Date(firstDate);
-              return Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1;
+              return Math.floor((new Date(currentDate) - new Date(firstDate)) / 86400000) + 1;
             };
 
+            const isSelected = location.allIds
+              ? location.allIds.some(id => selectedLocation === id)
+              : selectedLocation === location.id;
+
             const elements = [];
-            
-            // 첫 번째 항목일 때는 1일차 표시
+
             if (index === 0) {
               elements.push(
-                <div key={`day-1`} className="day-separator">
-                  <div className="day-separator-line"></div>
+                <div key="day-1" className="day-separator">
+                  <div className="day-separator-line" />
                   <span className="day-separator-text">1일차</span>
-                  <div className="day-separator-line"></div>
+                  <div className="day-separator-line" />
                 </div>
               );
             }
-            
-            // 날짜가 바뀌면 새 일차 표시
+
             if (shouldShowDaySeparator) {
               elements.push(
                 <div key={`day-${getDayNumber(index)}`} className="day-separator">
-                  <div className="day-separator-line"></div>
+                  <div className="day-separator-line" />
                   <span className="day-separator-text">{getDayNumber(index)}일차</span>
-                  <div className="day-separator-line"></div>
+                  <div className="day-separator-line" />
                 </div>
               );
             }
-            
-            // 위치 간 이동 시간 표시
-            if (index > 0 && locations[index - 1].captureTimestamp && location.captureTimestamp) {
-              const travelTime = formatTimeDiff(locations[index - 1].captureTimestamp, location.captureTimestamp);
+
+            if (index > 0 && displayLocations[index - 1].captureTimestamp && location.captureTimestamp) {
+              const travelTime = formatTimeDiff(displayLocations[index - 1].captureTimestamp, location.captureTimestamp);
               elements.push(
                 <div key={`travel-${location.id}`} className="travel-time-indicator">
                   <div className="travel-time-line" />
@@ -536,16 +585,15 @@ const MapPanel = () => {
               );
             }
 
-            // 위치 항목 추가
             elements.push(
               <div
                 key={location.id}
-                className={`location-item ${selectedLocation === location.id ? 'selected' : ''}`}
+                className={`location-item ${isSelected ? 'selected' : ''}`}
                 onClick={() => handleLocationSelect(location.id)}
               >
-                <div 
-                  className="location-marker-small" 
-                  style={{ 
+                <div
+                  className="location-marker-small"
+                  style={{
                     backgroundColor: location.color,
                     color: getContrastColor(location.color || '#ff6b6b')
                   }}
@@ -554,35 +602,24 @@ const MapPanel = () => {
                 </div>
                 <div className="location-content">
                   <div className="location-header">
-                    <span className="location-name">위치: {location.name}</span>
+                    <span className="location-name">{location.name}</span>
+                    {location.photoCount > 1 && (
+                      <span className="cluster-count-badge">{location.photoCount}장</span>
+                    )}
                   </div>
-                  <div className="location-time">
-                    촬영 시간: {location.time}
-                  </div>
-                  <div className="location-info">
-                    정보: {location.info}
-                  </div>
-                  <div className="location-coordinates">
-                    좌표: {location.coordinates.lat.toFixed(4)}, {location.coordinates.lng.toFixed(4)}
-                  </div>
+                  <div className="location-time">{location.time}</div>
                 </div>
-                {selectedLocation === location.id && editingLocationId !== location.id && (
+                {isSelected && editingLocationId !== location.id && (
                   <div className="location-actions">
                     <button
                       className="edit-location-btn"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleLocationEdit(location.id);
-                      }}
+                      onClick={(e) => { e.stopPropagation(); handleLocationEdit(location.id); }}
                     >
                       편집
                     </button>
                     <button
                       className="delete-location-btn"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleLocationDelete(location.id);
-                      }}
+                      onClick={(e) => { e.stopPropagation(); handleLocationDelete(location.id); }}
                     >
                       삭제
                     </button>
@@ -592,21 +629,13 @@ const MapPanel = () => {
                   <div className="location-edit-form" onClick={(e) => e.stopPropagation()}>
                     <div className="edit-field">
                       <label>위도</label>
-                      <input
-                        type="number"
-                        step="0.000001"
-                        value={editForm.lat}
-                        onChange={(e) => setEditForm({ ...editForm, lat: e.target.value })}
-                      />
+                      <input type="number" step="0.000001" value={editForm.lat}
+                        onChange={(e) => setEditForm({ ...editForm, lat: e.target.value })} />
                     </div>
                     <div className="edit-field">
                       <label>경도</label>
-                      <input
-                        type="number"
-                        step="0.000001"
-                        value={editForm.lng}
-                        onChange={(e) => setEditForm({ ...editForm, lng: e.target.value })}
-                      />
+                      <input type="number" step="0.000001" value={editForm.lng}
+                        onChange={(e) => setEditForm({ ...editForm, lng: e.target.value })} />
                     </div>
                     <div className="edit-actions">
                       <button className="save-btn" onClick={handleEditSave}>저장</button>

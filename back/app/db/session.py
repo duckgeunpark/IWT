@@ -16,7 +16,6 @@ engine_args = DatabaseConfig.get_engine_args()
 engine = create_engine(
     DATABASE_URL,
     poolclass=QueuePool,
-    pool_recycle=3600,
     connect_args={
         "charset": "utf8mb4",
     },

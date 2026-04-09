@@ -1,17 +1,3 @@
-/* ── Follower Feed Empty State ── */
-.follower-feed-empty {
-  margin-top: 0;
-}
-.follower-feed-empty-msg {
-  text-align: center;
-  color: var(--text-secondary);
-  font-size: 14px;
-  padding: 8px 0 4px;
-  margin: 0 0 4px;
-  border-top: 1px dashed var(--border-color);
-  padding-top: 20px;
-}
-
 /* ── Main Page ── */
 .main-page {
   min-height: 100vh;
@@ -19,136 +5,356 @@
 }
 
 .main-content {
-  max-width: 975px;
+  max-width: 1080px;
   margin: 0 auto;
-  padding: 0 20px 40px;
+  padding: 0 20px 60px;
 }
 
-/* ── Hero Section ── */
-.hero-section {
-  padding: 48px 0 32px;
-  text-align: center;
+/* ── 인사말 ── */
+.home-greeting {
+  padding: 32px 0 20px;
 }
-
-.hero-content {
-  max-width: 540px;
-  margin: 0 auto;
-}
-
-.hero-title {
-  font-size: 28px;
+.home-greeting-text {
+  font-size: 24px;
   font-weight: 800;
   color: var(--text-primary);
-  margin: 0 0 12px;
-  letter-spacing: -0.5px;
-  line-height: 1.3;
+  margin: 0 0 4px;
+  letter-spacing: -0.3px;
+}
+.home-greeting-sub {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin: 0;
 }
 
-.hero-subtitle {
+/* ── 비로그인 웰컴 ── */
+.home-welcome {
+  padding: 52px 0 36px;
+  text-align: center;
+}
+.home-welcome-title {
+  font-size: 30px;
+  font-weight: 800;
+  color: var(--text-primary);
+  margin: 0 0 10px;
+  letter-spacing: -0.5px;
+}
+.home-welcome-sub {
   font-size: 15px;
   color: var(--text-secondary);
-  margin: 0 0 24px;
-  line-height: 1.5;
+  margin: 0 0 28px;
+  line-height: 1.6;
 }
-
-.hero-cta {
+.home-welcome-cta {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 12px 28px;
-  background: var(--accent-color);
+  padding: 13px 36px;
+  background: var(--accent-color, #6366f1);
   color: #fff;
   border: none;
-  border-radius: var(--radius-sm);
+  border-radius: 100px;
   font-size: 15px;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: all 0.2s;
   font-family: var(--font-sans);
 }
-.hero-cta:hover {
-  background: var(--accent-hover);
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-md);
-}
-.hero-cta:active {
-  transform: translateY(0);
+.home-welcome-cta:hover {
+  background: var(--accent-hover, #4f46e5);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(99,102,241,0.3);
 }
 
-/* ── Content Header ── */
-.content-header {
+/* ── 섹션 공통 ── */
+.home-section {
+  margin-bottom: 44px;
+}
+.home-section-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  margin-bottom: 28px;
-  gap: 16px;
+  justify-content: space-between;
+  margin-bottom: 16px;
 }
-
-/* ── Tabs (Instagram Explore Style) ── */
-.tab-container {
-  display: flex;
-  gap: 0;
-  border-bottom: 1px solid var(--border-color);
+.home-section-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
 }
-
-.tab-btn {
-  padding: 14px 20px;
+.home-section-more {
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 500;
   color: var(--text-secondary);
   background: none;
   border: none;
-  border-bottom: 1px solid transparent;
   cursor: pointer;
-  transition: all var(--transition-fast);
-  letter-spacing: 1px;
-  text-transform: uppercase;
-  white-space: nowrap;
-  margin-bottom: -1px;
+  padding: 4px 0;
+  transition: color 0.15s;
   font-family: var(--font-sans);
 }
-.tab-btn:hover { color: var(--text-primary); }
-.tab-btn.active {
-  color: var(--text-primary);
-  border-bottom-color: var(--text-primary);
-  font-weight: 700;
+.home-section-more:hover {
+  color: var(--accent-color, #6366f1);
 }
 
-/* ── Sort & Actions ── */
-.content-actions {
+/* ── 내 여행 수평 스크롤 ── */
+.my-trips-strip {
+  display: flex;
+  gap: 14px;
+  overflow-x: auto;
+  padding-bottom: 8px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-color) transparent;
+}
+.my-trips-strip::-webkit-scrollbar { height: 4px; }
+.my-trips-strip::-webkit-scrollbar-track { background: transparent; }
+.my-trips-strip::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 4px; }
+
+.my-trip-card {
+  flex: 0 0 160px;
+  border-radius: 12px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: transform 0.18s, box-shadow 0.18s;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+}
+.my-trip-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+}
+.my-trip-thumb {
+  width: 100%;
+  height: 110px;
+  position: relative;
+  overflow: hidden;
+}
+.my-trip-thumb-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.my-trip-info {
+  padding: 10px 12px 12px;
+}
+.my-trip-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.my-trip-date {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin: 0 0 2px;
+}
+.my-trip-count {
+  font-size: 11px;
+  color: var(--text-tertiary, #9ca3af);
+  margin: 0;
+}
+
+/* ── 내 여행 빈 상태 ── */
+.home-my-empty {
   display: flex;
   align-items: center;
-  gap: 12px;
-}
-
-.sort-select {
-  appearance: none;
-  padding: 8px 32px 8px 12px;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-sm);
+  gap: 16px;
+  padding: 20px 24px;
+  background: var(--bg-secondary);
+  border: 1px dashed var(--border-color);
+  border-radius: 12px;
   font-size: 14px;
-  color: var(--text-primary);
-  background: var(--bg-secondary) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%238e8e8e' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E") no-repeat right 10px center;
-  cursor: pointer;
-  transition: border-color var(--transition-fast);
-  font-family: var(--font-sans);
+  color: var(--text-secondary);
 }
-.sort-select:hover { border-color: var(--text-secondary); }
-.sort-select:focus { border-color: var(--accent-color); outline: none; }
+.home-my-create-btn {
+  padding: 8px 18px;
+  background: var(--accent-color, #6366f1);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  font-family: var(--font-sans);
+  transition: background 0.15s;
+}
+.home-my-create-btn:hover { background: var(--accent-hover, #4f46e5); }
 
-.sections-container {
+/* ── 발견하기 그리드 ── */
+.discover-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 18px;
+}
+
+.discover-card {
+  border-radius: 14px;
+  overflow: hidden;
+  cursor: pointer;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  transition: transform 0.18s, box-shadow 0.18s;
+}
+.discover-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 32px rgba(0,0,0,0.13);
+}
+.discover-card-thumb {
+  width: 100%;
+  height: 180px;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.discover-thumb-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.discover-thumb-icon {
+  font-size: 32px;
+  opacity: 0.7;
+}
+.discover-thumb-count {
+  position: absolute;
+  bottom: 8px;
+  right: 10px;
+  background: rgba(0,0,0,0.55);
+  color: #fff;
+  font-size: 11px;
+  padding: 2px 7px;
+  border-radius: 10px;
+  backdrop-filter: blur(4px);
+}
+.discover-card-body {
+  padding: 12px 14px 14px;
+}
+.discover-card-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.discover-card-desc {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin: 0 0 10px;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.discover-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.discover-author {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.discover-avatar-img {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+.discover-avatar-default {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--accent-color, #6366f1);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.discover-author-name {
+  font-size: 12px;
+  color: var(--text-secondary);
+  max-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.discover-likes {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* ── 스켈레톤 로딩 ── */
+.skeleton {
+  background: linear-gradient(90deg, var(--bg-secondary) 25%, var(--border-color) 50%, var(--bg-secondary) 75%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.4s infinite;
+  min-height: 220px;
+}
+.my-trip-card.skeleton { min-height: 160px; }
+@keyframes skeleton-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ── 홈 스트립 로딩 ── */
+.home-strip-loading {
+  display: flex;
+  gap: 14px;
+}
+
+/* ── 에러/빈 상태 ── */
+.home-error {
+  color: var(--color-error, #ef4444);
+  font-size: 14px;
+  margin: 0 0 16px;
+}
+.home-discover-empty {
+  padding: 40px 0;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+/* ── 로딩 ── */
+.page-loading {
   display: flex;
   flex-direction: column;
-  gap: 40px;
+  align-items: center;
+  justify-content: center;
+  padding: 80px 0;
+  gap: 16px;
+  color: var(--text-secondary);
+  font-size: 14px;
 }
+.page-loading-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--border-color);
+  border-top-color: var(--accent-color, #6366f1);
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
 
-@media (max-width: 768px) {
-  .main-content { padding: 0 12px 32px; }
-  .hero-section { padding: 32px 0 24px; }
-  .hero-title { font-size: 22px; }
-  .hero-subtitle { font-size: 14px; }
-  .hero-cta { padding: 10px 24px; font-size: 14px; }
-  .content-header { flex-direction: column; gap: 12px; align-items: stretch; }
-  .content-actions { justify-content: flex-end; }
-  .tab-btn { padding: 10px 14px; font-size: 11px; }
+/* ── 반응형 ── */
+@media (max-width: 900px) {
+  .discover-grid { grid-template-columns: repeat(2, 1fr); gap: 14px; }
+}
+@media (max-width: 600px) {
+  .main-content { padding: 0 12px 40px; }
+  .discover-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
+  .discover-card-thumb { height: 130px; }
+  .home-greeting-text { font-size: 20px; }
+  .home-welcome-title { font-size: 22px; }
 }

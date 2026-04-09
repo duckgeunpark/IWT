@@ -1,3 +1,38 @@
+/* ── Photo Meta Badges ── */
+.image-meta {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 3px;
+  flex-wrap: wrap;
+}
+.gps-badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 4px;
+  letter-spacing: 0.3px;
+}
+.gps-ok {
+  background: #dcfce7;
+  color: #16a34a;
+}
+.gps-none {
+  background: #f3f4f6;
+  color: #9ca3af;
+}
+.capture-time {
+  font-size: 10px;
+  color: var(--text-secondary, #6b7280);
+  white-space: nowrap;
+}
+.dwell-label {
+  display: block;
+  font-size: 10px;
+  color: var(--text-tertiary, #9ca3af);
+  margin-top: 2px;
+}
+
 /* ── Lightbox ── */
 .lightbox-overlay {
   position: fixed;
@@ -223,6 +258,20 @@
 .image-item.selected {
   background: var(--accent-light);
   border-color: var(--accent-color);
+}
+.image-item.highlight {
+  border-color: #f59e0b;
+}
+
+/* ── Highlight Badge ── */
+.highlight-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  font-size: 11px;
+  line-height: 1;
+  z-index: 3;
+  filter: drop-shadow(0 1px 1px rgba(0,0,0,0.3));
 }
 
 @keyframes imageItemFadeIn {

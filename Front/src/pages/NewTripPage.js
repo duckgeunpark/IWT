@@ -12,6 +12,20 @@ import { useToast } from '../components/Toast';
 import Header from '../components/Header';
 import '../styles/NewTripPage.css';
 
+// ── 사진 활용 상태 헬퍼 ──
+const getUsageInfo = (usage, filterResult) => {
+  if (filterResult?.is_duplicate) return { label: '중복 제거', cls: 'dup' };
+  switch (usage) {
+    case 'used':   return { label: 'GPS+게시글 활용', cls: 'used' };
+    case '0001':   return { label: 'GPS 없음', cls: 'no-gps' };
+    case '0002':   return { label: '시간대 불일치', cls: 'trash' };
+    case '0003':   return { label: '연사 그룹', cls: 'burst' };
+    case '0004':   return { label: 'GPS 이상치', cls: 'trash' };
+    case '0005':   return { label: '날짜 없음', cls: 'no-gps' };
+    default:       return { label: '분석 중', cls: 'neutral' };
+  }
+};
+
 // ── 여행 스타일 옵션 ──
 const TRAVEL_STYLES = [
   { id: 'healing', icon: '🧘', label: '힐링', desc: '느긋하게 쉬는 여행' },
@@ -51,6 +65,7 @@ const NewTripPage = ({ toggleTheme, theme }) => {
 
   // ── 필터링 상태 ──
   const [filterSummary, setFilterSummary] = useState(null);
+  const [photosWithStatus, setPhotosWithStatus] = useState([]); // 사진별 필터 결과
   const [isFiltering, setIsFiltering] = useState(false);
   const [generatedDraft, setGeneratedDraft] = useState(null);
 
@@ -149,9 +164,10 @@ const NewTripPage = ({ toggleTheme, theme }) => {
 
     try {
       const filterInput = [];
+      const processedFiles = []; // 사진별 상태 추적용
 
       for (let i = 0; i < uploadedFiles.length; i++) {
-        const { file } = uploadedFiles[i];
+        const { file, preview, name, id: uploadedFileId } = uploadedFiles[i];
         setProcessProgress({ current: i + 1, total: uploadedFiles.length });
 
         // 파일 해시 계산 (중복 감지용)
@@ -202,8 +218,9 @@ const NewTripPage = ({ toggleTheme, theme }) => {
         }));
 
         // 필터링용 데이터 수집
+        const photoIdStr = String(photoId);
         filterInput.push({
-          id: String(photoId),
+          id: photoIdStr,
           file_name: file.name,
           file_size: file.size,
           file_hash: fileHash,
@@ -211,6 +228,9 @@ const NewTripPage = ({ toggleTheme, theme }) => {
           taken_at: takenAtLocal,
           content_type: file.type,
         });
+
+        // 사진별 상태 추적
+        processedFiles.push({ uploadedFileId, preview, name: file.name, photoId: photoIdStr });
       }
 
       dispatch(setUploadProgress({ current: 0, total: 0 }));
@@ -226,6 +246,14 @@ const NewTripPage = ({ toggleTheme, theme }) => {
         filterSummaryResult = filterResponse.summary;
         setFilterSummary(filterResponse.summary);
         dispatch(setFilterResult(filterResponse));
+
+        // 사진별 필터 결과 매핑
+        const filterPhotoMap = {};
+        (filterResponse.photos || []).forEach(p => { filterPhotoMap[p.id] = p; });
+        setPhotosWithStatus(processedFiles.map(pf => ({
+          ...pf,
+          filterResult: filterPhotoMap[pf.photoId] || null,
+        })));
 
         const s = filterResponse.summary;
         const msgs = [];
@@ -245,7 +273,7 @@ const NewTripPage = ({ toggleTheme, theme }) => {
         setIsFiltering(false);
       }
 
-      // AI 초안 생성
+      // AI 초안 생성 + 하이라이트 사진 선정 (병렬 실행)
       let draft = null;
       try {
         const photoData = filterInput.map(p => ({
@@ -255,30 +283,58 @@ const NewTripPage = ({ toggleTheme, theme }) => {
         }));
         const locationData = filterInput
           .filter(p => p.gps)
-          .map((p, i) => ({ name: p.file_name, coordinates: p.gps, time: p.taken_at }));
+          .map((p) => ({ name: p.file_name, coordinates: p.gps, time: p.taken_at }));
 
-        const llmRes = await apiClient.post('/api/v1/llm/generate-itinerary', {
-          route_data: {
-            photos: photoData,
-            locations: locationData,
-            total_photos: filterInput.length,
-          },
-          user_preferences: { language: 'ko', format: 'markdown' },
-        });
+        const highlightInput = filterInput.map(p => ({
+          id: p.id,
+          file_name: p.file_name,
+          gps: p.gps,
+          taken_at: p.taken_at,
+          file_size: p.file_size,
+        }));
 
-        if (llmRes.success && llmRes.itinerary) {
-          draft = { content: llmRes.itinerary, title: llmRes.title || null };
+        const [llmRes, highlightRes] = await Promise.allSettled([
+          apiClient.post('/api/v1/llm/generate-itinerary', {
+            route_data: {
+              photos: photoData,
+              locations: locationData,
+              total_photos: filterInput.length,
+            },
+            user_preferences: { language: 'ko', format: 'markdown' },
+          }),
+          filterInput.length >= 3
+            ? apiClient.post('/api/v1/llm/highlight-photos', {
+                photos: highlightInput,
+                max_highlights: Math.min(5, Math.ceil(filterInput.length * 0.3)),
+              })
+            : Promise.resolve(null),
+        ]);
+
+        const llmData = llmRes.status === 'fulfilled' ? llmRes.value : null;
+        const highlightData = highlightRes.status === 'fulfilled' ? highlightRes.value : null;
+
+        if (llmData?.success && llmData?.itinerary) {
+          draft = {
+            content: llmData.itinerary,
+            title: llmData.title || null,
+            tags: llmData.tags || null,
+            highlightedIds: highlightData?.highlighted_ids || null,
+          };
           toast.success('AI 초안 생성 완료! 내용을 검토하고 수정하세요.');
+        } else if (highlightData?.highlighted_ids) {
+          draft = { highlightedIds: highlightData.highlighted_ids };
         }
       } catch (llmErr) {
         console.warn('AI 초안 생성 실패 (무시하고 계속):', llmErr);
       }
 
-      // 필터 결과가 있으면 리뷰 단계로, 없으면 바로 이동
+      // 분석 결과 요약 toast만 보여주고 바로 edit 이동
       if (filterSummaryResult) {
-        setGeneratedDraft(draft);
-        setStep(2); // 필터 결과 리뷰 단계
-        return;
+        const s = filterSummaryResult;
+        const parts = [`활용 가능 ${s.usable_photos}장`];
+        if (s.duplicates_removed > 0) parts.push(`중복 ${s.duplicates_removed}장 제외`);
+        if (s.no_gps_count > 0) parts.push(`GPS 없음 ${s.no_gps_count}장`);
+        toast.success(`분석 완료 — ${parts.join(', ')}`);
       }
       goToEditPage(draft);
     } catch (err) {
@@ -493,76 +549,6 @@ const NewTripPage = ({ toggleTheme, theme }) => {
               </div>
             )}
 
-            {/* Step 2: 필터 결과 리뷰 */}
-            {step === 2 && filterSummary && (
-              <div className="filter-review">
-                <h2 className="filter-review-title">사진 분석 결과</h2>
-                <p className="filter-review-subtitle">
-                  {uploadedFiles.length}장의 사진을 분석했습니다
-                </p>
-
-                <div className="filter-stats-grid">
-                  <div className="filter-stat-card usable">
-                    <span className="filter-stat-number">{filterSummary.usable_photos}</span>
-                    <span className="filter-stat-label">활용 가능</span>
-                  </div>
-                  <div className="filter-stat-card">
-                    <span className="filter-stat-number">{filterSummary.total_photos}</span>
-                    <span className="filter-stat-label">전체 사진</span>
-                  </div>
-                  {filterSummary.duplicates_removed > 0 && (
-                    <div className="filter-stat-card warn">
-                      <span className="filter-stat-number">{filterSummary.duplicates_removed}</span>
-                      <span className="filter-stat-label">중복 제거</span>
-                    </div>
-                  )}
-                  {filterSummary.burst_groups > 0 && (
-                    <div className="filter-stat-card">
-                      <span className="filter-stat-number">{filterSummary.burst_groups}</span>
-                      <span className="filter-stat-label">연사 그룹</span>
-                    </div>
-                  )}
-                  {filterSummary.no_gps_count > 0 && (
-                    <div className="filter-stat-card warn">
-                      <span className="filter-stat-number">{filterSummary.no_gps_count}</span>
-                      <span className="filter-stat-label">GPS 없음</span>
-                    </div>
-                  )}
-                  {filterSummary.place_groups > 0 && (
-                    <div className="filter-stat-card">
-                      <span className="filter-stat-number">{filterSummary.place_groups}</span>
-                      <span className="filter-stat-label">장소 그룹</span>
-                    </div>
-                  )}
-                  {filterSummary.trash_removed > 0 && (
-                    <div className="filter-stat-card warn">
-                      <span className="filter-stat-number">{filterSummary.trash_removed}</span>
-                      <span className="filter-stat-label">불필요 사진</span>
-                    </div>
-                  )}
-                </div>
-
-                {/* 활용 내역 범례 */}
-                <div className="filter-legend">
-                  <h4>사진 활용 코드</h4>
-                  <div className="filter-legend-items">
-                    <span className="legend-item"><span className="legend-dot used" /> GPS+게시글 활용</span>
-                    <span className="legend-item"><span className="legend-dot unused" /> 활용 안 함 (GPS 없음)</span>
-                    <span className="legend-item"><span className="legend-dot trash" /> 불필요 (시간대 불일치 등)</span>
-                    <span className="legend-item"><span className="legend-dot dup" /> 중복 제거</span>
-                  </div>
-                </div>
-
-                <div className="filter-review-actions">
-                  <button className="filter-back-btn" onClick={() => setStep(1)}>
-                    ← 사진 수정
-                  </button>
-                  <button className="filter-proceed-btn" onClick={goToEditPage}>
-                    이대로 진행하기 →
-                  </button>
-                </div>
-              </div>
-            )}
           </div>
         </div>
       </div>

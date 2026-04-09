@@ -100,6 +100,29 @@ const photoSlice = createSlice({
       state.locations = [];
     },
 
+    // 편집 모드: 서버에서 불러온 기존 사진을 Redux에 로드
+    loadExistingPhoto: (state, action) => {
+      const photo = action.payload; // { id, file_name, file_size, content_type, url, location, upload_time }
+      const captureTimestamp = new Date(photo.upload_time || Date.now()).getTime();
+      const photoData = {
+        id: `existing_${photo.id}`,
+        dbId: photo.id,           // DB ID (keep_photo_ids에 사용)
+        name: photo.file_name,
+        size: photo.file_size || 0,
+        type: photo.content_type || 'image/jpeg',
+        preview: photo.url,       // S3 presigned URL → 미리보기로 사용
+        captureTime: photo.upload_time || new Date().toISOString(),
+        captureTimestamp,
+        isActive: true,
+        isExisting: true,         // 이미 서버에 있는 사진 표시
+        color: `#${Math.floor(Math.random() * 16777215).toString(16).padStart(6, '0')}`,
+        gpsData: photo.location ? { lat: photo.location.lat, lng: photo.location.lng } : null,
+      };
+      state.photos.push(photoData);
+      state.photos.sort((a, b) => (a.captureTimestamp || 0) - (b.captureTimestamp || 0));
+      state.locations = buildLocations(state.photos);
+    },
+
     togglePhotoActive: (state, action) => {
       const photoId = action.payload;
       const photo = state.photos.find(p => p.id === photoId);
@@ -140,6 +163,14 @@ const photoSlice = createSlice({
       state.filterResult = action.payload;
     },
 
+    // AI 하이라이트 사진 적용
+    applyHighlights: (state, action) => {
+      const highlightedIds = new Set(action.payload.map(String));
+      state.photos.forEach(p => {
+        p.isHighlight = highlightedIds.has(String(p.id));
+      });
+    },
+
     updatePhotoExif: (state, action) => {
       const { photoId, updatedBackendData } = action.payload;
       const photo = state.photos.find(p => p.id === photoId);
@@ -163,12 +194,14 @@ export const {
   removePhoto,
   updatePhotoGPS,
   clearPhotos,
+  loadExistingPhoto,
   togglePhotoActive,
   activateAllPhotos,
   deactivateAllPhotos,
   setSelectedPhoto,
   updatePhotoExif,
   setFilterResult,
+  applyHighlights,
   setLoading,
   setError,
   setUploadProgress

@@ -14,6 +14,7 @@ import {
   toggleFollow,
 } from '../store/socialSlice';
 import { apiClient } from '../services/apiClient';
+import { formatDate } from '../utils/dateUtils';
 import '../styles/TripDetailPage.css';
 
 const GOOGLE_MAPS_KEY = process.env.REACT_APP_GOOGLE_MAPS_API_KEY;
@@ -33,6 +34,7 @@ const TripDetailPage = ({ toggleTheme, theme }) => {
   const [showMap, setShowMap] = useState(false);
   const [commentText, setCommentText] = useState('');
   const [showComments, setShowComments] = useState(false);
+  const [similarPosts, setSimilarPosts] = useState([]);
 
   const postId = parseInt(id);
   const social = useSelector((state) => state.social.postSocial[postId] || {});
@@ -55,6 +57,10 @@ const TripDetailPage = ({ toggleTheme, theme }) => {
         setTrip(tripData);
         setPhotos(photosData?.photos || []);
         dispatch(fetchPostSocialInfo(postId));
+        // 유사 여행 추천 (백그라운드)
+        apiClient.get(`/api/v1/posts/${postId}/similar?limit=4`)
+          .then(res => setSimilarPosts(res?.posts || []))
+          .catch(() => {});
       } catch (err) {
         console.error('게시글 로드 실패:', err);
       } finally {
@@ -179,6 +185,17 @@ const TripDetailPage = ({ toggleTheme, theme }) => {
 
   const isFollowing = trip ? followStatus[trip.user_id]?.following : false;
 
+  const handleShare = useCallback(() => {
+    const url = window.location.href;
+    if (navigator.share) {
+      navigator.share({ title: trip?.title || '여행 기록', url });
+    } else {
+      navigator.clipboard.writeText(url).then(() => {
+        alert('링크가 복사됐습니다!');
+      });
+    }
+  }, [trip]);
+
   if (loading) {
     return (
       <div className="trip-detail-page">
@@ -295,14 +312,24 @@ const TripDetailPage = ({ toggleTheme, theme }) => {
         <div className="trip-info">
           {/* Author Header */}
           <div className="trip-info-header">
-            <div className="trip-author">
+            <div
+              className="trip-author"
+              style={{ cursor: 'pointer' }}
+              onClick={() => navigate(`/profile/${encodeURIComponent(trip.user_id)}`)}
+            >
               <div className="author-avatar-ring">
-                <div className="author-avatar-default">
-                  {(trip.user_id || '?')[0].toUpperCase()}
-                </div>
+                {trip.author?.picture ? (
+                  <img src={trip.author.picture} alt="" className="author-avatar-img" />
+                ) : (
+                  <div className="author-avatar-default">
+                    {(trip.author?.name || trip.user_id || '?')[0].toUpperCase()}
+                  </div>
+                )}
               </div>
               <div className="author-meta">
-                <span className="author-name">{trip.user_id?.split('|').pop()?.slice(0, 16) || trip.user_id}</span>
+                <span className="author-name">
+                  {trip.author?.name || trip.user_id?.split('|').pop()?.slice(0, 16) || trip.user_id}
+                </span>
               </div>
             </div>
             <div className="trip-header-actions">
@@ -325,7 +352,7 @@ const TripDetailPage = ({ toggleTheme, theme }) => {
           <div className="trip-title-section">
             <h1 className="trip-title">{trip.title}</h1>
             <div className="trip-meta">
-              <span className="trip-meta-item">{new Date(trip.created_at).toLocaleDateString('ko-KR')}</span>
+              <span className="trip-meta-item">{formatDate(trip.created_at)}</span>
               <span className="trip-meta-divider">&middot;</span>
               <span className="trip-meta-item">{trip.photo_count || 0}장</span>
             </div>
@@ -354,7 +381,7 @@ const TripDetailPage = ({ toggleTheme, theme }) => {
                   <circle cx="12" cy="10" r="3" />
                 </svg>
               </button>
-              <button className="action-icon-btn">
+              <button className="action-icon-btn" onClick={handleShare} title="공유">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <line x1="22" y1="2" x2="11" y2="13" />
                   <polygon points="22 2 15 22 11 13 2 9 22 2" />
@@ -429,7 +456,7 @@ const TripDetailPage = ({ toggleTheme, theme }) => {
                       <span className="comment-author-name">{comment.author?.name || comment.user_id}</span>
                       <span className="comment-text">{comment.content}</span>
                       <div className="comment-meta">
-                        <span className="comment-time">{new Date(comment.created_at).toLocaleDateString('ko-KR')}</span>
+                        <span className="comment-time">{formatDate(comment.created_at)}</span>
                         {comment.user_id === user?.sub && (
                           <button className="comment-delete-btn" onClick={() => handleDeleteComment(comment.id)}>삭제</button>
                         )}
@@ -443,6 +470,39 @@ const TripDetailPage = ({ toggleTheme, theme }) => {
               </div>
             </div>
           )}
+        {/* 유사 여행 추천 */}
+        {similarPosts.length > 0 && (
+          <div className="similar-trips-section">
+            <h4 className="similar-trips-title">비슷한 여행 기록</h4>
+            <div className="similar-trips-grid">
+              {similarPosts.map((p) => (
+                <div
+                  key={p.id}
+                  className="similar-trip-card"
+                  onClick={() => navigate(`/trip/${p.id}`)}
+                >
+                  <div className="similar-trip-thumb">
+                    {p.thumbnail_url
+                      ? <img src={p.thumbnail_url} alt={p.title} />
+                      : <span className="similar-trip-icon">✈️</span>
+                    }
+                  </div>
+                  <div className="similar-trip-body">
+                    <p className="similar-trip-title">{p.title}</p>
+                    {p.tags?.length > 0 && (
+                      <div className="similar-trip-tags">
+                        {p.tags.slice(0, 3).map(t => (
+                          <span key={t} className="similar-trip-tag">#{t}</span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         </div>
       </div>
     </div>

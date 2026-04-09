@@ -357,11 +357,12 @@ class LLMRouteRecommendService:
         """
         구조화된 경로 데이터 → 상세 여행 일정 텍스트 생성
         (블로그 생성에도 재사용)
+        마지막 줄에 <!-- tags: 태그1, 태그2 --> 형식으로 태그 포함
         """
         try:
             pref_text = json.dumps(user_preferences, ensure_ascii=False) if user_preferences else "없음"
             prompt = route_data.get("prompt") or f"""
-다음 여행 경로 데이터를 바탕으로 상세 여행 일정을 마크다운 형식으로 작성해주세요.
+다음 여행 사진 데이터를 바탕으로 여행 기록을 마크다운 형식으로 작성해주세요.
 
 경로 데이터:
 {json.dumps(route_data, ensure_ascii=False, indent=2)}
@@ -369,23 +370,125 @@ class LLMRouteRecommendService:
 사용자 선호도: {pref_text}
 
 요구사항:
-- 마크다운 형식으로 작성
-- 일자별 일정 구성
-- 각 장소 이동 수단 및 소요 시간 포함
-- 자연스러운 문체
+1. 첫 줄은 반드시 # 으로 시작하는 제목. 제목은 방문 지역과 여행 특징이 담긴 구체적인 제목으로 작성 (예: "도쿄 3박 4일, 신주쿠에서 아사쿠사까지" / "제주 당일치기 올레길 트레킹" / "오사카 먹방 여행 2박 3일")
+2. GPS가 있는 경우 방문 장소별로 일정을 구성하고 이동 경로를 자연스럽게 서술
+3. 감성적이고 여행 블로그 스타일의 자연스러운 한국어 문체
+4. 마크다운 형식 (소제목, 목록, 강조 활용)
+5. 마지막 줄에 반드시 아래 형식으로 태그를 포함:
+<!-- tags: 태그1, 태그2, 태그3, 태그4, 태그5 -->
+태그는 국가/도시명, 여행 테마(맛집/힐링/액티비티 등), 계절감 등 5~8개 포함
 """
             response = await self.llm.provider.chat_completion(
                 messages=[
-                    {"role": "system", "content": "당신은 여행 일정을 감성적으로 작성하는 전문 여행 작가입니다."},
+                    {"role": "system", "content": "당신은 여행 일정을 감성적으로 작성하는 전문 여행 작가입니다. 구체적인 제목과 태그를 반드시 포함합니다."},
                     {"role": "user", "content": prompt},
                 ],
                 temperature=0.4,
-                max_tokens=1000,
+                max_tokens=1200,
             )
             return response
         except Exception as e:
             logger.error(f"여행 일정 생성 실패: {str(e)}")
             return "여행 일정을 생성할 수 없습니다."
+
+    async def select_highlight_photos(
+        self,
+        photos: List[Dict[str, Any]],
+        max_highlights: int = 5,
+    ) -> List[str]:
+        """
+        사진 메타데이터를 분석하여 하이라이트 사진 ID 목록 반환
+        GPS 다양성, 촬영 시간 분포, 파일 크기(화질 프록시)를 고려
+        """
+        try:
+            if not photos:
+                return []
+            if len(photos) <= max_highlights:
+                return [str(p["id"]) for p in photos]
+
+            # GPS 있는 사진 우선 선별
+            gps_photos = [p for p in photos if p.get("gps")]
+            no_gps_photos = [p for p in photos if not p.get("gps")]
+
+            # GPS 사진이 충분하면 LLM으로 선별
+            if gps_photos:
+                prompt = f"""다음 여행 사진 목록에서 여행 기록에 가장 대표적인 사진 {max_highlights}장을 선택해주세요.
+
+사진 목록:
+{json.dumps(gps_photos, ensure_ascii=False, indent=2)}
+
+선택 기준:
+1. GPS 위치 다양성 (다른 장소 우선)
+2. 촬영 시간 분포 (여행 전체를 골고루 커버)
+3. 파일 크기가 클수록 화질 좋은 사진으로 간주
+4. 정확히 {max_highlights}개의 id를 선택
+
+반드시 아래 JSON 형식으로만 응답하세요:
+{{"highlighted_ids": ["id1", "id2", "id3"]}}"""
+
+                response = await self.llm.provider.chat_completion(
+                    messages=[
+                        {"role": "system", "content": "당신은 여행 사진을 분석하여 대표 사진을 선별하는 전문가입니다."},
+                        {"role": "user", "content": prompt},
+                    ],
+                    temperature=0.1,
+                    max_tokens=200,
+                )
+                data = self._parse_llm_json(response)
+                ids = data.get("highlighted_ids", [])
+                if ids:
+                    return [str(i) for i in ids[:max_highlights]]
+
+            # 폴백: 파일 크기 기준 + 시간 분포 기반 단순 선별
+            sorted_photos = sorted(photos, key=lambda p: p.get("file_size", 0), reverse=True)
+            return [str(p["id"]) for p in sorted_photos[:max_highlights]]
+
+        except Exception as e:
+            logger.error(f"하이라이트 사진 선별 실패: {str(e)}")
+            # 폴백: 처음 N장
+            return [str(p["id"]) for p in photos[:max_highlights]]
+
+    async def generate_tags_from_content(
+        self,
+        locations: List[Dict[str, Any]],
+        content: str = "",
+    ) -> List[str]:
+        """
+        위치 정보 + 콘텐츠 텍스트에서 태그 생성
+        """
+        try:
+            loc_summary = []
+            for loc in locations:
+                parts = [v for v in [loc.get("country"), loc.get("city"), loc.get("landmark")] if v]
+                if parts:
+                    loc_summary.append(", ".join(parts))
+
+            content_preview = content[:300] if content else ""
+
+            prompt = f"""다음 여행 정보를 바탕으로 태그를 생성해주세요.
+
+방문 장소:
+{chr(10).join(f"- {s}" for s in loc_summary) if loc_summary else "위치 정보 없음"}
+
+내용 미리보기:
+{content_preview}
+
+아래 JSON 형식으로만 응답하세요. 태그는 국가/도시명, 여행 테마, 계절감 등 5~8개:
+{{"tags": ["태그1", "태그2", "태그3"]}}"""
+
+            response = await self.llm.provider.chat_completion(
+                messages=[
+                    {"role": "system", "content": "당신은 여행 콘텐츠에서 검색 가능한 태그를 생성하는 전문가입니다."},
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=0.1,
+                max_tokens=150,
+            )
+            data = self._parse_llm_json(response)
+            return data.get("tags", ["여행"])
+        except Exception as e:
+            logger.error(f"태그 생성 실패: {str(e)}")
+            return ["여행"]
 
     async def get_category_recommendations(
         self,

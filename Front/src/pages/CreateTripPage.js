@@ -1,127 +1,343 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth0 } from '@auth0/auth0-react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useSelector, useDispatch } from 'react-redux';
+import { clearPhotos, loadExistingPhoto, applyHighlights } from '../store/photoSlice';
+import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import ImagePanel from '../components/ImagePanel';
 import DocumentPanel from '../components/DocumentPanel';
 import MapPanel from '../components/MapPanel';
 import Resizer from '../components/Resizer';
+import { useToast } from '../components/Toast';
+import { apiClient } from '../services/apiClient';
+import { fileStore } from '../store/fileStore';
 import '../styles/CreateTripPage.css';
 
-const CreateTripPage = ({ toggleTheme, theme }) => {
-  const { user, isAuthenticated, isLoading, loginWithRedirect } = useAuth0();
-  const navigate = useNavigate();
-  const routeLocation = useLocation();
-  const draft = routeLocation.state?.draft;
-  const [tripTitle, setTripTitle] = useState(
-    draft?.title || (user?.name ? `${user.name}의 여행 기록` : '새 여행 기록')
-  );
-  const [isEditing, setIsEditing] = useState(false);
+const DRAFT_KEY = 'iwt_draft';
 
-  // 인증되지 않은 사용자 리다이렉트
+const buildDefaultTitle = (userName, photos) => {
+  if (!photos || photos.length === 0) return userName ? `${userName}의 여행 기록` : '새 여행 기록';
+  const dates = photos
+    .map(p => p.captureTimestamp)
+    .filter(Boolean)
+    .sort((a, b) => a - b);
+  let datePart = '';
+  if (dates.length > 0) {
+    const d = new Date(dates[0]);
+    datePart = ` (${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,'0')})`;
+  }
+  return userName ? `${userName}의 여행 기록${datePart}` : `여행 기록${datePart}`;
+};
+
+const CreateTripPage = ({ toggleTheme, theme }) => {
+  const { user, isAuthenticated, isLoading } = useAuth0();
+  const dispatch = useDispatch();
+  const navigate = useNavigate();
+  const toast = useToast();
+  const routeLocation = useLocation();
+  const { id: editPostId } = useParams();  // defined when /trip/:id/edit
+
+  // 편집 모드 vs 신규 작성 모드
+  const isEditMode = Boolean(editPostId);
+
+  const draft = routeLocation.state?.draft;
+  const photos = useSelector(state => state.photos.photos);
+  const locations = useSelector(state => state.photos.locations);
+
+  const [tripTitle, setTripTitle] = useState(
+    draft?.title || buildDefaultTitle(user?.name, photos)
+  );
+  const [content, setContent] = useState(draft?.content || null);
+  const [tags, setTags] = useState(draft?.tags || []);
+  const [tagInput, setTagInput] = useState('');
+  const [isEditing, setIsEditing] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [isGeneratingContent, setIsGeneratingContent] = useState(false);
+  const [editLoading, setEditLoading] = useState(isEditMode); // 편집 모드일 때 기존 데이터 로드 중
+
+  // 임시저장 복원 배너
+  const [savedDraft, setSavedDraft] = useState(null);
+  const [draftBannerDismissed, setDraftBannerDismissed] = useState(false);
+
+  // ── 신규 모드: 이전 사진 세션 초기화 + 하이라이트 적용 ──
+  // fromRecord: NewTripPage에서 사진을 이미 Redux에 넣고 넘어온 경우 → 초기화 금지
+  useEffect(() => {
+    if (isEditMode) return;
+    if (routeLocation.state?.fromRecord) {
+      // 하이라이트 사진 적용
+      if (draft?.highlightedIds?.length) {
+        dispatch(applyHighlights(draft.highlightedIds));
+      }
+      return;
+    }
+    dispatch(clearPhotos());
+    fileStore.clear();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ── 편집 모드: 기존 게시글 데이터 + 사진 로드 ──
+  useEffect(() => {
+    if (!isEditMode) return;
+    let cancelled = false;
+
+    dispatch(clearPhotos());
+    fileStore.clear();
+
+    const load = async () => {
+      try {
+        const [post, photosData] = await Promise.all([
+          apiClient.get(`/api/v1/posts/${editPostId}`),
+          apiClient.get(`/api/v1/posts/${editPostId}/photos`),
+        ]);
+        if (cancelled) return; // 이전 실행 결과 무시
+        setTripTitle(post.title || '');
+        setContent(post.description || '');
+        setTags(post.tags || []);
+        for (const photo of photosData.photos || []) {
+          dispatch(loadExistingPhoto(photo));
+        }
+      } catch (err) {
+        if (cancelled) return;
+        console.error('게시글 로드 실패:', err);
+        toast.error('게시글을 불러오지 못했습니다.');
+      } finally {
+        if (!cancelled) setEditLoading(false);
+      }
+    };
+    load();
+
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEditMode, editPostId]);
+
+  // ── 임시저장 확인 (신규 모드만) ──
+  useEffect(() => {
+    if (isEditMode || draft) return;
+    try {
+      const raw = localStorage.getItem(DRAFT_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed.title || parsed.content) setSavedDraft(parsed);
+      }
+    } catch {}
+  }, [isEditMode, draft]);
+
+  // ── AI 자동 생성 (신규 모드, draft 없을 때) ──
+  useEffect(() => {
+    if (isEditMode || draft?.content || photos.length === 0 || isGeneratingContent) return;
+    const generateContent = async () => {
+      setIsGeneratingContent(true);
+      try {
+        const photoData = photos.map(p => ({
+          name: p.name,
+          captureTime: p.captureTime,
+          gps: p.gpsData,
+        }));
+        const locationData = locations.map(loc => ({
+          name: loc.name,
+          coordinates: loc.coordinates,
+          time: loc.time,
+        }));
+        const res = await apiClient.post('/api/v1/llm/generate-itinerary', {
+          route_data: { photos: photoData, locations: locationData, total_photos: photos.length },
+          user_preferences: { language: 'ko', format: 'markdown' },
+        });
+        if (res.success && res.itinerary) {
+          setContent(res.itinerary);
+          if (res.title) setTripTitle(res.title);
+          if (res.tags?.length) setTags(res.tags);
+        }
+      } catch (err) {
+        console.warn('AI 초안 자동 생성 실패:', err);
+      } finally {
+        setIsGeneratingContent(false);
+      }
+    };
+    generateContent();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ── 인증 확인 ──
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
-      // 로그인이 필요하다는 메시지를 표시하고 로그인 페이지로 이동
       alert('게시글을 작성하려면 로그인이 필요합니다.');
       navigate('/');
     }
   }, [isLoading, isAuthenticated, navigate]);
-  
-  // 패널 너비 상태 (백분율)
+
+  // ── 패널 너비 ──
   const [leftWidth, setLeftWidth] = useState(25);
   const [centerWidth, setCenterWidth] = useState(50);
   const [rightWidth, setRightWidth] = useState(25);
-  
-  // 드래그 시작 상태 저장
   const [dragStartState, setDragStartState] = useState({ left: 25, center: 50, right: 25 });
-  
-  // 반응형 탭 상태 관리
-  const [activeTab, setActiveTab] = useState('image'); // 'image', 'document', 'map'
+  const [activeTab, setActiveTab] = useState('image');
   const [isMobile, setIsMobile] = useState(false);
-  
-  // 반응형 감지
+
   useEffect(() => {
-    const handleResize = () => {
-      setIsMobile(window.innerWidth <= 992);
-    };
-    
-    handleResize(); // 초기값 설정
+    const handleResize = () => setIsMobile(window.innerWidth <= 992);
+    handleResize();
     window.addEventListener('resize', handleResize);
-    
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  const handleTitleEdit = () => {
-    setIsEditing(true);
+  // ── 임시저장 불러오기 ──
+  const handleLoadDraft = () => {
+    if (!savedDraft) return;
+    if (savedDraft.title) setTripTitle(savedDraft.title);
+    if (savedDraft.content) setContent(savedDraft.content);
+    setSavedDraft(null);
+    setDraftBannerDismissed(true);
+    toast.success('임시저장 기록을 불러왔습니다.');
   };
 
-  const handleTitleSave = () => {
-    setIsEditing(false);
+  const handleDismissDraft = () => {
+    setSavedDraft(null);
+    setDraftBannerDismissed(true);
+    localStorage.removeItem(DRAFT_KEY);
   };
 
-  const handleTitleChange = (e) => {
-    setTripTitle(e.target.value);
-  };
-
-  const handleTitleKeyPress = (e) => {
-    if (e.key === 'Enter') {
-      handleTitleSave();
+  // ── 임시저장 ──
+  const handleTempSave = () => {
+    try {
+      const draftData = { title: tripTitle, content, savedAt: new Date().toISOString() };
+      localStorage.setItem(DRAFT_KEY, JSON.stringify(draftData));
+      toast.success('임시저장 완료!');
+    } catch {
+      toast.error('임시저장에 실패했습니다.');
     }
   };
 
-  const handleLogoClick = () => {
-    navigate('/');
+  // ── 저장 (신규: POST, 편집: PUT) ──
+  const handleSave = async () => {
+    if (isEditMode) {
+      setIsUploading(true);
+      try {
+        // 기존 사진 중 유지할 것들의 DB ID
+        const keepPhotoIds = photos.filter(p => p.isExisting).map(p => p.dbId);
+
+        // 새로 추가된 사진 업로드
+        const newPhotos = [];
+        for (const photo of photos.filter(p => !p.isExisting)) {
+          const file = fileStore.get(photo.id);
+          if (!file) continue;
+          const presignedData = await apiClient.post('/api/v1/photos/presigned-url', {
+            file_name: photo.name,
+            content_type: photo.type,
+          });
+          const uploadRes = await fetch(presignedData.presigned_url, {
+            method: 'PUT',
+            body: file,
+            headers: { 'Content-Type': photo.type },
+          });
+          if (!uploadRes.ok) throw new Error(`업로드 실패: ${photo.name}`);
+          const permanentKey = `photos/${user.sub}/${Date.now()}_${photo.name}`;
+          await apiClient.post('/api/v1/photos/move-to-permanent', {
+            temp_key: presignedData.file_key,
+            permanent_key: permanentKey,
+          });
+          newPhotos.push({
+            file_key: permanentKey,
+            file_name: photo.name,
+            file_size: photo.size,
+            content_type: photo.type || 'image/jpeg',
+          });
+        }
+
+        await apiClient.put(`/api/v1/posts/${editPostId}`, {
+          title: tripTitle,
+          description: content || '',
+          tags: tags,
+          keep_photo_ids: keepPhotoIds,
+          new_photos: newPhotos,
+        });
+        dispatch(clearPhotos());
+        fileStore.clear();
+        toast.success('게시글이 수정됐습니다!');
+        navigate(`/trip/${editPostId}`);
+      } catch (err) {
+        console.error(err);
+        toast.error(err.message || '수정 중 오류가 발생했습니다.');
+      } finally {
+        setIsUploading(false);
+      }
+      return;
+    }
+
+    // 신규 모드: 사진 업로드 + 게시글 생성
+    if (photos.length === 0) {
+      toast.warning('업로드할 사진이 없습니다.');
+      return;
+    }
+    setIsUploading(true);
+    try {
+      const uploadedPhotos = [];
+      for (const photo of photos) {
+        const file = fileStore.get(photo.id);
+        let fileKey;
+        if (file) {
+          const presignedData = await apiClient.post('/api/v1/photos/presigned-url', {
+            file_name: photo.name,
+            content_type: photo.type,
+          });
+          const uploadRes = await fetch(presignedData.presigned_url, {
+            method: 'PUT',
+            body: file,
+            headers: { 'Content-Type': photo.type },
+          });
+          if (!uploadRes.ok) throw new Error(`업로드 실패: ${photo.name}`);
+          const permanentKey = `photos/${user.sub}/${Date.now()}_${photo.name}`;
+          await apiClient.post('/api/v1/photos/move-to-permanent', {
+            temp_key: presignedData.file_key,
+            permanent_key: permanentKey,
+          });
+          fileKey = permanentKey;
+        }
+        if (fileKey) {
+          uploadedPhotos.push({
+            file_key: fileKey,
+            file_name: photo.name,
+            file_size: photo.size,
+            content_type: photo.type || 'image/jpeg',
+            location_info: photo.gpsData ? {
+              coordinates: { latitude: photo.gpsData.lat, longitude: photo.gpsData.lng },
+            } : null,
+          });
+        }
+      }
+      await apiClient.post('/api/v1/posts/', {
+        title: tripTitle,
+        description: content || '',
+        tags: tags,
+        photos: uploadedPhotos,
+      });
+      localStorage.removeItem(DRAFT_KEY);
+      dispatch(clearPhotos());
+      fileStore.clear();
+      toast.success('게시글이 업로드됐습니다!');
+      navigate('/');
+    } catch (err) {
+      console.error(err);
+      toast.error(err.message || '업로드 중 오류가 발생했습니다.');
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   const handleLeftResize = (totalDeltaX) => {
     const containerWidth = document.querySelector('.panels-container')?.clientWidth || 1200;
     const deltaPercent = (totalDeltaX / containerWidth) * 100;
-    
-    // 드래그 시작 시점의 실제 상태를 기준으로 계산
-    const startLeft = dragStartState.left;
-    const startCenter = dragStartState.center;
-    const currentRight = rightWidth; // 현재 3번 패널 크기 (고정)
-    
-    // 3번 패널은 고정, 1번과 2번 패널이 나머지 공간을 나눔
-    const availableSpace = 100 - currentRight;
-    
-    // 1번 패널 크기 조정
-    const maxLeftWidth = Math.min(70, availableSpace - 15);
-    const newLeftWidth = Math.max(15, Math.min(maxLeftWidth, startLeft + deltaPercent));
-    
-    // 2번 패널은 나머지 공간 사용
+    const availableSpace = 100 - rightWidth;
+    const newLeftWidth = Math.max(15, Math.min(Math.min(70, availableSpace - 15), dragStartState.left + deltaPercent));
     const newCenterWidth = availableSpace - newLeftWidth;
-    
-    // 적용
-    if (newCenterWidth >= 15) {
-      setLeftWidth(newLeftWidth);
-      setCenterWidth(newCenterWidth);
-    }
+    if (newCenterWidth >= 15) { setLeftWidth(newLeftWidth); setCenterWidth(newCenterWidth); }
   };
 
   const handleRightResize = (totalDeltaX) => {
     const containerWidth = document.querySelector('.panels-container')?.clientWidth || 1200;
     const deltaPercent = (totalDeltaX / containerWidth) * 100;
-    
-    // 드래그 시작 시점의 실제 상태를 기준으로 계산
-    const currentLeft = leftWidth; // 현재 1번 패널 크기 (고정)
-    const startCenter = dragStartState.center;
-    const startRight = dragStartState.right;
-    
-    // 1번 패널은 고정, 2번과 3번 패널이 나머지 공간을 나눔
-    const availableSpace = 100 - currentLeft;
-    
-    // 2번 패널 크기 조정
-    const maxCenterWidth = Math.min(70, availableSpace - 15);
-    const newCenterWidth = Math.max(15, Math.min(maxCenterWidth, startCenter + deltaPercent));
-    
-    // 3번 패널은 나머지 공간 사용
+    const availableSpace = 100 - leftWidth;
+    const newCenterWidth = Math.max(15, Math.min(Math.min(70, availableSpace - 15), dragStartState.center + deltaPercent));
     const newRightWidth = availableSpace - newCenterWidth;
-    
-    // 적용
-    if (newRightWidth >= 15) {
-      setCenterWidth(newCenterWidth);
-      setRightWidth(newRightWidth);
-    }
+    if (newRightWidth >= 15) { setCenterWidth(newCenterWidth); setRightWidth(newRightWidth); }
   };
 
   const handleDragStart = useCallback(() => {
@@ -129,37 +345,24 @@ const CreateTripPage = ({ toggleTheme, theme }) => {
   }, [leftWidth, centerWidth, rightWidth]);
 
   const handleDragEnd = useCallback(() => {
-    // 드래그 종료 후 즉시 상태 업데이트
     setDragStartState({ left: leftWidth, center: centerWidth, right: rightWidth });
   }, [leftWidth, centerWidth, rightWidth]);
 
-  // 로딩 중이거나 인증되지 않은 경우 처리
-  if (isLoading) {
+  if (isLoading || (isEditMode && editLoading)) {
     return (
       <div className="create-trip-page">
         <div className="page-header">
           <div className="header-left">
-            <div className="logo-container" onClick={handleLogoClick}>
+            <div className="logo-container" onClick={() => navigate('/')}>
               <div className="logo-avatar"></div>
-              <div className="logo-text">
-                <h1>IWT</h1>
-                <p>I Want. I Went. Trip.</p>
-              </div>
+              <div className="logo-text"><h1>IWT</h1><p>I Want. I Went. Trip.</p></div>
             </div>
           </div>
-          <div className="title-section">
-            <h1 className="page-title">로딩 중...</h1>
-          </div>
+          <div className="title-section"><h1 className="page-title">로딩 중...</h1></div>
         </div>
         <div className="page-content">
-          <div style={{ 
-            display: 'flex', 
-            justifyContent: 'center', 
-            alignItems: 'center', 
-            height: '400px',
-            fontSize: '18px'
-          }}>
-            인증 정보를 확인하고 있습니다...
+          <div style={{ display:'flex', justifyContent:'center', alignItems:'center', height:'400px', fontSize:'18px' }}>
+            {isEditMode ? '게시글을 불러오는 중...' : '인증 정보를 확인하고 있습니다...'}
           </div>
         </div>
       </div>
@@ -168,44 +371,49 @@ const CreateTripPage = ({ toggleTheme, theme }) => {
 
   return (
     <div className="create-trip-page">
-      {/* 헤더 영역 */}
+      {/* 헤더 */}
       <div className="page-header">
         <div className="header-left">
-          <div className="logo-container" onClick={handleLogoClick}>
+          <div className="logo-container" onClick={() => navigate('/')}>
             <div className="logo-avatar"></div>
-            <div className="logo-text">
-              <h1>IWT</h1>
-              <p>I Want. I Went. Trip.</p>
-            </div>
+            <div className="logo-text"><h1>IWT</h1><p>I Want. I Went. Trip.</p></div>
           </div>
         </div>
-        
+
         <div className="title-section">
           {isEditing ? (
             <input
               type="text"
               className="title-input"
               value={tripTitle}
-              onChange={handleTitleChange}
-              onBlur={handleTitleSave}
-              onKeyPress={handleTitleKeyPress}
+              onChange={(e) => setTripTitle(e.target.value)}
+              onBlur={() => setIsEditing(false)}
+              onKeyPress={(e) => e.key === 'Enter' && setIsEditing(false)}
               autoFocus
             />
           ) : (
-            <h1 className="page-title" onClick={handleTitleEdit}>
-              {tripTitle}
-            </h1>
+            <h1 className="page-title" onClick={() => setIsEditing(true)}>{tripTitle}</h1>
           )}
         </div>
-        
+
         <div className="header-actions">
           {toggleTheme && (
             <button className="theme-toggle" onClick={toggleTheme} title={theme === 'light' ? '다크 모드' : '라이트 모드'}>
-              {theme === 'light' ? '\uD83C\uDF19' : '\u2600\uFE0F'}
+              {theme === 'light' ? '🌙' : '☀️'}
             </button>
           )}
-          <button className="action-btn temp-save-btn">임시저장</button>
-          <button className="action-btn upload-btn">업로드</button>
+          {!isEditMode && (
+            <button className="action-btn temp-save-btn" onClick={handleTempSave}>
+              임시저장
+            </button>
+          )}
+          <button
+            className="action-btn upload-btn"
+            onClick={handleSave}
+            disabled={isUploading}
+          >
+            {isUploading ? (isEditMode ? '저장 중...' : '업로드 중...') : (isEditMode ? '저장' : '업로드')}
+          </button>
           <div className="user-profile-icon">
             {isAuthenticated && user?.picture ? (
               <img src={user.picture} alt="프로필" className="profile-img" />
@@ -216,77 +424,100 @@ const CreateTripPage = ({ toggleTheme, theme }) => {
         </div>
       </div>
 
-      {/* 메인 콘텐츠 영역 */}
+      {/* 태그 바 */}
+      <div className="tag-bar">
+        <div className="tag-chips">
+          {tags.map((tag, i) => (
+            <span key={i} className="tag-chip">
+              #{tag}
+              <button
+                className="tag-chip-remove"
+                onClick={() => setTags(prev => prev.filter((_, idx) => idx !== i))}
+              >×</button>
+            </span>
+          ))}
+          <input
+            className="tag-input"
+            placeholder="태그 추가..."
+            value={tagInput}
+            onChange={e => setTagInput(e.target.value)}
+            onKeyDown={e => {
+              if ((e.key === 'Enter' || e.key === ',') && tagInput.trim()) {
+                e.preventDefault();
+                const newTag = tagInput.trim().replace(/^#/, '');
+                if (newTag && !tags.includes(newTag)) setTags(prev => [...prev, newTag]);
+                setTagInput('');
+              }
+            }}
+          />
+        </div>
+      </div>
+
+      {/* 임시저장 복원 배너 */}
+      {savedDraft && !draftBannerDismissed && (
+        <div className="draft-restore-banner">
+          <span className="draft-restore-text">
+            📝 임시저장된 기록이 있습니다.
+            {savedDraft.savedAt && ` (${new Date(savedDraft.savedAt).toLocaleString('ko-KR', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' })})`}
+          </span>
+          <div className="draft-restore-actions">
+            <button className="draft-restore-btn" onClick={handleLoadDraft}>불러오기</button>
+            <button className="draft-dismiss-btn" onClick={handleDismissDraft}>무시</button>
+          </div>
+        </div>
+      )}
+
+      {/* 메인 콘텐츠 */}
       <div className="page-content">
-        {/* 반응형 탭 메뉴 */}
         {isMobile && (
           <div className="tab-menu">
-          <button 
-            className={`tab-button ${activeTab === 'image' ? 'active' : ''}`}
-            onClick={() => setActiveTab('image')}
-          >
-            📷 사진
-          </button>
-          <button 
-            className={`tab-button ${activeTab === 'document' ? 'active' : ''}`}
-            onClick={() => setActiveTab('document')}
-          >
-            📄 문서
-          </button>
-          <button 
-            className={`tab-button ${activeTab === 'map' ? 'active' : ''}`}
-            onClick={() => setActiveTab('map')}
-          >
-            🗺️ 지도
-          </button>
+            <button className={`tab-button ${activeTab === 'image' ? 'active' : ''}`} onClick={() => setActiveTab('image')}>📷 사진</button>
+            <button className={`tab-button ${activeTab === 'document' ? 'active' : ''}`} onClick={() => setActiveTab('document')}>📄 문서</button>
+            <button className={`tab-button ${activeTab === 'map' ? 'active' : ''}`} onClick={() => setActiveTab('map')}>🗺️ 지도</button>
           </div>
         )}
-        
+
         <div className="panels-container">
-          {/* 왼쪽 패널 - 이미지 */}
-          <div 
-            className={`panel-wrapper left-panel ${isMobile && activeTab !== 'image' ? 'mobile-hidden' : ''}`} 
+          <div
+            className={`panel-wrapper left-panel ${isMobile && activeTab !== 'image' ? 'mobile-hidden' : ''}`}
             style={{ width: isMobile ? '100%' : `${leftWidth}%` }}
           >
             <ImagePanel />
           </div>
 
           {!isMobile && (
-            <Resizer 
-              onResize={handleLeftResize} 
-              onStart={handleDragStart} 
-              onEnd={handleDragEnd}
-              style={{ left: `${leftWidth}%` }}
-            />
+            <Resizer onResize={handleLeftResize} onStart={handleDragStart} onEnd={handleDragEnd} style={{ left: `${leftWidth}%` }} />
           )}
 
-          {/* 중간 패널 - 문서 */}
-          <div 
-            className={`panel-wrapper center-panel ${isMobile && activeTab !== 'document' ? 'mobile-hidden' : ''}`} 
-            style={{ width: isMobile ? '100%' : `${centerWidth}%` }}
+          <div
+            className={`panel-wrapper center-panel ${isMobile && activeTab !== 'document' ? 'mobile-hidden' : ''}`}
+            style={{ width: isMobile ? '100%' : `${centerWidth}%`, position: 'relative' }}
           >
-            <DocumentPanel initialContent={draft?.content} />
+            {isGeneratingContent && (
+              <div className="ai-generating-overlay">
+                <div className="ai-generating-spinner" />
+                <p className="ai-generating-text">AI가 여행 기록을 작성하는 중...</p>
+              </div>
+            )}
+            <DocumentPanel
+              key={content ? 'has-content' : 'no-content'}
+              initialContent={content}
+              onContentChange={setContent}
+            />
           </div>
 
           {!isMobile && (
-            <Resizer 
-              onResize={handleRightResize} 
-              onStart={handleDragStart} 
-              onEnd={handleDragEnd}
-              style={{ left: `${leftWidth + centerWidth}%` }}
-            />
+            <Resizer onResize={handleRightResize} onStart={handleDragStart} onEnd={handleDragEnd} style={{ left: `${leftWidth + centerWidth}%` }} />
           )}
 
-          {/* 오른쪽 패널 - 지도 */}
-          <div 
-            className={`panel-wrapper right-panel ${isMobile && activeTab !== 'map' ? 'mobile-hidden' : ''}`} 
+          <div
+            className={`panel-wrapper right-panel ${isMobile && activeTab !== 'map' ? 'mobile-hidden' : ''}`}
             style={{ width: isMobile ? '100%' : `${rightWidth}%` }}
           >
             <MapPanel />
           </div>
         </div>
       </div>
-
     </div>
   );
 };

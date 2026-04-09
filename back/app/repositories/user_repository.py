@@ -32,14 +32,10 @@ class UserRepository:
             Exception: 데이터베이스 작업 실패시
         """
         try:
-            # MySQL UPSERT 쿼리 실행
+            # 최초 로그인 시에만 저장 (이미 존재하면 아무것도 변경하지 않음)
             result = self.db.execute(text("""
-                INSERT INTO users (id, email, name, profile_image)
+                INSERT IGNORE INTO users (id, email, name, picture)
                 VALUES (:id, :email, :name, :picture)
-                ON DUPLICATE KEY UPDATE
-                    name = VALUES(name),
-                    profile_image = VALUES(profile_image),
-                    updated_at = NOW()
             """), {
                 "id": user_data.id,
                 "email": user_data.email,

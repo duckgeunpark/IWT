@@ -21,7 +21,7 @@ class S3PresignedURLService:
         oci_endpoint = os.getenv('OCI_S3_ENDPOINT')
 
         if oci_endpoint:
-            # OCI Object Storage (S3 호환 API)
+            # OCI Object Storage / MinIO (S3 호환 API)
             access_key = os.getenv('OCI_ACCESS_KEY_ID')
             secret_key = os.getenv('OCI_SECRET_ACCESS_KEY')
             region = os.getenv('OCI_REGION', 'ap-chuncheon-1')
@@ -34,6 +34,7 @@ class S3PresignedURLService:
             if not self.bucket_name:
                 raise ValueError("OCI_BUCKET_NAME environment variable is required")
 
+            # 내부 통신용 클라이언트 (일반 작업)
             self.s3_client = boto3.client(
                 's3',
                 aws_access_key_id=access_key,
@@ -42,7 +43,19 @@ class S3PresignedURLService:
                 endpoint_url=oci_endpoint,
                 config=boto3.session.Config(signature_version='s3v4'),
             )
-            logger.info(f"OCI Object Storage 초기화 완료 - Bucket: {self.bucket_name}, Region: {region}")
+
+            # presigned URL 생성용 클라이언트 (브라우저에서 접근 가능한 public endpoint 사용)
+            public_endpoint = os.getenv('OCI_S3_PUBLIC_ENDPOINT', oci_endpoint)
+            self.s3_presign_client = boto3.client(
+                's3',
+                aws_access_key_id=access_key,
+                aws_secret_access_key=secret_key,
+                region_name=region,
+                endpoint_url=public_endpoint,
+                config=boto3.session.Config(signature_version='s3v4'),
+            )
+
+            logger.info(f"OCI/MinIO Object Storage 초기화 완료 - Bucket: {self.bucket_name}, Internal: {oci_endpoint}, Public: {public_endpoint}")
         else:
             # AWS S3 (기본)
             access_key = os.getenv('AWS_ACCESS_KEY_ID')
@@ -63,6 +76,8 @@ class S3PresignedURLService:
                 aws_secret_access_key=secret_key,
                 region_name=region,
             )
+            self.s3_presign_client = self.s3_client  # AWS는 동일 클라이언트 사용
+
             logger.info(f"AWS S3 초기화 완료 - Bucket: {self.bucket_name}, Region: {region}")
     
     async def generate_presigned_url(
@@ -88,7 +103,7 @@ class S3PresignedURLService:
             # 임시 폴더에 저장
             temp_key = f"temp/{file_key}"
             
-            presigned_url = self.s3_client.generate_presigned_url(
+            presigned_url = self.s3_presign_client.generate_presigned_url(
                 'put_object',
                 Params={
                     'Bucket': self.bucket_name,
@@ -193,6 +208,17 @@ class S3PresignedURLService:
             logger.error(f"파일 삭제 중 예상치 못한 오류: {str(e)}")
             return False
     
+    def generate_download_url_sync(self, file_key: str, expiration: int = 3600) -> Optional[str]:
+        """동기 버전 - presigned GET URL 생성"""
+        try:
+            return self.s3_presign_client.generate_presigned_url(
+                'get_object',
+                Params={'Bucket': self.bucket_name, 'Key': file_key},
+                ExpiresIn=expiration,
+            )
+        except Exception:
+            return None
+
     async def generate_download_url(
         self,
         file_key: str,
@@ -209,7 +235,7 @@ class S3PresignedURLService:
             presigned URL 문자열 (실패 시 None)
         """
         try:
-            url = self.s3_client.generate_presigned_url(
+            url = self.s3_presign_client.generate_presigned_url(
                 'get_object',
                 Params={'Bucket': self.bucket_name, 'Key': file_key},
                 ExpiresIn=expiration,

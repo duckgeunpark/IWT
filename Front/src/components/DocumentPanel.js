@@ -24,10 +24,15 @@ const SAMPLE_CONTENT = `# 여행 기록
 *LLM 버튼을 눌러 AI가 여행 기록을 자동 생성하도록 할 수 있습니다.*
 `;
 
-const DocumentPanel = ({ initialContent, initialTitle }) => {
+const DocumentPanel = ({ initialContent, initialTitle, onContentChange }) => {
   const { photos, locations } = useSelector(state => state.photos);
   const toast = useToast();
   const [content, setContent] = useState(initialContent || SAMPLE_CONTENT);
+
+  const updateContent = useCallback((newContent) => {
+    setContent(newContent);
+    onContentChange?.(newContent);
+  }, [onContentChange]);
   const [mode, setMode] = useState('preview');
   const [isLLMProcessing, setIsLLMProcessing] = useState(false);
   const textareaRef = useRef(null);
@@ -48,7 +53,7 @@ const DocumentPanel = ({ initialContent, initialTitle }) => {
       prefix + (selected || '텍스트') + suffix +
       content.substring(end);
 
-    setContent(newContent);
+    updateContent(newContent);
 
     // 커서 위치 복원
     requestAnimationFrame(() => {
@@ -201,7 +206,7 @@ ${locationSummary || '- 위치 정보가 있는 사진이 없습니다.'}
             ref={textareaRef}
             className="document-textarea"
             value={content}
-            onChange={(e) => setContent(e.target.value)}
+            onChange={(e) => updateContent(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="마크다운으로 여행 기록을 작성하세요..."
           />
