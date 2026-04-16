@@ -4,6 +4,7 @@ import { useAuth0 } from '@auth0/auth0-react';
 import Header from '../components/Header';
 import { apiClient } from '../services/apiClient';
 import { formatDate } from '../utils/dateUtils';
+import useDisplayName from '../hooks/useDisplayName';
 import '../styles/ProfilePage.css';
 
 const GRADIENTS = [
@@ -104,9 +105,9 @@ const ProfilePage = ({ toggleTheme, theme }) => {
   const [showEditModal, setShowEditModal] = useState(false);
   const [editName, setEditName] = useState('');
   const [editSaving, setEditSaving] = useState(false);
-  // DB에서 읽어온 정보 (Auth0 캐시 우회)
-  const [dbDisplayName, setDbDisplayName] = useState(null);
   const [dbPicture, setDbPicture] = useState(null);
+
+  const displayName = useDisplayName();
 
   // 삭제 확인 모달
   const [deleteTarget, setDeleteTarget] = useState(null);
@@ -130,7 +131,6 @@ const ProfilePage = ({ toggleTheme, theme }) => {
 
       // DB에서 읽어온 이름/사진 (Auth0 캐시 우회)
       if (meRes.status === 'fulfilled' && meRes.value) {
-        if (meRes.value.name) setDbDisplayName(meRes.value.name);
         if (meRes.value.picture) setDbPicture(meRes.value.picture);
       }
       if (postsRes.status === 'fulfilled') setMyTrips(postsRes.value.posts || []);
@@ -170,8 +170,6 @@ const ProfilePage = ({ toggleTheme, theme }) => {
       await apiClient.put(`/api/v1/users/profile/${encodeURIComponent(user.sub)}`, {
         name: editName.trim(),
       });
-      // DB 업데이트 성공 → 컴포넌트 상태 직접 갱신 (Auth0 캐시 우회)
-      setDbDisplayName(editName.trim());
       setShowEditModal(false);
     } catch (err) {
       console.error('프로필 업데이트 실패:', err);
@@ -182,11 +180,9 @@ const ProfilePage = ({ toggleTheme, theme }) => {
   }, [user?.sub, editName]);
 
   const openEditModal = () => {
-    setEditName(dbDisplayName || user?.name || user?.nickname || '');
+    setEditName(displayName !== '사용자' ? displayName : '');
     setShowEditModal(true);
   };
-
-  const displayName = dbDisplayName || user?.nickname || user?.name || user?.email?.split('@')[0] || '사용자';
   const avatarSrc = dbPicture || user?.picture || null;
 
   const stats = {

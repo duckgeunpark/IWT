@@ -33,9 +33,9 @@ class UserUpdate(BaseModel):
 class UserResponse(UserBase):
     """사용자 응답 스키마"""
     id: str
-    created_at: datetime
-    updated_at: datetime
-    
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
     model_config = {"from_attributes": True}
 
 

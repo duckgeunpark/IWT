@@ -74,7 +74,7 @@ class UserService:
         try:
             user = self.user_repo.get_user_by_id(user_id)
             if user:
-                return UserResponse.from_orm(user)
+                return UserResponse.model_validate(user)
             return None
         except Exception as e:
             logger.error(f"사용자 프로필 조회 실패: {str(e)}")
@@ -105,7 +105,7 @@ class UserService:
             user = self.user_repo.update_user(user_id, update_data)
             if user:
                 logger.info(f"사용자 프로필 업데이트 완료: {user_id}")
-                return UserResponse.from_orm(user)
+                return UserResponse.model_validate(user)
             return None
             
         except ValueError as e:

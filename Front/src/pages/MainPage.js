@@ -4,6 +4,7 @@ import { useAuth0 } from '@auth0/auth0-react';
 import { parseDate } from '../utils/dateUtils';
 import Header from '../components/Header';
 import { apiClient } from '../services/apiClient';
+import useDisplayName from '../hooks/useDisplayName';
 import '../styles/MainPage.css';
 
 // 그라디언트 팔레트 (썸네일 없을 때)
@@ -142,7 +143,7 @@ const MainPage = ({ toggleTheme, theme }) => {
     );
   }
 
-  const firstName = user?.name?.split(' ')[0] || user?.nickname || null;
+  const displayName = useDisplayName();
 
   return (
     <div className="main-page">
@@ -153,7 +154,7 @@ const MainPage = ({ toggleTheme, theme }) => {
         {isAuthenticated && (
           <div className="home-greeting">
             <h2 className="home-greeting-text">
-              안녕하세요{firstName ? `, ${firstName}님` : ''}
+              안녕하세요, {displayName}님
             </h2>
             <p className="home-greeting-sub">오늘도 새로운 여행을 기록해 보세요</p>
           </div>

@@ -67,6 +67,7 @@ const NewTripPage = ({ toggleTheme, theme }) => {
   const [filterSummary, setFilterSummary] = useState(null);
   const [photosWithStatus, setPhotosWithStatus] = useState([]); // 사진별 필터 결과
   const [isFiltering, setIsFiltering] = useState(false);
+  const [isGeneratingDraft, setIsGeneratingDraft] = useState(false);
   const [generatedDraft, setGeneratedDraft] = useState(null);
 
   // ── 계획 모드 상태 ──
@@ -273,9 +274,14 @@ const NewTripPage = ({ toggleTheme, theme }) => {
         setIsFiltering(false);
       }
 
-      // AI 초안 생성 + 하이라이트 사진 선정 (병렬 실행)
+      // AI 초안 생성 + 하이라이트 사진 선정 (병렬 실행, 30초 타임아웃)
       let draft = null;
+      const withTimeout = (promise, ms) =>
+        Promise.race([promise, new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), ms))]);
+
+
       try {
+        setIsGeneratingDraft(true);
         const photoData = filterInput.map(p => ({
           name: p.file_name,
           captureTime: p.taken_at,
@@ -294,19 +300,19 @@ const NewTripPage = ({ toggleTheme, theme }) => {
         }));
 
         const [llmRes, highlightRes] = await Promise.allSettled([
-          apiClient.post('/api/v1/llm/generate-itinerary', {
+          withTimeout(apiClient.post('/api/v1/llm/generate-itinerary', {
             route_data: {
               photos: photoData,
               locations: locationData,
               total_photos: filterInput.length,
             },
             user_preferences: { language: 'ko', format: 'markdown' },
-          }),
+          }), 60000),
           filterInput.length >= 3
-            ? apiClient.post('/api/v1/llm/highlight-photos', {
+            ? withTimeout(apiClient.post('/api/v1/llm/highlight-photos', {
                 photos: highlightInput,
                 max_highlights: Math.min(5, Math.ceil(filterInput.length * 0.3)),
-              })
+              }), 60000)
             : Promise.resolve(null),
         ]);
 
@@ -325,7 +331,13 @@ const NewTripPage = ({ toggleTheme, theme }) => {
           draft = { highlightedIds: highlightData.highlighted_ids };
         }
       } catch (llmErr) {
-        console.warn('AI 초안 생성 실패 (무시하고 계속):', llmErr);
+        if (llmErr.message === 'timeout') {
+          toast.warning('AI 초안 생성 시간이 초과됐습니다. 직접 작성해주세요.');
+        } else {
+          console.warn('AI 초안 생성 실패 (무시하고 계속):', llmErr);
+        }
+      } finally {
+        setIsGeneratingDraft(false);
       }
 
       // 분석 결과 요약 toast만 보여주고 바로 edit 이동
@@ -526,18 +538,24 @@ const NewTripPage = ({ toggleTheme, theme }) => {
               <div className="upload-actions">
                 <span className="upload-count">{uploadedFiles.length}장 선택됨</span>
 
-                {isProcessing || isFiltering ? (
+                {isProcessing || isFiltering || isGeneratingDraft ? (
                   <div className="processing-status">
                     <div className="processing-bar">
                       <div
                         className="processing-fill"
-                        style={{ width: isFiltering ? '100%' : `${(processProgress.current / processProgress.total) * 100}%` }}
+                        style={{
+                          width: (isFiltering || isGeneratingDraft)
+                            ? '100%'
+                            : `${(processProgress.current / processProgress.total) * 100}%`
+                        }}
                       />
                     </div>
                     <span className="processing-text">
-                      {isFiltering
-                        ? 'AI 사진 필터링 중...'
-                        : `${processProgress.current}/${processProgress.total} 처리 중...`
+                      {isGeneratingDraft
+                        ? 'AI 여행 초안 생성 중...'
+                        : isFiltering
+                          ? 'AI 사진 분석 중...'
+                          : `${processProgress.current}/${processProgress.total} 처리 중...`
                       }
                     </span>
                   </div>
