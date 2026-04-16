@@ -78,6 +78,9 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     log_format: str = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     
+    # 도메인 설정
+    domain: str = "localhost"
+
     # 보안 설정
     secret_key: str = os.getenv("SECRET_KEY", "CHANGE-ME-IN-PRODUCTION")
     access_token_expire_minutes: int = 30

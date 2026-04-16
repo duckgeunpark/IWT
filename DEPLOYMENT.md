@@ -1,5 +1,8 @@
 # IWT 오라클 클라우드 배포 가이드
 
+```bash
+ ssh -i C:\Users\DK\Downloads\ssh-key-2026-04-15.key ubuntu@144.24.85.97
+```
 ## 인스턴스 정보
 | 항목 | 값 |
 |------|-----|
@@ -41,10 +44,14 @@ sudo systemctl enable docker && sudo systemctl start docker
 
 ### 방화벽 설정
 ```bash
-sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport 80 -j ACCEPT
-sudo iptables -I INPUT 7 -m state --state NEW -p tcp --dport 443 -j ACCEPT
+# REJECT 규칙 앞(4번 위치)에 삽입해야 함 — 순서 중요
+sudo iptables -I INPUT 4 -m state --state NEW -p tcp --dport 80 -j ACCEPT
+sudo iptables -I INPUT 4 -m state --state NEW -p tcp --dport 443 -j ACCEPT
 sudo apt-get install -y iptables-persistent
 sudo netfilter-persistent save
+
+# 확인 (80, 443이 REJECT 줄보다 위에 있어야 함)
+sudo iptables -L INPUT -n --line-numbers
 ```
 
 ---
@@ -89,16 +96,17 @@ CACHE_TTL=3600
 SECRET_KEY=<생성된 SECRET_KEY>
 DEBUG=false
 LOG_LEVEL=INFO
-ALLOWED_ORIGINS=["http://144.24.85.97"]
+DOMAIN=iwt-app.duckdns.org
+ALLOWED_ORIGINS=["https://iwt-app.duckdns.org"]
 RATE_LIMIT_DEFAULT=60/minute
 RATE_LIMIT_LLM=10/minute
 MAX_FILE_SIZE=10485760
 REACT_APP_AUTH0_DOMAIN=duckgeunpark.us.auth0.com
 REACT_APP_AUTH0_CLIENT_ID=<Auth0 Client ID>
-REACT_APP_AUTH0_CALLBACK_URL=http://144.24.85.97
+REACT_APP_AUTH0_CALLBACK_URL=https://iwt-app.duckdns.org
 REACT_APP_AUTH0_AUDIENCE=https://duckgeunpark.us.auth0.com/api/v2/
 REACT_APP_GOOGLE_MAPS_API_KEY=<Google Maps API Key>
-REACT_APP_API_URL=http://144.24.85.97
+REACT_APP_API_URL=https://iwt-app.duckdns.org
 EOF
 ```
 
@@ -142,27 +150,80 @@ dcprod build --no-cache   # 최초 빌드 (10~20분 소요)
 dcprod up -d
 dcprod ps                 # 상태 확인
 ```
-ssh -i C:\Users\DK\Downloads\ssh-key-2026-04-15.key ubuntu@144.24.85.97
 
 ---
 
-## 6단계: HTTPS 설정 (진행 예정)
+## 6단계: HTTPS 설정
 
 Auth0 SPA SDK는 HTTPS 필수. HTTP로는 로그인 불가.
 
 ### DuckDNS 무료 도메인 사용
 1. [duckdns.org](https://www.duckdns.org) 가입
 2. 도메인 생성: `iwt-app.duckdns.org` → IP `144.24.85.97` 연결
-3. 인증서 발급:
+3. certbot 설치 및 인증서 발급:
+```bash
+sudo apt-get install -y certbot
+dcprod down
+sudo certbot certonly --standalone -d iwt-app.duckdns.org --email <이메일> --agree-tos --non-interactive
+```
+4. `.env.prod` HTTPS 관련 항목 수정:
+```bash
+sudo nano /opt/iwt/.env.prod
+```
+아래 항목을 https 도메인으로 변경:
+```
+DOMAIN=iwt-app.duckdns.org
+ALLOWED_ORIGINS=["https://iwt-app.duckdns.org"]
+REACT_APP_AUTH0_CALLBACK_URL=https://iwt-app.duckdns.org
+REACT_APP_API_URL=https://iwt-app.duckdns.org
+```
+
+5. 전체 재빌드 (`REACT_APP_*`는 빌드 타임에 번들에 포함되므로 반드시 `--no-cache`):
+```bash
+cd /opt/iwt && git pull
+dcprod build --no-cache && dcprod up -d
+```
+6. Auth0 대시보드 → Applications → Settings에서 아래 항목을 `https://iwt-app.duckdns.org`로 변경:
+   - Allowed Callback URLs
+   - Allowed Logout URLs
+   - Allowed Web Origins
+
+---
+
+## 도메인 변경 방법
+
+도메인은 `.env.prod` 한 곳만 수정하면 자동으로 nginx, 인증서 경로, React 빌드에 모두 반영됩니다.
+
+### 1. 새 도메인 인증서 발급
 ```bash
 dcprod down
-sudo certbot certonly --standalone -d iwt-app.duckdns.org
-dcprod up -d
+sudo certbot certonly --standalone -d <새도메인> --email <이메일> --agree-tos --non-interactive
 ```
-4. nginx HTTPS 설정 추가 (443 포트, 인증서 경로 연결)
-5. docker-compose.prod.yml에 포트 443 추가
-6. Auth0 콜백 URL을 `https://iwt-app.duckdns.org`로 변경
-7. .env.prod URL 전부 https로 변경 후 재빌드
+
+### 2. .env.prod 수정 (DOMAIN 관련 항목 전부 변경)
+```bash
+sudo nano /opt/iwt/.env.prod
+```
+변경 항목 (4곳):
+```
+DOMAIN=<새도메인>
+ALLOWED_ORIGINS=["https://<새도메인>"]
+REACT_APP_AUTH0_CALLBACK_URL=https://<새도메인>
+REACT_APP_API_URL=https://<새도메인>
+```
+> **주의**: `REACT_APP_*`는 빌드 타임에 번들에 포함됨 → 반드시 `--no-cache` 재빌드 필요
+
+### 3. 재빌드 및 재시작
+```bash
+cd /opt/iwt
+dcprod build --no-cache frontend && dcprod up -d
+```
+
+### 4. Auth0 대시보드 업데이트
+Auth0 → Applications → Settings에서 아래 항목을 새 도메인으로 변경:
+- Allowed Callback URLs
+- Allowed Logout URLs
+- Allowed Web Origins
 
 ---
 
@@ -172,7 +233,6 @@ dcprod up -d
 |------|------|------|
 | `Table 'users' already exists` | 9개 워커 동시 테이블 생성 충돌 | 일부 워커 재시작으로 자동 복구됨 |
 | `google.generativeai` FutureWarning | 구버전 Gemini 패키지 사용 중 | 추후 `google-genai`로 마이그레이션 필요 |
-| HTTPS 미적용 | 인증서 미발급 | 다음 작업 예정 |
 
 ---
 
@@ -180,7 +240,8 @@ dcprod up -d
 
 ```
 [브라우저]
-    ↓ :80 (HTTP) / :443 (HTTPS 예정)
+    ↓ :80 (HTTP → HTTPS 리다이렉트)
+    ↓ :443 (HTTPS)
 [Frontend - nginx:alpine]
     ↓ /api/* proxy_pass
 [Backend - FastAPI uvicorn × 9 workers]

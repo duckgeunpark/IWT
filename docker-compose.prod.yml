@@ -67,6 +67,7 @@ services:
         REACT_APP_AUTH0_AUDIENCE: ${REACT_APP_AUTH0_AUDIENCE}
         REACT_APP_GOOGLE_MAPS_API_KEY: ${REACT_APP_GOOGLE_MAPS_API_KEY}
         REACT_APP_API_URL: ${REACT_APP_API_URL}
+        DOMAIN: ${DOMAIN}
     restart: always
     ports:
       - "80:80"

@@ -74,7 +74,7 @@ def setup_middleware(app: FastAPI) -> None:
     if not settings.debug:
         app.add_middleware(
             TrustedHostMiddleware,
-            allowed_hosts=["localhost", "127.0.0.1", "*.vercel.app"]
+            allowed_hosts=["localhost", "127.0.0.1", "*.vercel.app", settings.domain]
         )
     
     # 요청 로깅 미들웨어

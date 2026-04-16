@@ -131,7 +131,7 @@ const Header = ({ toggleTheme, theme }) => {
         {isLoading ? (
           <span className="header-loading">...</span>
         ) : isAuthenticated ? (
-          <button className="logout-btn" onClick={() => logout({ returnTo: window.location.origin })}>
+          <button className="logout-btn" onClick={() => logout({ logoutParams: { returnTo: window.location.origin } })}>
             로그아웃
           </button>
         ) : (
