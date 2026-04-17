@@ -98,6 +98,7 @@ const MainPage = ({ toggleTheme, theme }) => {
   const [publicPosts, setPublicPosts] = useState([]);
   const [dataLoading, setDataLoading] = useState(true);
   const [error, setError] = useState(null);
+  const displayName = useDisplayName();
 
   useEffect(() => {
     if (authLoading) return;
@@ -142,8 +143,6 @@ const MainPage = ({ toggleTheme, theme }) => {
       </div>
     );
   }
-
-  const displayName = useDisplayName();
 
   return (
     <div className="main-page">
