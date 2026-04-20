@@ -387,15 +387,18 @@ class LLMRouteRecommendService:
 1. 첫 줄: # 제목 (방문 지역과 여행 특징 포함. 예: "도쿄 3박 4일, 신주쿠에서 아사쿠사까지")
 2. 장소별 ## 소제목으로 구분, 각 장소당 2~3문단
 3. 실제 여행자 시점의 감성적인 한국어 블로그 문체
-4. 마지막 줄: <!-- tags: 태그1, 태그2, 태그3 --> (국가/도시명, 여행 테마 5~8개)
+4. 여정 전체를 하나의 이야기처럼 연결하되, 첫 장소와 마지막 장소를 에필로그로 자연스럽게 마무리
+5. 장소별 문단이 단순 나열이 되지 않도록 감정 변화·날씨·음식·소소한 에피소드 등 맥락 삽입
+6. 각 ## 섹션의 첫 문장 시작 방식을 다양하게 (질문형, 감탄형, 묘사형, 회상형 등 번갈아 사용)
+7. 마지막 줄: <!-- tags: 태그1, 태그2, 태그3 --> (국가/도시명, 여행 테마 5~8개)
 """
             response = await self.llm.provider.chat_completion(
                 messages=[
                     {"role": "system", "content": "당신은 여행 경험을 감성적으로 기록하는 한국어 여행 블로거입니다."},
                     {"role": "user", "content": prompt},
                 ],
-                temperature=0.5,
-                max_tokens=1800,
+                temperature=0.75,
+                max_tokens=2200,
             )
             return response
         except Exception as e:
@@ -486,18 +489,21 @@ class LLMRouteRecommendService:
 
 작성 규칙:
 1. 첫 줄: ## 장소명 (소제목)
-2. 본문: 2~3개 문단, 총 400~600자
+2. 본문: 2~3개 문단, 총 350~700자
 3. 장소의 분위기·특징·인상을 생생하게 묘사 (실제 여행자 시점)
 4. 자연스럽고 감성적인 한국어 블로그 문체
 5. 소제목(##) 외 다른 마크다운 헤딩(#, ###) 사용 금지
+6. 장소 유형(카페·신사·거리·역·공원·시장 등)을 유추해 현장감 있는 묘사 추가
+7. 방문자가 실제로 느낄 법한 소소한 디테일(냄새·소리·분위기·계절감·사람들) 포함
+8. 이 단락의 첫 문장 시작 방식을 다양하게 (질문형·감탄형·묘사형·회상형 중 하나 선택)
 """
             response = await self.llm.provider.chat_completion(
                 messages=[
                     {"role": "system", "content": "당신은 실제 여행 경험을 생생하게 기록하는 한국어 여행 블로거입니다."},
                     {"role": "user", "content": prompt},
                 ],
-                temperature=0.5,
-                max_tokens=900,
+                temperature=0.75,
+                max_tokens=1000,
             )
             return response or ""
         except Exception as e:

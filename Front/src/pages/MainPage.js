@@ -26,15 +26,25 @@ function formatDate(isoString) {
 }
 
 // ── 내 여행 컴팩트 카드 ──
-const MyTripCard = ({ post, onClick, index }) => {
+const MyTripCard = ({ post, onClick, onDelete, index }) => {
   const gradient = GRADIENTS[index % GRADIENTS.length];
   const isDraft = post.status === 'draft';
+
+  const handleDelete = (e) => {
+    e.stopPropagation();
+    if (!window.confirm('임시저장을 삭제할까요?')) return;
+    onDelete(post.id);
+  };
+
   return (
     <div
       className={`my-trip-card${isDraft ? ' my-trip-card--draft' : ''}`}
       onClick={onClick}
     >
       {isDraft && <span className="my-trip-draft-badge">임시저장</span>}
+      {isDraft && (
+        <button className="my-trip-delete-btn" onClick={handleDelete} title="삭제">×</button>
+      )}
       <div className="my-trip-thumb" style={{ background: gradient }}>
         {post.thumbnail_url && (
           <img src={post.thumbnail_url} alt={post.title} className="my-trip-thumb-img" />
@@ -104,6 +114,16 @@ const MainPage = ({ toggleTheme, theme }) => {
   const [dataLoading, setDataLoading] = useState(true);
   const [error, setError] = useState(null);
   const displayName = useDisplayName();
+
+  const handleDeleteDraft = async (postId) => {
+    try {
+      await apiClient.delete(`/api/v1/posts/${postId}`);
+      setMyPosts(prev => prev.filter(p => p.id !== postId));
+    } catch (err) {
+      console.error('삭제 실패:', err);
+      alert('삭제에 실패했습니다.');
+    }
+  };
 
   useEffect(() => {
     if (authLoading) return;
@@ -205,6 +225,7 @@ const MainPage = ({ toggleTheme, theme }) => {
                     post={post}
                     index={i}
                     onClick={() => navigate(post.status === 'draft' ? `/trip/${post.id}/edit` : `/trip/${post.id}`)}
+                    onDelete={handleDeleteDraft}
                   />
                 ))}
               </div>
