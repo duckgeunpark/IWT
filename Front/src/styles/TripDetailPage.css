@@ -103,7 +103,7 @@
   border-bottom: 1px solid var(--border-color);
 }
 .trip-meta-inner {
-  max-width: 1080px;
+  max-width: 860px;
   margin: 0 auto;
   padding: 20px 24px 18px;
 }
@@ -262,7 +262,7 @@
 /* ── Map Bar (sticky, collapsible) ── */
 .map-bar {
   position: sticky;
-  top: 60px; /* 헤더 높이만큼 */
+  top: 60px;
   z-index: 100;
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border-color);
@@ -272,7 +272,9 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  max-width: 860px;
   width: 100%;
+  margin: 0 auto;
   padding: 10px 24px;
   background: none;
   border: none;
@@ -282,9 +284,9 @@
   color: var(--text-primary);
   font-family: var(--font-sans);
   text-align: left;
-  transition: background 0.15s;
+  transition: color 0.15s;
 }
-.map-bar-toggle:hover { background: var(--bg-tertiary); }
+.map-bar-toggle:hover { color: var(--accent-color); }
 .map-bar-chevron {
   margin-left: auto;
   display: flex;
@@ -307,7 +309,7 @@
 
 /* ── Body: single column ── */
 .trip-body {
-  max-width: 720px;
+  max-width: 860px;
   margin: 0 auto;
   padding: 48px 24px 80px;
 }
@@ -320,7 +322,7 @@
   border-top: 1px solid var(--border-color);
 }
 .trip-comments-inner {
-  max-width: 1080px;
+  max-width: 860px;
   margin: 0 auto;
   padding: 32px 24px;
 }
@@ -438,7 +440,7 @@
   border-top: 1px solid var(--border-color);
 }
 .similar-trips-inner {
-  max-width: 1080px;
+  max-width: 860px;
   margin: 0 auto;
   padding: 40px 24px;
 }

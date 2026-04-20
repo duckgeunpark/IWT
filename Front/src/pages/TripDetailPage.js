@@ -322,11 +322,9 @@ const TripDetailPage = ({ toggleTheme, theme }) => {
             <span className="trip-meta-divider">&middot;</span>
             <span className="trip-meta-item">사진 {trip.photo_count || 0}장</span>
           </div>
-          {likesCount > 0 && (
-            <div className="trip-likes">
-              <strong>{likesCount}</strong>명이 좋아합니다
-            </div>
-          )}
+          <div className="trip-likes" style={{ visibility: likesCount > 0 ? 'visible' : 'hidden' }}>
+            <strong>{likesCount || 0}</strong>명이 좋아합니다
+          </div>
           {tags.length > 0 && (
             <div className="trip-tags">
               {tags.map((tag) => (

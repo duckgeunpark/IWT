@@ -747,44 +747,69 @@ const NewTripPage = ({ toggleTheme, theme }) => {
               <div className="wizard-header-spacer" />
             </div>
 
-            <p className="cluster-review-desc">
-              각 장소의 대표 사진을 선택하세요. 게시글 각 섹션 상단에 표시됩니다.
-            </p>
-
-            <div className="cluster-review-list">
-              {clusters.length === 0 ? (
-                <p style={{ textAlign: 'center', color: 'var(--text-secondary, #888)', padding: '40px 0' }}>
-                  클러스터 정보가 없습니다. 다음 단계로 진행하세요.
-                </p>
-              ) : clusters.map(cluster => {
-                const clusterPhotos = photos.filter(p => cluster.photo_ids.includes(String(p.id)));
-                const repId = cluster.representative_photo_id;
-                return (
-                  <div key={cluster.cluster_id} className="cluster-review-card">
-                    <div className="cluster-review-card-header">
-                      <span className="cluster-location-name">{cluster.location_name}</span>
-                      <span className="cluster-photo-count">{clusterPhotos.length}장</span>
-                    </div>
-                    <div className="cluster-photo-strip">
-                      {clusterPhotos.map(photo => (
-                        <button
-                          key={photo.id}
-                          className={`cluster-photo-thumb ${String(photo.id) === String(repId) ? 'selected' : ''}`}
-                          onClick={() => dispatch(setRepresentativePhoto({ cluster_id: cluster.cluster_id, photo_id: String(photo.id) }))}
-                        >
-                          <img src={photo.preview} alt={photo.name} />
-                          {String(photo.id) === String(repId) && <span className="cluster-thumb-star">★</span>}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
+            <div className="cluster-review-header">
+              <h2 className="cluster-review-title">각 장소의 대표 사진을 선택하세요</h2>
+              <p className="cluster-review-subtitle">
+                선택한 사진이 게시글 각 섹션 상단에 표시됩니다. 선택하지 않으면 첫 번째 사진이 자동 선택됩니다.
+              </p>
             </div>
 
-            <button className="record-start-btn" style={{ marginTop: '24px' }} onClick={goToEditPage}>
-              여행 기록 만들기 →
-            </button>
+            {clusters.length === 0 ? (
+              <div className="cluster-empty">
+                <p>GPS 정보가 없어 클러스터를 생성할 수 없습니다.</p>
+              </div>
+            ) : (
+              <div className="cluster-list">
+                {clusters.map((cluster, idx) => {
+                  const clusterPhotos = photos.filter(p => cluster.photo_ids.includes(String(p.id)));
+                  const repId = cluster.representative_photo_id;
+                  const hasSelection = !!repId;
+
+                  return (
+                    <div key={cluster.cluster_id} className="cluster-card">
+                      <div className="cluster-card-head">
+                        <div className="cluster-badge">{idx + 1}</div>
+                        <div className="cluster-card-info">
+                          <span className="cluster-card-name">{cluster.location_name}</span>
+                          <span className="cluster-card-count">사진 {clusterPhotos.length}장</span>
+                        </div>
+                        <div className={`cluster-selected-pill ${hasSelection ? 'done' : 'pending'}`}>
+                          {hasSelection ? '✓ 선택됨' : '미선택'}
+                        </div>
+                      </div>
+
+                      <div className="cluster-photo-grid">
+                        {clusterPhotos.map(photo => {
+                          const isSelected = String(photo.id) === String(repId);
+                          return (
+                            <button
+                              key={photo.id}
+                              className={`cluster-photo-item${isSelected ? ' selected' : ''}`}
+                              onClick={() => dispatch(setRepresentativePhoto({ cluster_id: cluster.cluster_id, photo_id: String(photo.id) }))}
+                            >
+                              <img src={photo.preview} alt={photo.name} />
+                              {isSelected && (
+                                <div className="cluster-photo-overlay">
+                                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                                    <polyline points="20 6 9 17 4 12" />
+                                  </svg>
+                                </div>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            <div className="cluster-review-footer">
+              <button className="record-start-btn" onClick={goToEditPage}>
+                여행 기록 만들기 →
+              </button>
+            </div>
           </div>
         </div>
       </div>
