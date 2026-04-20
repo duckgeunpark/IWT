@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from typing import List, Optional
 import logging
 from datetime import datetime
@@ -339,6 +339,18 @@ async def batch_process_photos(
     except Exception as e:
         logger.error(f"배치 사진 처리 실패: {str(e)}")
         raise HTTPException(status_code=500, detail="사진 일괄 처리에 실패했습니다.") 
+
+@router.get("/download/{file_key:path}")
+async def download_photo(file_key: str):
+    """
+    마크다운 등에서 직접 이미지 표시를 위한 리다이렉트 엔드포인트
+    """
+    try:
+        url = await s3_service.generate_download_url(file_key)
+        return RedirectResponse(url)
+    except Exception as e:
+        logger.error(f"이미지 다운로드 URL 생성 실패: {str(e)}")
+        raise HTTPException(status_code=404, detail="이미지를 찾을 수 없습니다.")
 
 @router.get("/health")
 async def health_check():

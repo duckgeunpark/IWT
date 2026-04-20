@@ -500,6 +500,17 @@ const ImagePanel = ({ readOnly = false }) => {
                         onClick={(e) => openLightbox(image, e)}
                         style={{ cursor: 'zoom-in' }}
                         title="클릭하여 크게 보기"
+                        draggable={true}
+                        onDragStart={(e) => {
+                          e.stopPropagation();
+                          const photoData = {
+                            id: image.id,
+                            name: image.name,
+                            url: image.preview || image.url
+                          };
+                          e.dataTransfer.setData('application/json', JSON.stringify(photoData));
+                          e.dataTransfer.effectAllowed = 'copy';
+                        }}
                       />
                       {image.isHighlight && (
                         <div className="highlight-badge" title="AI 추천 하이라이트 사진">⭐</div>

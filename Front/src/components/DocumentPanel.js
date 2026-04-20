@@ -108,6 +108,39 @@ const DocumentPanel = ({ initialContent, initialTitle, onContentChange }) => {
     setContent(content.substring(0, pos) + '\n---\n' + content.substring(pos));
   };
 
+  const handleDragOver = useCallback((e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+  }, []);
+
+  const handleDrop = useCallback((e) => {
+    e.preventDefault();
+    try {
+      const data = e.dataTransfer.getData('application/json');
+      if (!data) return;
+
+      const photo = JSON.parse(data);
+      const markdownImage = `!${photo.name}\n`;
+
+      const textarea = textareaRef.current;
+      if (!textarea) return;
+
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+
+      const newContent = content.substring(0, start) + markdownImage + content.substring(end);
+      updateContent(newContent);
+
+      requestAnimationFrame(() => {
+        textarea.focus();
+        textarea.selectionStart = start + markdownImage.length;
+        textarea.selectionEnd = start + markdownImage.length;
+      });
+    } catch (err) {
+      console.error("사진 드롭 처리 중 오류:", err);
+    }
+  }, [content, updateContent]);
+
   const handleLLMGenerate = async () => {
     if (photos.length === 0) {
       toast.warning('사진을 먼저 업로드해주세요.');
@@ -229,6 +262,8 @@ ${locationSummary || '- 위치 정보가 있는 사진이 없습니다.'}
             value={content}
             onChange={(e) => updateContent(e.target.value)}
             onKeyDown={handleKeyDown}
+            onDrop={handleDrop}
+            onDragOver={handleDragOver}
             placeholder="마크다운으로 여행 기록을 작성하세요..."
           />
         ) : (

@@ -214,6 +214,8 @@ async def generate_itinerary_clustered(
 
             paragraph = await llm_route_service.generate_cluster_paragraph(cluster, location_info)
             if paragraph:
+                # 프론트엔드에서 치환할 수 있도록 클러스터 ID 플레이스홀더 삽입
+                paragraph = f"[PHOTO:{cluster['cluster_id']}]\n\n" + paragraph
                 paragraphs.append(paragraph)
 
             location_name = "알 수 없는 장소"

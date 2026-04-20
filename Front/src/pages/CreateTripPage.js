@@ -41,6 +41,7 @@ const CreateTripPage = ({ toggleTheme, theme }) => {
   const draft = routeLocation.state?.draft;
   const photos = useSelector(state => state.photos.photos);
   const locations = useSelector(state => state.photos.locations);
+  const clusters = useSelector(state => state.clusters?.clusters || []);
 
   const [tripTitle, setTripTitle] = useState(
     draft?.title || buildDefaultTitle(user?.name, photos)
@@ -127,7 +128,30 @@ const CreateTripPage = ({ toggleTheme, theme }) => {
         });
 
         if (res.success && res.itinerary) {
-          setContent(res.itinerary);
+          let updatedItinerary = res.itinerary;
+          
+          if (res.clusters && Array.isArray(res.clusters)) {
+             res.clusters.forEach(bc => {
+                const backendPhotoIds = bc.photo_ids || [];
+                let repPhotoId = backendPhotoIds[0];
+                for (const fc of clusters) {
+                   if (fc.representative_photo_id && backendPhotoIds.includes(String(fc.representative_photo_id))) {
+                      repPhotoId = fc.representative_photo_id;
+                      break;
+                   }
+                }
+                const photo = photos.find(p => String(p.id) === String(repPhotoId));
+                const placeholder = `[PHOTO:${bc.cluster_id}]`;
+                if (photo && updatedItinerary.includes(placeholder)) {
+                   updatedItinerary = updatedItinerary.replaceAll(placeholder, `!image`);
+                } else {
+                   updatedItinerary = updatedItinerary.replaceAll(placeholder + '\n\n', '');
+                   updatedItinerary = updatedItinerary.replaceAll(placeholder, '');
+                }
+             });
+          }
+          
+          setContent(updatedItinerary);
           if (res.title) setTripTitle(res.title);
           if (res.tags?.length) setTags(res.tags);
           if (res.cluster_count) setClusterCount(res.cluster_count);
@@ -173,6 +197,7 @@ const CreateTripPage = ({ toggleTheme, theme }) => {
       try {
         const keepPhotoIds = photos.filter(p => p.isExisting).map(p => p.dbId);
         const newPhotos = [];
+        let updatedContent = content || '';
         for (const photo of photos.filter(p => !p.isExisting)) {
           const file = fileStore.get(photo.id);
           if (!file) continue;
@@ -183,9 +208,12 @@ const CreateTripPage = ({ toggleTheme, theme }) => {
           const permanentKey = `photos/${user.sub}/${Date.now()}_${photo.name}`;
           await apiClient.post('/api/v1/photos/move-to-permanent', { temp_key: presignedData.file_key, permanent_key: permanentKey });
           newPhotos.push({ file_key: permanentKey, file_name: photo.name, file_size: photo.size, content_type: photo.type || 'image/jpeg' });
+          if (photo.preview && updatedContent.includes(photo.preview)) {
+            updatedContent = updatedContent.replaceAll(photo.preview, `/api/v1/photos/download/${permanentKey}`);
+          }
         }
         await apiClient.put(`/api/v1/posts/${editPostId}`, {
-          title: tripTitle, description: content || '', tags, status: 'draft',
+          title: tripTitle, description: updatedContent, tags, status: 'draft',
           keep_photo_ids: keepPhotoIds, new_photos: newPhotos,
         });
         toast.success('임시저장 완료!');
@@ -205,6 +233,7 @@ const CreateTripPage = ({ toggleTheme, theme }) => {
     setIsUploading(true);
     try {
       const uploadedPhotos = [];
+      let updatedContent = content || '';
       for (const photo of photos) {
         const file = fileStore.get(photo.id);
         if (!file) continue;
@@ -220,9 +249,12 @@ const CreateTripPage = ({ toggleTheme, theme }) => {
           content_type: photo.type || 'image/jpeg',
           location_info: photo.gpsData ? { coordinates: { latitude: photo.gpsData.lat, longitude: photo.gpsData.lng } } : null,
         });
+        if (photo.preview && updatedContent.includes(photo.preview)) {
+          updatedContent = updatedContent.replaceAll(photo.preview, `/api/v1/photos/download/${permanentKey}`);
+        }
       }
       const res = await apiClient.post('/api/v1/posts/', {
-        title: tripTitle, description: content || '', tags, status: 'draft', photos: uploadedPhotos,
+        title: tripTitle, description: updatedContent, tags, status: 'draft', photos: uploadedPhotos,
       });
       dispatch(clearPhotos());
       dispatch(clearClusters());
@@ -246,6 +278,7 @@ const CreateTripPage = ({ toggleTheme, theme }) => {
 
         // 새로 추가된 사진 업로드
         const newPhotos = [];
+        let updatedContent = content || '';
         for (const photo of photos.filter(p => !p.isExisting)) {
           const file = fileStore.get(photo.id);
           if (!file) continue;
@@ -270,11 +303,14 @@ const CreateTripPage = ({ toggleTheme, theme }) => {
             file_size: photo.size,
             content_type: photo.type || 'image/jpeg',
           });
+          if (photo.preview && updatedContent.includes(photo.preview)) {
+            updatedContent = updatedContent.replaceAll(photo.preview, `/api/v1/photos/download/${permanentKey}`);
+          }
         }
 
         await apiClient.put(`/api/v1/posts/${editPostId}`, {
           title: tripTitle,
-          description: content || '',
+          description: updatedContent,
           tags: tags,
           ...(isDraftPost && { status: 'published' }),
           keep_photo_ids: keepPhotoIds,
@@ -302,6 +338,7 @@ const CreateTripPage = ({ toggleTheme, theme }) => {
     setIsUploading(true);
     try {
       const uploadedPhotos = [];
+      let updatedContent = content || '';
       for (const photo of photos) {
         const file = fileStore.get(photo.id);
         let fileKey;
@@ -333,11 +370,14 @@ const CreateTripPage = ({ toggleTheme, theme }) => {
               coordinates: { latitude: photo.gpsData.lat, longitude: photo.gpsData.lng },
             } : null,
           });
+          if (photo.preview && updatedContent.includes(photo.preview)) {
+            updatedContent = updatedContent.replaceAll(photo.preview, `/api/v1/photos/download/${fileKey}`);
+          }
         }
       }
       await apiClient.post('/api/v1/posts/', {
         title: tripTitle,
-        description: content || '',
+        description: updatedContent,
         tags: tags,
         photos: uploadedPhotos,
       });
