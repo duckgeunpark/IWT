@@ -20,14 +20,16 @@ const GRADIENTS = [
 const ProfileTripCard = ({ trip, index, onDelete, onClick }) => {
   const gradient = GRADIENTS[index % GRADIENTS.length];
   const [hovered, setHovered] = useState(false);
+  const isDraft = trip.status === 'draft';
 
   return (
     <div
-      className="prof-trip-card"
+      className={`prof-trip-card${isDraft ? ' prof-trip-card--draft' : ''}`}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       onClick={onClick}
     >
+      {isDraft && <span className="prof-trip-draft-badge">임시저장</span>}
       <div className="prof-trip-thumb" style={{ background: gradient }}>
         {trip.thumbnail_url ? (
           <img src={trip.thumbnail_url} alt={trip.title} className="prof-trip-img" />
@@ -123,7 +125,7 @@ const ProfilePage = ({ toggleTheme, theme }) => {
     try {
       const [meRes, postsRes, bookmarksRes, followersRes, followingRes] = await Promise.allSettled([
         apiClient.get('/api/v1/users/me'),
-        apiClient.get(`/api/v1/posts/user/${encodeURIComponent(user.sub)}?skip=0&limit=50`),
+        apiClient.get(`/api/v1/posts/user/${encodeURIComponent(user.sub)}?skip=0&limit=50&include_drafts=true`),
         apiClient.get('/api/v1/posts/bookmarked?limit=50'),
         apiClient.get(`/api/v1/users/${encodeURIComponent(user.sub)}/followers?limit=100`),
         apiClient.get(`/api/v1/users/${encodeURIComponent(user.sub)}/following?limit=100`),
@@ -330,7 +332,7 @@ const ProfilePage = ({ toggleTheme, theme }) => {
                   trip={trip}
                   index={i}
                   onDelete={setDeleteTarget}
-                  onClick={() => navigate(`/trip/${trip.id}`)}
+                  onClick={() => navigate(trip.status === 'draft' ? `/trip/${trip.id}/edit` : `/trip/${trip.id}`)}
                 />
               ))
             )

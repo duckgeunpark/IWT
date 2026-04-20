@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth0 } from '@auth0/auth0-react';
 import { useSelector, useDispatch } from 'react-redux';
 import { clearPhotos, loadExistingPhoto, applyHighlights } from '../store/photoSlice';
+import { clearClusters } from '../store/clusterSlice';
 import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import ImagePanel from '../components/ImagePanel';
 import DocumentPanel from '../components/DocumentPanel';
@@ -11,8 +12,6 @@ import { useToast } from '../components/Toast';
 import { apiClient } from '../services/apiClient';
 import { fileStore } from '../store/fileStore';
 import '../styles/CreateTripPage.css';
-
-const DRAFT_KEY = 'iwt_draft';
 
 const buildDefaultTitle = (userName, photos) => {
   if (!photos || photos.length === 0) return userName ? `${userName}의 여행 기록` : '새 여행 기록';
@@ -52,11 +51,9 @@ const CreateTripPage = ({ toggleTheme, theme }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [isGeneratingContent, setIsGeneratingContent] = useState(false);
-  const [editLoading, setEditLoading] = useState(isEditMode); // 편집 모드일 때 기존 데이터 로드 중
-
-  // 임시저장 복원 배너
-  const [savedDraft, setSavedDraft] = useState(null);
-  const [draftBannerDismissed, setDraftBannerDismissed] = useState(false);
+  const [clusterCount, setClusterCount] = useState(null);
+  const [editLoading, setEditLoading] = useState(isEditMode);
+  const [isDraftPost, setIsDraftPost] = useState(false);
 
   // ── 신규 모드: 이전 사진 세션 초기화 + 하이라이트 적용 ──
   // fromRecord: NewTripPage에서 사진을 이미 Redux에 넣고 넘어온 경우 → 초기화 금지
@@ -92,6 +89,7 @@ const CreateTripPage = ({ toggleTheme, theme }) => {
         setTripTitle(post.title || '');
         setContent(post.description || '');
         setTags(post.tags || []);
+        setIsDraftPost(post.status === 'draft');
         for (const photo of photosData.photos || []) {
           dispatch(loadExistingPhoto(photo));
         }
@@ -109,18 +107,6 @@ const CreateTripPage = ({ toggleTheme, theme }) => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isEditMode, editPostId]);
 
-  // ── 임시저장 확인 (신규 모드만) ──
-  useEffect(() => {
-    if (isEditMode || draft) return;
-    try {
-      const raw = localStorage.getItem(DRAFT_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (parsed.title || parsed.content) setSavedDraft(parsed);
-      }
-    } catch {}
-  }, [isEditMode, draft]);
-
   // ── AI 자동 생성 (신규 모드, draft 없을 때) ──
   useEffect(() => {
     if (isEditMode || draft?.content || photos.length === 0 || isGeneratingContent) return;
@@ -128,23 +114,23 @@ const CreateTripPage = ({ toggleTheme, theme }) => {
       setIsGeneratingContent(true);
       try {
         const photoData = photos.map(p => ({
-          name: p.name,
-          captureTime: p.captureTime,
-          gps: p.gpsData,
+          id: String(p.id),
+          file_name: p.name,
+          file_size: p.size,
+          gps: p.gpsData ? { lat: p.gpsData.lat, lng: p.gpsData.lng } : null,
+          taken_at: p.captureTime || null,
         }));
-        const locationData = locations.map(loc => ({
-          name: loc.name,
-          coordinates: loc.coordinates,
-          time: loc.time,
-        }));
-        const res = await apiClient.post('/api/v1/llm/generate-itinerary', {
-          route_data: { photos: photoData, locations: locationData, total_photos: photos.length },
-          user_preferences: { language: 'ko', format: 'markdown' },
+
+        const res = await apiClient.post('/api/v1/llm/generate-itinerary-clustered', {
+          photos: photoData,
+          user_preferences: { language: 'ko' },
         });
+
         if (res.success && res.itinerary) {
           setContent(res.itinerary);
           if (res.title) setTripTitle(res.title);
           if (res.tags?.length) setTags(res.tags);
+          if (res.cluster_count) setClusterCount(res.cluster_count);
         }
       } catch (err) {
         console.warn('AI 초안 자동 생성 실패:', err);
@@ -179,30 +165,74 @@ const CreateTripPage = ({ toggleTheme, theme }) => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // ── 임시저장 불러오기 ──
-  const handleLoadDraft = () => {
-    if (!savedDraft) return;
-    if (savedDraft.title) setTripTitle(savedDraft.title);
-    if (savedDraft.content) setContent(savedDraft.content);
-    setSavedDraft(null);
-    setDraftBannerDismissed(true);
-    toast.success('임시저장 기록을 불러왔습니다.');
-  };
+  // ── 임시저장 (신규 모드: S3 업로드 + draft POST → edit 모드로 이동) ──
+  const handleTempSave = async () => {
+    if (isEditMode) {
+      // edit 모드 (draft): 현재 draft 상태 유지하며 업데이트
+      setIsUploading(true);
+      try {
+        const keepPhotoIds = photos.filter(p => p.isExisting).map(p => p.dbId);
+        const newPhotos = [];
+        for (const photo of photos.filter(p => !p.isExisting)) {
+          const file = fileStore.get(photo.id);
+          if (!file) continue;
+          const presignedData = await apiClient.post('/api/v1/photos/presigned-url', {
+            file_name: photo.name, content_type: photo.type,
+          });
+          await fetch(presignedData.presigned_url, { method: 'PUT', body: file, headers: { 'Content-Type': photo.type } });
+          const permanentKey = `photos/${user.sub}/${Date.now()}_${photo.name}`;
+          await apiClient.post('/api/v1/photos/move-to-permanent', { temp_key: presignedData.file_key, permanent_key: permanentKey });
+          newPhotos.push({ file_key: permanentKey, file_name: photo.name, file_size: photo.size, content_type: photo.type || 'image/jpeg' });
+        }
+        await apiClient.put(`/api/v1/posts/${editPostId}`, {
+          title: tripTitle, description: content || '', tags, status: 'draft',
+          keep_photo_ids: keepPhotoIds, new_photos: newPhotos,
+        });
+        toast.success('임시저장 완료!');
+      } catch (err) {
+        toast.error(err.message || '임시저장에 실패했습니다.');
+      } finally {
+        setIsUploading(false);
+      }
+      return;
+    }
 
-  const handleDismissDraft = () => {
-    setSavedDraft(null);
-    setDraftBannerDismissed(true);
-    localStorage.removeItem(DRAFT_KEY);
-  };
-
-  // ── 임시저장 ──
-  const handleTempSave = () => {
+    // 신규 모드: 사진 업로드 + draft 생성 → /trip/:id/edit 이동
+    if (photos.length === 0) {
+      toast.warning('사진을 먼저 업로드해주세요.');
+      return;
+    }
+    setIsUploading(true);
     try {
-      const draftData = { title: tripTitle, content, savedAt: new Date().toISOString() };
-      localStorage.setItem(DRAFT_KEY, JSON.stringify(draftData));
+      const uploadedPhotos = [];
+      for (const photo of photos) {
+        const file = fileStore.get(photo.id);
+        if (!file) continue;
+        const presignedData = await apiClient.post('/api/v1/photos/presigned-url', {
+          file_name: photo.name, content_type: photo.type,
+        });
+        const uploadRes = await fetch(presignedData.presigned_url, { method: 'PUT', body: file, headers: { 'Content-Type': photo.type } });
+        if (!uploadRes.ok) throw new Error(`업로드 실패: ${photo.name}`);
+        const permanentKey = `photos/${user.sub}/${Date.now()}_${photo.name}`;
+        await apiClient.post('/api/v1/photos/move-to-permanent', { temp_key: presignedData.file_key, permanent_key: permanentKey });
+        uploadedPhotos.push({
+          file_key: permanentKey, file_name: photo.name, file_size: photo.size,
+          content_type: photo.type || 'image/jpeg',
+          location_info: photo.gpsData ? { coordinates: { latitude: photo.gpsData.lat, longitude: photo.gpsData.lng } } : null,
+        });
+      }
+      const res = await apiClient.post('/api/v1/posts/', {
+        title: tripTitle, description: content || '', tags, status: 'draft', photos: uploadedPhotos,
+      });
+      dispatch(clearPhotos());
+      dispatch(clearClusters());
+      fileStore.clear();
       toast.success('임시저장 완료!');
-    } catch {
-      toast.error('임시저장에 실패했습니다.');
+      navigate(`/trip/${res.id}/edit`);
+    } catch (err) {
+      toast.error(err.message || '임시저장에 실패했습니다.');
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -246,12 +276,14 @@ const CreateTripPage = ({ toggleTheme, theme }) => {
           title: tripTitle,
           description: content || '',
           tags: tags,
+          ...(isDraftPost && { status: 'published' }),
           keep_photo_ids: keepPhotoIds,
           new_photos: newPhotos,
         });
         dispatch(clearPhotos());
+        dispatch(clearClusters());
         fileStore.clear();
-        toast.success('게시글이 수정됐습니다!');
+        toast.success(isDraftPost ? '게시글이 게시됐습니다!' : '게시글이 수정됐습니다!');
         navigate(`/trip/${editPostId}`);
       } catch (err) {
         console.error(err);
@@ -311,6 +343,7 @@ const CreateTripPage = ({ toggleTheme, theme }) => {
       });
       localStorage.removeItem(DRAFT_KEY);
       dispatch(clearPhotos());
+      dispatch(clearClusters());
       fileStore.clear();
       toast.success('게시글이 업로드됐습니다!');
       navigate('/');
@@ -369,6 +402,34 @@ const CreateTripPage = ({ toggleTheme, theme }) => {
     );
   }
 
+  if (isGeneratingContent) {
+    return (
+      <div className="create-trip-page">
+        <div className="page-header">
+          <div className="header-left">
+            <div className="logo-container" onClick={() => navigate('/')}>
+              <div className="logo-avatar"></div>
+              <div className="logo-text"><h1>IWT</h1><p>I Want. I Went. Trip.</p></div>
+            </div>
+          </div>
+          <div className="title-section"><h1 className="page-title">{tripTitle}</h1></div>
+        </div>
+        <div style={{ display:'flex', flexDirection:'column', justifyContent:'center', alignItems:'center', height:'calc(100vh - 80px)', gap:'24px' }}>
+          <div style={{ width:'56px', height:'56px', border:'5px solid var(--border-color, #e0e0e0)', borderTopColor:'var(--primary-color, #4285F4)', borderRadius:'50%', animation:'spin 1s linear infinite' }} />
+          <div style={{ textAlign:'center' }}>
+            <p style={{ fontSize:'18px', fontWeight:'600', marginBottom:'8px' }}>AI가 여행 기록을 작성하는 중입니다</p>
+            <p style={{ fontSize:'14px', color:'var(--text-secondary, #888)' }}>
+              {clusterCount
+                ? `장소 ${clusterCount}곳을 분석해 단락을 생성하고 있어요. 잠시만 기다려주세요.`
+                : '사진을 분석해 여행 일지를 자동으로 생성하고 있어요. 잠시만 기다려주세요.'
+              }
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="create-trip-page">
       {/* 헤더 */}
@@ -402,8 +463,8 @@ const CreateTripPage = ({ toggleTheme, theme }) => {
               {theme === 'light' ? '🌙' : '☀️'}
             </button>
           )}
-          {!isEditMode && (
-            <button className="action-btn temp-save-btn" onClick={handleTempSave}>
+          {(!isEditMode || isDraftPost) && (
+            <button className="action-btn temp-save-btn" onClick={handleTempSave} disabled={isUploading}>
               임시저장
             </button>
           )}
@@ -412,7 +473,9 @@ const CreateTripPage = ({ toggleTheme, theme }) => {
             onClick={handleSave}
             disabled={isUploading}
           >
-            {isUploading ? (isEditMode ? '저장 중...' : '업로드 중...') : (isEditMode ? '저장' : '업로드')}
+            {isUploading
+              ? (isDraftPost ? '게시 중...' : isEditMode ? '저장 중...' : '업로드 중...')
+              : (isDraftPost ? '게시하기' : isEditMode ? '저장' : '업로드')}
           </button>
           <div className="user-profile-icon">
             {isAuthenticated && user?.picture ? (
@@ -453,17 +516,10 @@ const CreateTripPage = ({ toggleTheme, theme }) => {
         </div>
       </div>
 
-      {/* 임시저장 복원 배너 */}
-      {savedDraft && !draftBannerDismissed && (
+      {/* 임시저장 draft 편집 중 안내 */}
+      {isDraftPost && (
         <div className="draft-restore-banner">
-          <span className="draft-restore-text">
-            📝 임시저장된 기록이 있습니다.
-            {savedDraft.savedAt && ` (${new Date(savedDraft.savedAt).toLocaleString('ko-KR', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' })})`}
-          </span>
-          <div className="draft-restore-actions">
-            <button className="draft-restore-btn" onClick={handleLoadDraft}>불러오기</button>
-            <button className="draft-dismiss-btn" onClick={handleDismissDraft}>무시</button>
-          </div>
+          <span className="draft-restore-text">📝 임시저장된 게시글을 편집 중입니다.</span>
         </div>
       )}
 

@@ -13,6 +13,7 @@ class Post(Base):
     title = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
     tags = Column(Text, nullable=True)  # 태그 리스트를 JSON 문자열로 저장 (애플리케이션에서 기본값 '[]' 처리)
+    status = Column(String(50), nullable=False, default='published', server_default='published')
     user_id = Column(String(255), ForeignKey("users.id"), nullable=False, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

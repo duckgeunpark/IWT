@@ -31,7 +31,6 @@ const TripDetailPage = ({ toggleTheme, theme }) => {
   const [photos, setPhotos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activePhotoIndex, setActivePhotoIndex] = useState(0);
-  const [showMap, setShowMap] = useState(false);
   const [commentText, setCommentText] = useState('');
   const [showComments, setShowComments] = useState(false);
   const [similarPosts, setSimilarPosts] = useState([]);
@@ -79,8 +78,8 @@ const TripDetailPage = ({ toggleTheme, theme }) => {
 
   // 지도 초기화
   useEffect(() => {
-    if (!showMap || !mapRef.current || !GOOGLE_MAPS_KEY) return;
-    if (mapInstanceRef.current) return; // 이미 초기화됨
+    if (!mapRef.current || !GOOGLE_MAPS_KEY) return;
+    if (mapInstanceRef.current) return;
 
     const gpsPhotos = photos.filter(p => p.location?.lat && p.location?.lng);
     if (gpsPhotos.length === 0) return;
@@ -129,7 +128,6 @@ const TripDetailPage = ({ toggleTheme, theme }) => {
     if (window.google?.maps) {
       initMap();
     } else {
-      // Google Maps 스크립트 로드
       const existingScript = document.getElementById('google-maps-script');
       if (!existingScript) {
         const script = document.createElement('script');
@@ -142,14 +140,7 @@ const TripDetailPage = ({ toggleTheme, theme }) => {
         existingScript.addEventListener('load', initMap);
       }
     }
-  }, [showMap, photos]);
-
-  // 지도 토글 시 인스턴스 초기화
-  useEffect(() => {
-    if (!showMap) {
-      mapInstanceRef.current = null;
-    }
-  }, [showMap]);
+  }, [photos]);
 
   const handleLike = useCallback(() => {
     if (!isAuthenticated) return;
@@ -225,86 +216,81 @@ const TripDetailPage = ({ toggleTheme, theme }) => {
   const isOwner = isAuthenticated && trip.user_id === user?.sub;
   const tags = Array.isArray(trip.tags) ? trip.tags : [];
   const activePhoto = photos[activePhotoIndex];
+  const gpsPhotos = photos.filter(p => p.location?.lat && p.location?.lng);
 
   return (
     <div className="trip-detail-page">
       <Header toggleTheme={toggleTheme} theme={theme} />
 
       <div className="trip-detail-container">
-        {/* Left: Photo Gallery */}
+        {/* Left: Photo Gallery + Map */}
         <div className="trip-gallery">
-          {showMap ? (
-            <div className="gallery-map-container" style={{ width: '100%', height: '100%', minHeight: 400 }}>
-              {photos.filter(p => p.location?.lat).length > 0 ? (
-                <div ref={mapRef} style={{ width: '100%', height: '100%', minHeight: 400, borderRadius: '12px' }} />
-              ) : (
-                <div className="gallery-hero blue-gradient">
-                  <div className="gallery-placeholder">
-                    <p>GPS 정보가 없어 지도를 표시할 수 없습니다.</p>
-                  </div>
+          {/* 사진 캐러셀 */}
+          <div className="gallery-photos">
+            {photos.length > 0 ? (
+              <>
+                <div className="gallery-main">
+                  <img
+                    src={activePhoto?.url}
+                    alt={activePhoto?.file_name || '여행 사진'}
+                    className="gallery-main-img"
+                    style={{ width: '100%', height: '360px', objectFit: 'cover', display: 'block' }}
+                  />
+                  {photos.length > 1 && (
+                    <>
+                      <button
+                        className="gallery-nav gallery-nav-prev"
+                        onClick={() => setActivePhotoIndex(i => (i - 1 + photos.length) % photos.length)}
+                        style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', background: 'rgba(0,0,0,0.45)', border: 'none', borderRadius: '50%', width: 36, height: 36, cursor: 'pointer', color: '#fff', fontSize: 18 }}
+                      >‹</button>
+                      <button
+                        className="gallery-nav gallery-nav-next"
+                        onClick={() => setActivePhotoIndex(i => (i + 1) % photos.length)}
+                        style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: 'rgba(0,0,0,0.45)', border: 'none', borderRadius: '50%', width: 36, height: 36, cursor: 'pointer', color: '#fff', fontSize: 18 }}
+                      >›</button>
+                      <div className="gallery-counter" style={{ position: 'absolute', bottom: 12, right: 16, background: 'rgba(0,0,0,0.5)', color: '#fff', padding: '2px 8px', borderRadius: 10, fontSize: 12 }}>
+                        {activePhotoIndex + 1} / {photos.length}
+                      </div>
+                    </>
+                  )}
                 </div>
-              )}
-            </div>
-          ) : photos.length > 0 ? (
-            <>
-              {/* 메인 사진 */}
-              <div className="gallery-main">
-                <img
-                  src={activePhoto?.url}
-                  alt={activePhoto?.file_name || '여행 사진'}
-                  className="gallery-main-img"
-                  style={{ width: '100%', height: '480px', objectFit: 'cover', borderRadius: '12px', display: 'block' }}
-                />
                 {photos.length > 1 && (
-                  <>
-                    <button
-                      className="gallery-nav gallery-nav-prev"
-                      onClick={() => setActivePhotoIndex(i => (i - 1 + photos.length) % photos.length)}
-                      style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', background: 'rgba(0,0,0,0.45)', border: 'none', borderRadius: '50%', width: 36, height: 36, cursor: 'pointer', color: '#fff', fontSize: 18 }}
-                    >‹</button>
-                    <button
-                      className="gallery-nav gallery-nav-next"
-                      onClick={() => setActivePhotoIndex(i => (i + 1) % photos.length)}
-                      style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: 'rgba(0,0,0,0.45)', border: 'none', borderRadius: '50%', width: 36, height: 36, cursor: 'pointer', color: '#fff', fontSize: 18 }}
-                    >›</button>
-                    <div className="gallery-counter" style={{ position: 'absolute', bottom: 12, right: 16, background: 'rgba(0,0,0,0.5)', color: '#fff', padding: '2px 8px', borderRadius: 10, fontSize: 12 }}>
-                      {activePhotoIndex + 1} / {photos.length}
-                    </div>
-                  </>
+                  <div className="gallery-strip" style={{ display: 'flex', gap: 6, padding: '6px 8px', overflowX: 'auto' }}>
+                    {photos.map((photo, i) => (
+                      <img
+                        key={photo.id}
+                        src={photo.url}
+                        alt=""
+                        onClick={() => setActivePhotoIndex(i)}
+                        style={{
+                          width: 56, height: 56, objectFit: 'cover', borderRadius: 6, cursor: 'pointer', flexShrink: 0,
+                          border: i === activePhotoIndex ? '2px solid var(--color-primary, #4285F4)' : '2px solid transparent',
+                          opacity: i === activePhotoIndex ? 1 : 0.65,
+                        }}
+                      />
+                    ))}
+                  </div>
                 )}
-              </div>
-              {/* 썸네일 스트립 */}
-              {photos.length > 1 && (
-                <div className="gallery-strip" style={{ display: 'flex', gap: 8, marginTop: 8, overflowX: 'auto', padding: '4px 0' }}>
-                  {photos.map((photo, i) => (
-                    <img
-                      key={photo.id}
-                      src={photo.url}
-                      alt=""
-                      onClick={() => setActivePhotoIndex(i)}
-                      style={{
-                        width: 64, height: 64, objectFit: 'cover', borderRadius: 8, cursor: 'pointer', flexShrink: 0,
-                        border: i === activePhotoIndex ? '2px solid var(--color-primary, #4285F4)' : '2px solid transparent',
-                        opacity: i === activePhotoIndex ? 1 : 0.7,
-                      }}
-                    />
-                  ))}
+              </>
+            ) : (
+              <div className="gallery-hero blue-gradient">
+                <div className="gallery-placeholder">
+                  <div className="gallery-placeholder-icon">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="3" y="3" width="18" height="18" rx="2" />
+                      <circle cx="8.5" cy="8.5" r="1.5" />
+                      <path d="m21 15-5-5L5 21" />
+                    </svg>
+                  </div>
+                  <p>{trip.photo_count || 0}장의 사진</p>
                 </div>
-              )}
-            </>
-          ) : (
-            <div className="gallery-hero blue-gradient" style={{ position: 'relative' }}>
-              <div className="gallery-placeholder">
-                <div className="gallery-placeholder-icon">
-                  <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="3" y="3" width="18" height="18" rx="2" />
-                    <circle cx="8.5" cy="8.5" r="1.5" />
-                    <path d="m21 15-5-5L5 21" />
-                  </svg>
-                </div>
-                <p>{trip.photo_count || 0}장의 사진</p>
               </div>
-            </div>
+            )}
+          </div>
+
+          {/* 지도 (GPS 사진 있을 때만) */}
+          {gpsPhotos.length > 0 && (
+            <div className="gallery-map" ref={mapRef} />
           )}
         </div>
 
@@ -369,16 +355,6 @@ const TripDetailPage = ({ toggleTheme, theme }) => {
               <button className="action-icon-btn" onClick={() => setShowComments(!showComments)}>
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                </svg>
-              </button>
-              <button
-                className={`action-icon-btn ${showMap ? 'active' : ''}`}
-                onClick={() => setShowMap(!showMap)}
-                title="지도 보기"
-              >
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
-                  <circle cx="12" cy="10" r="3" />
                 </svg>
               </button>
               <button className="action-icon-btn" onClick={handleShare} title="공유">

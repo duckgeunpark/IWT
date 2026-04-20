@@ -28,8 +28,13 @@ function formatDate(isoString) {
 // ── 내 여행 컴팩트 카드 ──
 const MyTripCard = ({ post, onClick, index }) => {
   const gradient = GRADIENTS[index % GRADIENTS.length];
+  const isDraft = post.status === 'draft';
   return (
-    <div className="my-trip-card" onClick={onClick}>
+    <div
+      className={`my-trip-card${isDraft ? ' my-trip-card--draft' : ''}`}
+      onClick={onClick}
+    >
+      {isDraft && <span className="my-trip-draft-badge">임시저장</span>}
       <div className="my-trip-thumb" style={{ background: gradient }}>
         {post.thumbnail_url && (
           <img src={post.thumbnail_url} alt={post.title} className="my-trip-thumb-img" />
@@ -111,7 +116,7 @@ const MainPage = ({ toggleTheme, theme }) => {
         const allPublic = publicRes?.posts || [];
 
         if (isAuthenticated && user?.sub) {
-          const myRes = await apiClient.get(`/api/v1/posts/user/${encodeURIComponent(user.sub)}?skip=0&limit=6`);
+          const myRes = await apiClient.get(`/api/v1/posts/user/${encodeURIComponent(user.sub)}?skip=0&limit=6&include_drafts=true`);
           const myIds = new Set((myRes?.posts || []).map(p => p.id));
           setMyPosts(myRes?.posts || []);
           setPublicPosts(allPublic.filter(p => !myIds.has(p.id)));
@@ -199,7 +204,7 @@ const MainPage = ({ toggleTheme, theme }) => {
                     key={post.id}
                     post={post}
                     index={i}
-                    onClick={() => navigate(`/trip/${post.id}`)}
+                    onClick={() => navigate(post.status === 'draft' ? `/trip/${post.id}/edit` : `/trip/${post.id}`)}
                   />
                 ))}
               </div>

@@ -20,6 +20,8 @@ from app.schemas.llm import (
     AttractionsResponse,
     ItineraryRequest,
     ItineraryResponse,
+    ClusteredItineraryRequest,
+    ClusteredItineraryResponse,
     CategoryRecommendationsRequest,
     CategoryRecommendationsResponse,
     BlogGenerateRequest,
@@ -29,6 +31,8 @@ from app.schemas.llm import (
     TagGenerateRequest,
     TagGenerateResponse,
 )
+from app.services.photo_cluster import cluster_photos_by_location
+from app.services.reverse_geocoder import ReverseGeocoderService
 
 router = APIRouter(prefix="/llm", tags=["llm"])
 
@@ -36,6 +40,7 @@ router = APIRouter(prefix="/llm", tags=["llm"])
 llm_location_service = LLMLocationSearchService()
 llm_route_service = LLMRouteRecommendService()
 ocr_service = OCRAugmenterService()
+geocoder_service = ReverseGeocoderService()
 
 logger = logging.getLogger(__name__)
 
@@ -171,6 +176,92 @@ async def generate_travel_itinerary(
     except Exception as e:
         logger.error(f"일정 생성 실패: {str(e)}")
         return ItineraryResponse(success=False, error_message=str(e))
+
+
+@router.post("/generate-itinerary-clustered", response_model=ClusteredItineraryResponse)
+@limiter.limit("10/minute")
+async def generate_itinerary_clustered(
+    request: Request,
+    body: ClusteredItineraryRequest,
+    current_user = Depends(get_current_user)
+):
+    """
+    위치 클러스터 기반 여행 게시글 생성
+    1) GPS+시간 클러스터링 → 2) 클러스터별 역지오코딩 → 3) 클러스터별 LLM 단락 → 4) 조합
+    """
+    try:
+        clusters = cluster_photos_by_location(
+            body.photos,
+            distance_km=body.distance_km,
+            time_hours=body.time_hours,
+        )
+
+        if not clusters:
+            return ClusteredItineraryResponse(success=False, error_message="클러스터링 결과 없음")
+
+        paragraphs = []
+        location_names = []
+        cluster_infos = []
+
+        for cluster in clusters:
+            gps = cluster.get("center_gps")
+            location_info = None
+            if gps:
+                try:
+                    location_info = await geocoder_service.reverse_geocode(gps["lat"], gps["lng"])
+                except Exception:
+                    pass
+
+            paragraph = await llm_route_service.generate_cluster_paragraph(cluster, location_info)
+            if paragraph:
+                paragraphs.append(paragraph)
+
+            location_name = "알 수 없는 장소"
+            if location_info:
+                name = location_info.get("city") or location_info.get("country") or ""
+                if name:
+                    location_name = name
+                    location_names.append({"country": location_info.get("country", ""), "city": name})
+
+            photo_ids = [str(p.get("id", "")) for p in cluster.get("photos", []) if p.get("id")]
+            cluster_infos.append({
+                "cluster_id": cluster["cluster_id"],
+                "photo_ids": photo_ids,
+                "location_name": location_name,
+                "section_heading": location_name,
+            })
+
+        if not paragraphs:
+            return ClusteredItineraryResponse(success=False, error_message="단락 생성 실패")
+
+        # 제목: 첫 장소 ~ 마지막 장소 (LLM 불필요)
+        if location_names:
+            if len(location_names) == 1:
+                title = f"{location_names[0]['city']} 여행 기록"
+            else:
+                title = f"{location_names[0]['city']} ~ {location_names[-1]['city']} 여행 기록"
+        else:
+            title = "여행 기록"
+
+        itinerary = f"# {title}\n\n" + "\n\n".join(paragraphs)
+
+        # 태그: 기존 함수 재사용
+        try:
+            tags = await llm_route_service.generate_tags_from_content(location_names, itinerary[:300])
+        except Exception:
+            tags = [loc["city"] for loc in location_names if loc.get("city")]
+
+        return ClusteredItineraryResponse(
+            success=True,
+            itinerary=itinerary,
+            title=title,
+            tags=tags,
+            cluster_count=len(clusters),
+            clusters=cluster_infos,
+        )
+    except Exception as e:
+        logger.error(f"클러스터 일정 생성 실패: {str(e)}")
+        return ClusteredItineraryResponse(success=False, error_message=str(e))
 
 
 @router.post("/highlight-photos", response_model=HighlightPhotosResponse)

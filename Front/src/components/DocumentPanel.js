@@ -1,6 +1,7 @@
 import React, { useState, useRef, useCallback } from 'react';
 import { useSelector } from 'react-redux';
 import MarkdownPreview from './MarkdownPreview';
+import ClusterPhotoPickerModal from './ClusterPhotoPickerModal';
 import { useToast } from './Toast';
 import { apiClient } from '../services/apiClient';
 import '../styles/DocumentPanel.css';
@@ -24,10 +25,30 @@ const SAMPLE_CONTENT = `# 여행 기록
 *LLM 버튼을 눌러 AI가 여행 기록을 자동 생성하도록 할 수 있습니다.*
 `;
 
+const parseSections = (content) => {
+  const lines = content.split('\n');
+  const sections = [];
+  let current = { heading: null, body: [] };
+
+  for (const line of lines) {
+    const h2 = line.match(/^##\s+(.+)/);
+    if (h2) {
+      sections.push(current);
+      current = { heading: h2[1].trim(), body: [] };
+    } else {
+      current.body.push(line);
+    }
+  }
+  sections.push(current);
+  return sections;
+};
+
 const DocumentPanel = ({ initialContent, initialTitle, onContentChange }) => {
   const { photos, locations } = useSelector(state => state.photos);
+  const clusters = useSelector(state => state.clusters.clusters);
   const toast = useToast();
   const [content, setContent] = useState(initialContent || SAMPLE_CONTENT);
+  const [pickerCluster, setPickerCluster] = useState(null);
 
   const updateContent = useCallback((newContent) => {
     setContent(newContent);
@@ -212,7 +233,44 @@ ${locationSummary || '- 위치 정보가 있는 사진이 없습니다.'}
           />
         ) : (
           <div className="markdown-preview-area">
-            <MarkdownPreview content={content} />
+            {clusters.length > 0 ? (
+              parseSections(content).map((section, idx) => {
+                const cluster = clusters.find(c => c.section_heading === section.heading);
+                const repPhoto = cluster
+                  ? photos.find(p => String(p.id) === String(cluster.representative_photo_id))
+                  : null;
+                const sectionMd = section.heading
+                  ? `## ${section.heading}\n${section.body.join('\n')}`
+                  : section.body.join('\n');
+
+                return (
+                  <div key={idx} className="dp-section">
+                    {cluster && (
+                      <div className="dp-section-cluster-bar">
+                        {repPhoto ? (
+                          <img
+                            src={repPhoto.preview}
+                            alt="대표사진"
+                            className="dp-rep-thumb"
+                          />
+                        ) : (
+                          <div className="dp-rep-thumb dp-rep-thumb--empty">📷</div>
+                        )}
+                        <button
+                          className="dp-change-btn"
+                          onClick={() => setPickerCluster(cluster)}
+                        >
+                          변경
+                        </button>
+                      </div>
+                    )}
+                    <MarkdownPreview content={sectionMd} />
+                  </div>
+                );
+              })
+            ) : (
+              <MarkdownPreview content={content} />
+            )}
           </div>
         )}
       </div>
@@ -240,6 +298,13 @@ ${locationSummary || '- 위치 정보가 있는 사진이 없습니다.'}
           </span>
         </div>
       </div>
+
+      {pickerCluster && (
+        <ClusterPhotoPickerModal
+          cluster={pickerCluster}
+          onClose={() => setPickerCluster(null)}
+        />
+      )}
     </div>
   );
 };

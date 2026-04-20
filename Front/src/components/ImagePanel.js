@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import exifr from 'exifr';
 import { addPhoto, removePhoto, togglePhotoActive, activateAllPhotos, deactivateAllPhotos, setSelectedPhoto, updatePhotoExif, setLoading, setError, setUploadProgress } from '../store/photoSlice';
+import { autoAssignToCluster } from '../store/clusterSlice';
 import { fileStore } from '../store/fileStore';
 import DropdownMenu from './DropdownMenu';
 import ExifEditModal from './ExifEditModal';
@@ -247,6 +248,12 @@ const ImagePanel = ({ readOnly = false }) => {
           photo: photoData,
           gpsData: exifData.backendData?.gps || null,
           exifData: exifData
+        }));
+
+        dispatch(autoAssignToCluster({
+          photo_id: String(photoId),
+          gps: exifData.backendData?.gps || null,
+          taken_at: exifData.backendData?.takenAtLocal || null,
         }));
 
         if (exifData.hasExif && exifData.backendData) {

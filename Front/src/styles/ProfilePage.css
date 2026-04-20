@@ -376,6 +376,23 @@
   transform: translateY(-3px);
   box-shadow: 0 10px 28px rgba(0,0,0,0.12);
 }
+.prof-trip-card--draft {
+  border: 2px solid #7c3aed;
+  position: relative;
+}
+.prof-trip-draft-badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  background: #7c3aed;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 20px;
+  z-index: 2;
+  letter-spacing: 0.3px;
+}
 .prof-trip-thumb {
   width: 100%;
   height: 160px;

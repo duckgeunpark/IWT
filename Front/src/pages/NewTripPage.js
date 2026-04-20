@@ -4,6 +4,8 @@ import { useAuth0 } from '@auth0/auth0-react';
 import { useDispatch } from 'react-redux';
 import exifr from 'exifr';
 import { addPhoto, setUploadProgress, setFilterResult } from '../store/photoSlice';
+import { setClusters, setRepresentativePhoto } from '../store/clusterSlice';
+import { useSelector } from 'react-redux';
 import { fileStore } from '../store/fileStore';
 import { compressImage, createThumbnail } from '../utils/imageCompressor';
 import { computeFileHash } from '../utils/fileHash';
@@ -11,6 +13,58 @@ import { apiClient } from '../services/apiClient';
 import { useToast } from '../components/Toast';
 import Header from '../components/Header';
 import '../styles/NewTripPage.css';
+
+// ── 프론트 간이 클러스터링 (대표사진 선택 화면용) ──
+const haversine = (lat1, lng1, lat2, lng2) => {
+  const R = 6371;
+  const p1 = (lat1 * Math.PI) / 180, p2 = (lat2 * Math.PI) / 180;
+  const dp = ((lat2 - lat1) * Math.PI) / 180, dl = ((lng2 - lng1) * Math.PI) / 180;
+  const a = Math.sin(dp / 2) ** 2 + Math.cos(p1) * Math.cos(p2) * Math.sin(dl / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+};
+
+const buildTempClusters = (filterInput, processedFiles) => {
+  const sorted = [...filterInput].sort((a, b) => (a.taken_at || '') < (b.taken_at || '') ? -1 : 1);
+  const groups = [];
+  for (const photo of sorted) {
+    const last = groups[groups.length - 1];
+    let sameCluster = false;
+    if (last) {
+      const prev = last[last.length - 1];
+      const gClose = photo.gps && prev.gps
+        ? haversine(photo.gps.lat, photo.gps.lng, prev.gps.lat, prev.gps.lng) < 0.5
+        : true;
+      const tClose = photo.taken_at && prev.taken_at
+        ? Math.abs(new Date(photo.taken_at) - new Date(prev.taken_at)) / 3600000 < 2
+        : true;
+      sameCluster = gClose && tClose;
+    }
+    if (sameCluster) groups[groups.length - 1].push(photo);
+    else groups.push([photo]);
+  }
+
+  return groups.map((group, i) => {
+    const photoIds = group.map(p => p.id);
+    // processedFiles에서 photoId 매핑해 실제 Redux photo ID 찾기
+    const matchedIds = photoIds.map(pid => {
+      const match = processedFiles.find(pf => pf.photoId === pid);
+      return match ? match.photoId : pid;
+    });
+    const gpsItems = group.filter(p => p.gps);
+    const centerGps = gpsItems.length
+      ? { lat: gpsItems.reduce((s, p) => s + p.gps.lat, 0) / gpsItems.length, lng: gpsItems.reduce((s, p) => s + p.gps.lng, 0) / gpsItems.length }
+      : null;
+    return {
+      cluster_id: i,
+      photo_ids: matchedIds,
+      location_name: `장소 ${i + 1}`,
+      section_heading: `장소 ${i + 1}`,
+      center_gps: centerGps,
+      start_time: group[0]?.taken_at || null,
+      end_time: group[group.length - 1]?.taken_at || null,
+    };
+  });
+};
 
 // ── 사진 활용 상태 헬퍼 ──
 const getUsageInfo = (usage, filterResult) => {
@@ -52,8 +106,11 @@ const NewTripPage = ({ toggleTheme, theme }) => {
   const toast = useToast();
   const { isAuthenticated, isLoading, loginWithRedirect } = useAuth0();
 
+  const photos = useSelector(state => state.photos.photos);
+  const clusters = useSelector(state => state.clusters.clusters);
+
   // ── 공통 상태 ──
-  const [mode, setMode] = useState(null); // null, 'record', 'plan'
+  const [mode, setMode] = useState(null); // null, 'record', 'plan', 'cluster-review'
   const [step, setStep] = useState(0);
 
   // ── 기록 모드 상태 ──
@@ -255,92 +312,20 @@ const NewTripPage = ({ toggleTheme, theme }) => {
           ...pf,
           filterResult: filterPhotoMap[pf.photoId] || null,
         })));
-
-        const s = filterResponse.summary;
-        const msgs = [];
-        if (s.duplicates_removed > 0) msgs.push(`중복 ${s.duplicates_removed}장 제거`);
-        if (s.burst_groups > 0) msgs.push(`연사 ${s.burst_groups}그룹 감지`);
-        if (s.trash_removed > 0) msgs.push(`불필요 ${s.trash_removed}장 구분`);
-        if (s.no_gps_count > 0) msgs.push(`GPS 없음 ${s.no_gps_count}장`);
-
-        toast.success(
-          `${uploadedFiles.length}장 분석 완료! 활용 가능: ${s.usable_photos}장` +
-          (msgs.length > 0 ? ` (${msgs.join(', ')})` : '')
-        );
       } catch (filterErr) {
         console.warn('필터링 API 실패 (무시하고 계속):', filterErr);
-        toast.success(`${uploadedFiles.length}장 처리 완료!`);
       } finally {
         setIsFiltering(false);
       }
 
-      // AI 초안 생성 + 하이라이트 사진 선정 (병렬 실행, 30초 타임아웃)
-      let draft = null;
-      const withTimeout = (promise, ms) =>
-        Promise.race([promise, new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), ms))]);
-
-
-      try {
-        setIsGeneratingDraft(true);
-        const photoData = filterInput.map(p => ({
-          name: p.file_name,
-          captureTime: p.taken_at,
-          gps: p.gps,
-        }));
-        const locationData = filterInput
-          .filter(p => p.gps)
-          .map((p) => ({ name: p.file_name, coordinates: p.gps, time: p.taken_at }));
-
-        const highlightInput = filterInput.map(p => ({
-          id: p.id,
-          file_name: p.file_name,
-          gps: p.gps,
-          taken_at: p.taken_at,
-          file_size: p.file_size,
-        }));
-
-        const [llmRes, highlightRes] = await Promise.allSettled([
-          withTimeout(apiClient.post('/api/v1/llm/generate-itinerary', {
-            route_data: {
-              photos: photoData,
-              locations: locationData,
-              total_photos: filterInput.length,
-            },
-            user_preferences: { language: 'ko', format: 'markdown' },
-          }), 60000),
-          filterInput.length >= 3
-            ? withTimeout(apiClient.post('/api/v1/llm/highlight-photos', {
-                photos: highlightInput,
-                max_highlights: Math.min(5, Math.ceil(filterInput.length * 0.3)),
-              }), 60000)
-            : Promise.resolve(null),
-        ]);
-
-        const llmData = llmRes.status === 'fulfilled' ? llmRes.value : null;
-        const highlightData = highlightRes.status === 'fulfilled' ? highlightRes.value : null;
-
-        if (llmData?.success && llmData?.itinerary) {
-          draft = {
-            content: llmData.itinerary,
-            title: llmData.title || null,
-            tags: llmData.tags || null,
-            highlightedIds: highlightData?.highlighted_ids || null,
-          };
-          toast.success('AI 초안 생성 완료! 내용을 검토하고 수정하세요.');
-        } else if (highlightData?.highlighted_ids) {
-          draft = { highlightedIds: highlightData.highlighted_ids };
-        }
-      } catch (llmErr) {
-        if (llmErr.message === 'timeout') {
-          toast.warning('AI 초안 생성 시간이 초과됐습니다. 직접 작성해주세요.');
-        } else {
-          console.warn('AI 초안 생성 실패 (무시하고 계속):', llmErr);
-        }
-      } finally {
-        setIsGeneratingDraft(false);
+      // 필터링 완료 후 클러스터 정보 미리 생성해서 Redux에 저장
+      // (프론트에서 GPS+시간 기준 간이 클러스터링 → 확인 화면에서 대표사진 선택)
+      const gpsPhotos = filterInput.filter(p => p.gps);
+      if (gpsPhotos.length > 0) {
+        const tempClusters = buildTempClusters(filterInput, processedFiles);
+        dispatch(setClusters(tempClusters));
       }
 
-      // 분석 결과 요약 toast만 보여주고 바로 edit 이동
       if (filterSummaryResult) {
         const s = filterSummaryResult;
         const parts = [`활용 가능 ${s.usable_photos}장`];
@@ -348,7 +333,8 @@ const NewTripPage = ({ toggleTheme, theme }) => {
         if (s.no_gps_count > 0) parts.push(`GPS 없음 ${s.no_gps_count}장`);
         toast.success(`분석 완료 — ${parts.join(', ')}`);
       }
-      goToEditPage(draft);
+      // 클러스터 확인 화면으로 이동
+      setMode('cluster-review');
     } catch (err) {
       toast.error('처리 중 오류가 발생했습니다.');
       console.error(err);
@@ -357,9 +343,9 @@ const NewTripPage = ({ toggleTheme, theme }) => {
     }
   };
 
-  const goToEditPage = (draft) => {
+  const goToEditPage = () => {
     uploadedFiles.forEach(f => { if (f.preview) URL.revokeObjectURL(f.preview); });
-    navigate('/trip/new/edit', { state: { fromRecord: true, draft: draft || generatedDraft } });
+    navigate('/trip/new/edit', { state: { fromRecord: true } });
   };
 
   // ═══════════════════════════════════════════
@@ -740,6 +726,65 @@ const NewTripPage = ({ toggleTheme, theme }) => {
                 </button>
               </div>
             )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── 클러스터 확인 화면 ──
+  if (mode === 'cluster-review') {
+    return (
+      <div className="new-trip-page">
+        <Header toggleTheme={toggleTheme} theme={theme} />
+        <div className="new-trip-content">
+          <div className="wizard-container">
+            <div className="wizard-header">
+              <button className="wizard-back" onClick={() => setMode('record')}>← 뒤로</button>
+              <div className="wizard-step-indicator">
+                <span className="step-label">대표 사진 선택</span>
+              </div>
+              <div className="wizard-header-spacer" />
+            </div>
+
+            <p className="cluster-review-desc">
+              각 장소의 대표 사진을 선택하세요. 게시글 각 섹션 상단에 표시됩니다.
+            </p>
+
+            <div className="cluster-review-list">
+              {clusters.length === 0 ? (
+                <p style={{ textAlign: 'center', color: 'var(--text-secondary, #888)', padding: '40px 0' }}>
+                  클러스터 정보가 없습니다. 다음 단계로 진행하세요.
+                </p>
+              ) : clusters.map(cluster => {
+                const clusterPhotos = photos.filter(p => cluster.photo_ids.includes(String(p.id)));
+                const repId = cluster.representative_photo_id;
+                return (
+                  <div key={cluster.cluster_id} className="cluster-review-card">
+                    <div className="cluster-review-card-header">
+                      <span className="cluster-location-name">{cluster.location_name}</span>
+                      <span className="cluster-photo-count">{clusterPhotos.length}장</span>
+                    </div>
+                    <div className="cluster-photo-strip">
+                      {clusterPhotos.map(photo => (
+                        <button
+                          key={photo.id}
+                          className={`cluster-photo-thumb ${String(photo.id) === String(repId) ? 'selected' : ''}`}
+                          onClick={() => dispatch(setRepresentativePhoto({ cluster_id: cluster.cluster_id, photo_id: String(photo.id) }))}
+                        >
+                          <img src={photo.preview} alt={photo.name} />
+                          {String(photo.id) === String(repId) && <span className="cluster-thumb-star">★</span>}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <button className="record-start-btn" style={{ marginTop: '24px' }} onClick={goToEditPage}>
+              여행 기록 만들기 →
+            </button>
           </div>
         </div>
       </div>

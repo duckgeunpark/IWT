@@ -361,35 +361,148 @@ class LLMRouteRecommendService:
         """
         try:
             pref_text = json.dumps(user_preferences, ensure_ascii=False) if user_preferences else "없음"
-            prompt = route_data.get("prompt") or f"""
-다음 여행 사진 데이터를 바탕으로 여행 기록을 마크다운 형식으로 작성해주세요.
+            # 블로그 생성 재사용 경로: prompt 키가 있으면 그대로 사용
+            if route_data.get("prompt"):
+                prompt = route_data["prompt"]
+            else:
+                # 필요한 정보만 추출 (raw JSON dump 대신 요약 형태로)
+                photos = route_data.get("photos", [])
+                locations = route_data.get("locations", [])
 
-경로 데이터:
-{json.dumps(route_data, ensure_ascii=False, indent=2)}
+                loc_lines = []
+                for loc in locations:
+                    parts = [loc.get("name"), loc.get("time")]
+                    coords = loc.get("coordinates", {})
+                    if coords.get("lat"):
+                        parts.append(f"({coords['lat']:.4f}, {coords['lng']:.4f})")
+                    loc_lines.append("- " + " | ".join(p for p in parts if p))
 
-사용자 선호도: {pref_text}
+                prompt = f"""다음 여행 데이터를 바탕으로 여행 기록을 마크다운으로 작성해주세요.
 
-요구사항:
-1. 첫 줄은 반드시 # 으로 시작하는 제목. 제목은 방문 지역과 여행 특징이 담긴 구체적인 제목으로 작성 (예: "도쿄 3박 4일, 신주쿠에서 아사쿠사까지" / "제주 당일치기 올레길 트레킹" / "오사카 먹방 여행 2박 3일")
-2. GPS가 있는 경우 방문 장소별로 일정을 구성하고 이동 경로를 자연스럽게 서술
-3. 감성적이고 여행 블로그 스타일의 자연스러운 한국어 문체
-4. 마크다운 형식 (소제목, 목록, 강조 활용)
-5. 마지막 줄에 반드시 아래 형식으로 태그를 포함:
-<!-- tags: 태그1, 태그2, 태그3, 태그4, 태그5 -->
-태그는 국가/도시명, 여행 테마(맛집/힐링/액티비티 등), 계절감 등 5~8개 포함
+총 사진: {len(photos)}장
+방문 장소:
+{chr(10).join(loc_lines) if loc_lines else "- 위치 정보 없음"}
+
+작성 규칙:
+1. 첫 줄: # 제목 (방문 지역과 여행 특징 포함. 예: "도쿄 3박 4일, 신주쿠에서 아사쿠사까지")
+2. 장소별 ## 소제목으로 구분, 각 장소당 2~3문단
+3. 실제 여행자 시점의 감성적인 한국어 블로그 문체
+4. 마지막 줄: <!-- tags: 태그1, 태그2, 태그3 --> (국가/도시명, 여행 테마 5~8개)
 """
             response = await self.llm.provider.chat_completion(
                 messages=[
-                    {"role": "system", "content": "당신은 여행 일정을 감성적으로 작성하는 전문 여행 작가입니다. 구체적인 제목과 태그를 반드시 포함합니다."},
+                    {"role": "system", "content": "당신은 여행 경험을 감성적으로 기록하는 한국어 여행 블로거입니다."},
                     {"role": "user", "content": prompt},
                 ],
-                temperature=0.4,
-                max_tokens=1200,
+                temperature=0.5,
+                max_tokens=1800,
             )
             return response
         except Exception as e:
             logger.error(f"여행 일정 생성 실패: {str(e)}")
             return "여행 일정을 생성할 수 없습니다."
+
+    def _format_visit_time(self, start: str, end: str) -> str:
+        """ISO 시간 문자열 → 읽기 쉬운 방문 시간 문자열"""
+        try:
+            from datetime import datetime as dt
+            fmt_candidates = [
+                "%Y-%m-%dT%H:%M:%S",
+                "%Y-%m-%dT%H:%M:%S.%f",
+                "%Y-%m-%d %H:%M:%S",
+            ]
+            def parse(s):
+                for f in fmt_candidates:
+                    try:
+                        return dt.strptime(s[:19], f[:len(f)])
+                    except ValueError:
+                        continue
+                return None
+
+            s = parse(start) if start else None
+            e = parse(end) if end else None
+
+            def time_label(d):
+                h = d.hour
+                if h < 6:   return f"새벽 {d.strftime('%H:%M')}"
+                if h < 12:  return f"오전 {d.strftime('%I:%M')}"
+                if h < 14:  return f"점심 {d.strftime('%I:%M')}"
+                if h < 18:  return f"오후 {d.strftime('%I:%M')}"
+                return f"저녁 {d.strftime('%I:%M')}"
+
+            if s and e:
+                delta_min = int((e - s).total_seconds() / 60)
+                duration = f"{delta_min // 60}시간 {delta_min % 60}분" if delta_min >= 60 else f"{delta_min}분"
+                return f"{time_label(s)} ~ {time_label(e)} (약 {duration})"
+            if s:
+                return time_label(s)
+            return ""
+        except Exception:
+            return ""
+
+    async def generate_cluster_paragraph(
+        self,
+        cluster: Dict[str, Any],
+        location_info: Optional[Dict[str, Any]] = None,
+    ) -> str:
+        """
+        단일 위치 클러스터 → 마크다운 단락 생성
+        """
+        try:
+            # 장소 정보 조합 (landmark 우선, 없으면 city/country)
+            location_name = "알 수 없는 장소"
+            location_details = []
+            if location_info:
+                landmark = location_info.get("landmark") or location_info.get("region")
+                city = location_info.get("city")
+                country = location_info.get("country")
+                address = location_info.get("address") or location_info.get("display_name")
+
+                name_parts = [p for p in [landmark, city, country] if p]
+                location_name = ", ".join(name_parts) if name_parts else location_name
+
+                if address:
+                    location_details.append(f"주소: {address}")
+                if city and country:
+                    location_details.append(f"도시: {city}, {country}")
+
+            photo_count = cluster.get("photo_count", len(cluster.get("photos", [])))
+            visit_time = self._format_visit_time(
+                cluster.get("start_time", ""),
+                cluster.get("end_time", ""),
+            )
+
+            context_lines = [f"- 장소: {location_name}"]
+            if location_details:
+                for d in location_details:
+                    context_lines.append(f"- {d}")
+            context_lines.append(f"- 촬영 사진: {photo_count}장")
+            if visit_time:
+                context_lines.append(f"- 방문 시간대: {visit_time}")
+
+            prompt = f"""아래 여행 장소 정보를 바탕으로 여행 블로그 단락을 마크다운으로 작성해주세요.
+
+{chr(10).join(context_lines)}
+
+작성 규칙:
+1. 첫 줄: ## 장소명 (소제목)
+2. 본문: 2~3개 문단, 총 400~600자
+3. 장소의 분위기·특징·인상을 생생하게 묘사 (실제 여행자 시점)
+4. 자연스럽고 감성적인 한국어 블로그 문체
+5. 소제목(##) 외 다른 마크다운 헤딩(#, ###) 사용 금지
+"""
+            response = await self.llm.provider.chat_completion(
+                messages=[
+                    {"role": "system", "content": "당신은 실제 여행 경험을 생생하게 기록하는 한국어 여행 블로거입니다."},
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=0.5,
+                max_tokens=900,
+            )
+            return response or ""
+        except Exception as e:
+            logger.error(f"클러스터 단락 생성 실패: {str(e)}")
+            return ""
 
     async def select_highlight_photos(
         self,
@@ -478,7 +591,7 @@ class LLMRouteRecommendService:
 
             response = await self.llm.provider.chat_completion(
                 messages=[
-                    {"role": "system", "content": "당신은 여행 콘텐츠에서 검색 가능한 태그를 생성하는 전문가입니다."},
+                    {"role": "system", "content": "여행 콘텐츠에서 검색 최적화 태그를 추출합니다. JSON만 출력합니다."},
                     {"role": "user", "content": prompt},
                 ],
                 temperature=0.1,

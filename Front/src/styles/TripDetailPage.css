@@ -39,6 +39,18 @@
   background: var(--bg-tertiary);
   display: flex;
   flex-direction: column;
+  gap: 0;
+}
+
+.gallery-photos {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.gallery-map {
+  height: 260px;
+  flex-shrink: 0;
+  border-top: 1px solid var(--border-color);
 }
 
 .gallery-hero {
@@ -572,6 +584,9 @@
   }
   .gallery-hero {
     aspect-ratio: 4/3;
+  }
+  .gallery-map {
+    height: 220px;
   }
   .trip-info {
     max-width: 100%;

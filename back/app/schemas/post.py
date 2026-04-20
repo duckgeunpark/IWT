@@ -17,6 +17,7 @@ class PostCreateRequest(BaseModel):
     photos: List[PhotoData]
     categories: Optional[Dict[str, List[str]]] = None
     selected_route: Optional[Dict[str, Any]] = None
+    status: str = 'published'
 
 
 class PostResponse(BaseModel):
@@ -24,6 +25,7 @@ class PostResponse(BaseModel):
     title: str
     description: Optional[str] = None
     tags: List[str] = []
+    status: str = 'published'
     created_at: datetime
     updated_at: Optional[datetime] = None
     photo_count: int
@@ -47,6 +49,7 @@ class PostUpdateRequest(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
     tags: Optional[List[str]] = None
+    status: Optional[str] = None
     keep_photo_ids: Optional[List[int]] = None  # 유지할 기존 사진 DB ID 목록
     new_photos: Optional[List[Dict[str, Any]]] = None  # 새로 추가할 사진 목록
 

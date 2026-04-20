@@ -94,6 +94,27 @@ class TravelPatternResponse(BaseModel):
     pattern: Optional[Dict[str, Any]] = None
     error_message: Optional[str] = None
 
+class ClusteredItineraryRequest(BaseModel):
+    photos: List[Dict[str, Any]]  # [{id, gps, taken_at, file_name, file_size}]
+    user_preferences: Optional[Dict[str, Any]] = None
+    distance_km: float = 0.5
+    time_hours: float = 2.0
+
+class ClusterInfo(BaseModel):
+    cluster_id: int
+    photo_ids: List[str]
+    location_name: str
+    section_heading: str
+
+class ClusteredItineraryResponse(BaseModel):
+    success: bool
+    itinerary: Optional[str] = None
+    title: Optional[str] = None
+    tags: Optional[List[str]] = None
+    cluster_count: Optional[int] = None
+    clusters: Optional[List[ClusterInfo]] = None
+    error_message: Optional[str] = None
+
 class CategoryRecommendationsRequest(BaseModel):
     categories: List[str]
     location_info: Optional[Dict[str, Any]] = None

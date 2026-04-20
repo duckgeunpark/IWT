@@ -1,4 +1,7 @@
 /* ── AI Generating Overlay ── */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
 @keyframes createTripSpin {
   to { transform: rotate(360deg); }
 }

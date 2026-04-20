@@ -70,6 +70,7 @@ def _build_post_response(post: Post, db: Session, current_user_id: Optional[str]
         title=post.title,
         description=post.description,
         tags=json.loads(post.tags) if post.tags else [],
+        status=getattr(post, 'status', 'published'),
         created_at=post.created_at,
         updated_at=post.updated_at,
         photo_count=len(post.photos),
@@ -110,6 +111,7 @@ async def create_post(
             title=request.title,
             description=request.description,
             tags=json.dumps(request.tags, ensure_ascii=False),
+            status=request.status,
             user_id=user_id,
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow()
@@ -476,18 +478,25 @@ async def get_user_posts(
     user_id: str,
     skip: int = Query(0, ge=0),
     limit: int = Query(10, ge=1, le=100),
+    include_drafts: bool = Query(False),
     current_user = Depends(get_optional_current_user),
     db: Session = Depends(get_db)
 ):
-    """특정 사용자의 게시글 목록 조회"""
+    """특정 사용자의 게시글 목록 조회 (본인 요청 시 draft 포함)"""
     try:
+        current_user_id = current_user["sub"] if current_user else None
+        is_owner = current_user_id == user_id
+
+        base_filter = [Post.user_id == user_id]
+        if not (is_owner and include_drafts):
+            base_filter.append(Post.status == 'published')
+
         query = db.query(Post).options(joinedload(Post.photos)).filter(
-            Post.user_id == user_id
+            *base_filter
         ).order_by(Post.created_at.desc())
 
-        total = db.query(func.count(Post.id)).filter(Post.user_id == user_id).scalar()
+        total = db.query(func.count(Post.id)).filter(*base_filter).scalar()
         posts = query.offset(skip).limit(limit).all()
-        current_user_id = current_user["sub"] if current_user else None
 
         return PostListResponse(
             posts=[_build_post_response(p, db, current_user_id) for p in posts],
@@ -511,7 +520,7 @@ async def get_posts(
 ):
     """게시글 목록 조회"""
     try:
-        count_query = db.query(Post)
+        count_query = db.query(Post).filter(Post.status == 'published')
 
         if user_id:
             count_query = count_query.filter(Post.user_id == user_id)
@@ -769,13 +778,15 @@ async def update_post(
         if post.user_id != current_user['sub']:
             raise HTTPException(status_code=403, detail="게시글을 수정할 권한이 없습니다.")
         
-        # 제목/내용/태그 업데이트
+        # 제목/내용/태그/상태 업데이트
         if request.title is not None:
             post.title = request.title
         if request.description is not None:
             post.description = request.description
         if request.tags is not None:
             post.tags = json.dumps(request.tags, ensure_ascii=False)
+        if request.status is not None:
+            post.status = request.status
 
         # 사진 업데이트 (keep_photo_ids가 전달된 경우)
         if request.keep_photo_ids is not None:
@@ -805,6 +816,7 @@ async def update_post(
             title=post.title,
             description=post.description,
             tags=json.loads(post.tags) if post.tags else [],
+            status=getattr(post, 'status', 'published'),
             created_at=post.created_at,
             photo_count=len(post.photos),
             user_id=post.user_id

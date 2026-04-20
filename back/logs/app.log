@@ -35575,3 +35575,81 @@ violations {
 [2026-04-14 15:48:15] INFO     | app.main             | startup_event   | 261  | IWT API 서버가 시작되었습니다.
 [2026-04-14 15:48:15] INFO     | app.main             | startup_event   | 262  | 디버그 모드: False
 [2026-04-14 15:48:15] INFO     | app.main             | startup_event   | 263  | 허용된 CORS origins: ['http://localhost:3000', 'http://127.0.0.1:3000']
+[2026-04-20 03:40:02] INFO     | app                  | setup_logging   | 122  | 로깅 시스템이 초기화되었습니다.
+[2026-04-20 03:40:02] INFO     | app.main             | create_application | 57   | IWT API v1.0.0 애플리케이션이 생성되었습니다.
+[2026-04-20 03:40:02] INFO     | app.main             | startup_event   | 261  | IWT API 서버가 시작되었습니다.
+[2026-04-20 03:40:02] INFO     | app.main             | startup_event   | 262  | 디버그 모드: False
+[2026-04-20 03:40:02] INFO     | app.main             | startup_event   | 263  | 허용된 CORS origins: ['http://localhost:3000', 'http://127.0.0.1:3000']
+[2026-04-20 04:02:35] INFO     | app.main             | shutdown_event  | 282  | IWT API 서버가 종료됩니다.
+[2026-04-20 04:02:37] INFO     | app                  | setup_logging   | 122  | 로깅 시스템이 초기화되었습니다.
+[2026-04-20 04:02:37] INFO     | app.main             | create_application | 57   | IWT API v1.0.0 애플리케이션이 생성되었습니다.
+[2026-04-20 04:02:37] INFO     | app.main             | startup_event   | 261  | IWT API 서버가 시작되었습니다.
+[2026-04-20 04:02:37] INFO     | app.main             | startup_event   | 262  | 디버그 모드: False
+[2026-04-20 04:02:37] INFO     | app.main             | startup_event   | 263  | 허용된 CORS origins: ['http://localhost:3000', 'http://127.0.0.1:3000']
+[2026-04-20 04:02:51] INFO     | app.main             | shutdown_event  | 282  | IWT API 서버가 종료됩니다.
+[2026-04-20 04:02:52] INFO     | app                  | setup_logging   | 122  | 로깅 시스템이 초기화되었습니다.
+[2026-04-20 04:02:52] INFO     | app.main             | create_application | 57   | IWT API v1.0.0 애플리케이션이 생성되었습니다.
+[2026-04-20 04:02:52] INFO     | app.main             | startup_event   | 261  | IWT API 서버가 시작되었습니다.
+[2026-04-20 04:02:52] INFO     | app.main             | startup_event   | 262  | 디버그 모드: False
+[2026-04-20 04:02:52] INFO     | app.main             | startup_event   | 263  | 허용된 CORS origins: ['http://localhost:3000', 'http://127.0.0.1:3000']
+[2026-04-20 04:02:57] INFO     | app.main             | shutdown_event  | 282  | IWT API 서버가 종료됩니다.
+[2026-04-20 04:02:58] INFO     | app                  | setup_logging   | 122  | 로깅 시스템이 초기화되었습니다.
+[2026-04-20 04:02:58] INFO     | app.main             | create_application | 57   | IWT API v1.0.0 애플리케이션이 생성되었습니다.
+[2026-04-20 04:02:58] INFO     | app.main             | startup_event   | 261  | IWT API 서버가 시작되었습니다.
+[2026-04-20 04:02:58] INFO     | app.main             | startup_event   | 262  | 디버그 모드: False
+[2026-04-20 04:02:58] INFO     | app.main             | startup_event   | 263  | 허용된 CORS origins: ['http://localhost:3000', 'http://127.0.0.1:3000']
+[2026-04-20 04:03:08] INFO     | app.main             | shutdown_event  | 282  | IWT API 서버가 종료됩니다.
+[2026-04-20 04:03:09] INFO     | app                  | setup_logging   | 122  | 로깅 시스템이 초기화되었습니다.
+[2026-04-20 04:03:09] INFO     | app.main             | create_application | 57   | IWT API v1.0.0 애플리케이션이 생성되었습니다.
+[2026-04-20 04:03:09] INFO     | app.main             | startup_event   | 261  | IWT API 서버가 시작되었습니다.
+[2026-04-20 04:03:09] INFO     | app.main             | startup_event   | 262  | 디버그 모드: False
+[2026-04-20 04:03:09] INFO     | app.main             | startup_event   | 263  | 허용된 CORS origins: ['http://localhost:3000', 'http://127.0.0.1:3000']
+[2026-04-20 04:03:13] INFO     | app.main             | shutdown_event  | 282  | IWT API 서버가 종료됩니다.
+[2026-04-20 04:03:14] INFO     | app                  | setup_logging   | 122  | 로깅 시스템이 초기화되었습니다.
+[2026-04-20 04:03:14] INFO     | app.main             | create_application | 57   | IWT API v1.0.0 애플리케이션이 생성되었습니다.
+[2026-04-20 04:03:14] INFO     | app.main             | startup_event   | 261  | IWT API 서버가 시작되었습니다.
+[2026-04-20 04:03:14] INFO     | app.main             | startup_event   | 262  | 디버그 모드: False
+[2026-04-20 04:03:14] INFO     | app.main             | startup_event   | 263  | 허용된 CORS origins: ['http://localhost:3000', 'http://127.0.0.1:3000']
+[2026-04-20 04:03:19] INFO     | app.main             | shutdown_event  | 282  | IWT API 서버가 종료됩니다.
+[2026-04-20 04:03:20] INFO     | app                  | setup_logging   | 122  | 로깅 시스템이 초기화되었습니다.
+[2026-04-20 04:03:20] INFO     | app.main             | create_application | 57   | IWT API v1.0.0 애플리케이션이 생성되었습니다.
+[2026-04-20 04:03:20] INFO     | app.main             | startup_event   | 261  | IWT API 서버가 시작되었습니다.
+[2026-04-20 04:03:20] INFO     | app.main             | startup_event   | 262  | 디버그 모드: False
+[2026-04-20 04:03:20] INFO     | app.main             | startup_event   | 263  | 허용된 CORS origins: ['http://localhost:3000', 'http://127.0.0.1:3000']
+[2026-04-20 04:03:28] INFO     | app.main             | shutdown_event  | 282  | IWT API 서버가 종료됩니다.
+[2026-04-20 04:03:30] INFO     | app                  | setup_logging   | 122  | 로깅 시스템이 초기화되었습니다.
+[2026-04-20 04:03:30] INFO     | app.main             | create_application | 57   | IWT API v1.0.0 애플리케이션이 생성되었습니다.
+[2026-04-20 04:03:30] INFO     | app.main             | startup_event   | 261  | IWT API 서버가 시작되었습니다.
+[2026-04-20 04:03:30] INFO     | app.main             | startup_event   | 262  | 디버그 모드: False
+[2026-04-20 04:03:30] INFO     | app.main             | startup_event   | 263  | 허용된 CORS origins: ['http://localhost:3000', 'http://127.0.0.1:3000']
+[2026-04-20 04:03:37] INFO     | app.main             | shutdown_event  | 282  | IWT API 서버가 종료됩니다.
+[2026-04-20 04:03:38] INFO     | app                  | setup_logging   | 122  | 로깅 시스템이 초기화되었습니다.
+[2026-04-20 04:03:38] INFO     | app.main             | create_application | 57   | IWT API v1.0.0 애플리케이션이 생성되었습니다.
+[2026-04-20 04:03:38] INFO     | app.main             | startup_event   | 261  | IWT API 서버가 시작되었습니다.
+[2026-04-20 04:03:38] INFO     | app.main             | startup_event   | 262  | 디버그 모드: False
+[2026-04-20 04:03:38] INFO     | app.main             | startup_event   | 263  | 허용된 CORS origins: ['http://localhost:3000', 'http://127.0.0.1:3000']
+[2026-04-20 04:03:45] INFO     | app.main             | shutdown_event  | 282  | IWT API 서버가 종료됩니다.
+[2026-04-20 04:03:47] INFO     | app                  | setup_logging   | 122  | 로깅 시스템이 초기화되었습니다.
+[2026-04-20 04:03:47] INFO     | app.main             | create_application | 57   | IWT API v1.0.0 애플리케이션이 생성되었습니다.
+[2026-04-20 04:03:47] INFO     | app.main             | startup_event   | 261  | IWT API 서버가 시작되었습니다.
+[2026-04-20 04:03:47] INFO     | app.main             | startup_event   | 262  | 디버그 모드: False
+[2026-04-20 04:03:47] INFO     | app.main             | startup_event   | 263  | 허용된 CORS origins: ['http://localhost:3000', 'http://127.0.0.1:3000']
+[2026-04-20 05:17:47] INFO     | app.main             | shutdown_event  | 282  | IWT API 서버가 종료됩니다.
+[2026-04-20 05:17:48] INFO     | app                  | setup_logging   | 122  | 로깅 시스템이 초기화되었습니다.
+[2026-04-20 05:17:48] INFO     | app.main             | create_application | 57   | IWT API v1.0.0 애플리케이션이 생성되었습니다.
+[2026-04-20 05:17:49] INFO     | app.main             | startup_event   | 261  | IWT API 서버가 시작되었습니다.
+[2026-04-20 05:17:49] INFO     | app.main             | startup_event   | 262  | 디버그 모드: False
+[2026-04-20 05:17:49] INFO     | app.main             | startup_event   | 263  | 허용된 CORS origins: ['http://localhost:3000', 'http://127.0.0.1:3000']
+[2026-04-20 05:18:08] INFO     | app.main             | shutdown_event  | 282  | IWT API 서버가 종료됩니다.
+[2026-04-20 05:18:09] INFO     | app                  | setup_logging   | 122  | 로깅 시스템이 초기화되었습니다.
+[2026-04-20 05:18:09] INFO     | app.main             | create_application | 57   | IWT API v1.0.0 애플리케이션이 생성되었습니다.
+[2026-04-20 05:18:09] INFO     | app.main             | startup_event   | 261  | IWT API 서버가 시작되었습니다.
+[2026-04-20 05:18:09] INFO     | app.main             | startup_event   | 262  | 디버그 모드: False
+[2026-04-20 05:18:09] INFO     | app.main             | startup_event   | 263  | 허용된 CORS origins: ['http://localhost:3000', 'http://127.0.0.1:3000']
+[2026-04-20 05:18:16] INFO     | app.main             | shutdown_event  | 282  | IWT API 서버가 종료됩니다.
+[2026-04-20 05:18:17] INFO     | app                  | setup_logging   | 122  | 로깅 시스템이 초기화되었습니다.
+[2026-04-20 05:18:17] INFO     | app.main             | create_application | 57   | IWT API v1.0.0 애플리케이션이 생성되었습니다.
+[2026-04-20 05:18:17] INFO     | app.main             | startup_event   | 261  | IWT API 서버가 시작되었습니다.
+[2026-04-20 05:18:17] INFO     | app.main             | startup_event   | 262  | 디버그 모드: False
+[2026-04-20 05:18:17] INFO     | app.main             | startup_event   | 263  | 허용된 CORS origins: ['http://localhost:3000', 'http://127.0.0.1:3000']
+[2026-04-20 05:36:51] INFO     | app.main             | shutdown_event  | 282  | IWT API 서버가 종료됩니다.

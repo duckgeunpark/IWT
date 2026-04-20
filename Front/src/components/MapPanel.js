@@ -85,7 +85,8 @@ const GoogleMapComponent = ({
       const newMap = new window.google.maps.Map(ref.current, {
         center,
         zoom,
-        mapTypeId: mapType
+        mapTypeId: mapType,
+        mapId: process.env.REACT_APP_GOOGLE_MAPS_MAP_ID || 'DEMO_MAP_ID',
       });
       
       // 지도 클릭 이벤트 리스너
