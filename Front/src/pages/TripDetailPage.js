@@ -33,6 +33,7 @@ const TripDetailPage = ({ toggleTheme, theme }) => {
   const [activePhotoIndex, setActivePhotoIndex] = useState(0);
   const [commentText, setCommentText] = useState('');
   const [showComments, setShowComments] = useState(false);
+  const [mapOpen, setMapOpen] = useState(false);
   const [similarPosts, setSimilarPosts] = useState([]);
 
   const postId = parseInt(id);
@@ -73,8 +74,9 @@ const TripDetailPage = ({ toggleTheme, theme }) => {
     }
   }, [showComments, postId, dispatch]);
 
+  // 지도는 mapOpen이 true가 되고 mapRef가 준비됐을 때 초기화
   useEffect(() => {
-    if (!mapRef.current || !GOOGLE_MAPS_KEY) return;
+    if (!mapOpen || !mapRef.current || !GOOGLE_MAPS_KEY) return;
     if (mapInstanceRef.current) return;
 
     const gpsPhotos = photos.filter(p => p.location?.lat && p.location?.lng);
@@ -131,7 +133,7 @@ const TripDetailPage = ({ toggleTheme, theme }) => {
         existingScript.addEventListener('load', initMap);
       }
     }
-  }, [photos]);
+  }, [mapOpen, photos]);
 
   const handleLike = useCallback(() => {
     if (!isAuthenticated) return;
@@ -335,7 +337,27 @@ const TripDetailPage = ({ toggleTheme, theme }) => {
         </div>
       </div>
 
-      {/* ── 본문 + 사이드바 ── */}
+      {/* ── 지도 바 (sticky, 열고 닫기) ── */}
+      {gpsPhotos.length > 0 && (
+        <div className="map-bar">
+          <button className="map-bar-toggle" onClick={() => setMapOpen(v => !v)}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21" />
+            </svg>
+            <span>{mapOpen ? '지도 닫기' : '지도 보기'}</span>
+            <span className="map-bar-chevron" style={{ transform: mapOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            </span>
+          </button>
+          <div className={`map-bar-panel${mapOpen ? ' open' : ''}`}>
+            <div className="map-bar-map" ref={mapRef} />
+          </div>
+        </div>
+      )}
+
+      {/* ── 본문 (단일 컬럼) ── */}
       <div className="trip-body">
         <div className="trip-content">
           {trip.description ? (
@@ -344,28 +366,6 @@ const TripDetailPage = ({ toggleTheme, theme }) => {
             <p className="trip-no-content">내용이 없습니다.</p>
           )}
         </div>
-
-        <aside className="trip-sidebar">
-          {gpsPhotos.length > 0 && (
-            <div className="sidebar-map" ref={mapRef} />
-          )}
-          {photos.length > 1 && (
-            <div className="sidebar-photo-section">
-              <p className="sidebar-section-label">사진 {photos.length}장</p>
-              <div className="sidebar-photo-grid">
-                {photos.map((photo, i) => (
-                  <img
-                    key={photo.id}
-                    src={photo.url}
-                    alt=""
-                    onClick={() => setActivePhotoIndex(i)}
-                    className={`sidebar-photo-thumb${i === activePhotoIndex ? ' active' : ''}`}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
-        </aside>
       </div>
 
       {/* ── 댓글 (전체너비) ── */}

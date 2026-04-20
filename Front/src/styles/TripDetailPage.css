@@ -259,60 +259,60 @@
 }
 .trip-tag:hover { text-decoration: underline; }
 
-/* ── Body: content (65%) + sidebar (35%) ── */
-.trip-body {
-  max-width: 1080px;
-  margin: 0 auto;
-  padding: 40px 24px 60px;
-  display: flex;
-  gap: 48px;
-  align-items: flex-start;
-}
-.trip-content {
-  flex: 1;
-  min-width: 0;
-}
-.trip-no-content { color: var(--text-muted); font-size: 14px; }
-
-.trip-sidebar {
-  width: 280px;
-  flex-shrink: 0;
+/* ── Map Bar (sticky, collapsible) ── */
+.map-bar {
   position: sticky;
-  top: 80px;
+  top: 60px; /* 헤더 높이만큼 */
+  z-index: 100;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+.map-bar-toggle {
   display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-.sidebar-map {
-  height: 240px;
-  border-radius: 12px;
-  overflow: hidden;
-  border: 1px solid var(--border-color);
-}
-.sidebar-section-label {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-secondary);
-  margin: 0 0 8px;
-}
-.sidebar-photo-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 3px;
-  border-radius: 8px;
-  overflow: hidden;
-}
-.sidebar-photo-thumb {
+  align-items: center;
+  gap: 8px;
   width: 100%;
-  aspect-ratio: 1;
-  object-fit: cover;
+  padding: 10px 24px;
+  background: none;
+  border: none;
   cursor: pointer;
-  display: block;
-  opacity: 0.7;
-  transition: opacity 0.15s;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  text-align: left;
+  transition: background 0.15s;
 }
-.sidebar-photo-thumb.active,
-.sidebar-photo-thumb:hover { opacity: 1; }
+.map-bar-toggle:hover { background: var(--bg-tertiary); }
+.map-bar-chevron {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  transition: transform 0.25s ease;
+  color: var(--text-secondary);
+}
+.map-bar-panel {
+  height: 0;
+  overflow: hidden;
+  transition: height 0.3s ease;
+}
+.map-bar-panel.open {
+  height: 320px;
+}
+.map-bar-map {
+  width: 100%;
+  height: 320px;
+}
+
+/* ── Body: single column ── */
+.trip-body {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 48px 24px 80px;
+}
+.trip-content { width: 100%; }
+.trip-no-content { color: var(--text-muted); font-size: 14px; }
 
 /* ── Comments (full width) ── */
 .trip-comments-outer {
@@ -508,16 +508,11 @@
   .trip-hero { height: 280px; }
   .trip-title { font-size: 20px; }
   .trip-meta-inner { padding: 16px; }
-  .trip-body {
-    flex-direction: column;
-    padding: 24px 16px 40px;
-    gap: 32px;
-  }
-  .trip-sidebar {
-    width: 100%;
-    position: static;
-  }
-  .sidebar-map { height: 220px; }
+  .map-bar-toggle { padding: 10px 16px; }
+  .map-bar-panel.open { height: 260px; }
+  .map-bar-map { height: 260px; }
+  .map-bar { top: 56px; }
+  .trip-body { padding: 32px 16px 60px; }
   .trip-comments-inner { padding: 24px 16px; }
   .similar-trips-inner { padding: 28px 16px; }
   .similar-trips-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
