@@ -341,7 +341,6 @@ const CreateTripPage = ({ toggleTheme, theme }) => {
         tags: tags,
         photos: uploadedPhotos,
       });
-      localStorage.removeItem(DRAFT_KEY);
       dispatch(clearPhotos());
       dispatch(clearClusters());
       fileStore.clear();

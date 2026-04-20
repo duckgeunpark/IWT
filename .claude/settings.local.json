@@ -39,7 +39,8 @@
       "Bash(findstr \"get\\\\|post\\\\|put\\\\|delete\")",
       "Bash(node -e ':*)",
       "Bash(findstr /n \".\")",
-      "Bash(more +88)"
+      "Bash(more +88)",
+      "Bash(npm run *)"
     ],
     "deny": [],
     "ask": []

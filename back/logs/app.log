@@ -35653,3 +35653,162 @@ violations {
 [2026-04-20 05:18:17] INFO     | app.main             | startup_event   | 262  | 디버그 모드: False
 [2026-04-20 05:18:17] INFO     | app.main             | startup_event   | 263  | 허용된 CORS origins: ['http://localhost:3000', 'http://127.0.0.1:3000']
 [2026-04-20 05:36:51] INFO     | app.main             | shutdown_event  | 282  | IWT API 서버가 종료됩니다.
+[2026-04-20 05:36:55] INFO     | app                  | setup_logging   | 122  | 로깅 시스템이 초기화되었습니다.
+[2026-04-20 05:36:55] INFO     | app.main             | create_application | 57   | IWT API v1.0.0 애플리케이션이 생성되었습니다.
+[2026-04-20 05:36:55] INFO     | app.main             | startup_event   | 261  | IWT API 서버가 시작되었습니다.
+[2026-04-20 05:36:55] INFO     | app.main             | startup_event   | 262  | 디버그 모드: False
+[2026-04-20 05:36:55] INFO     | app.main             | startup_event   | 263  | 허용된 CORS origins: ['http://localhost:3000', 'http://127.0.0.1:3000']
+[2026-04-20 05:44:23] INFO     | app.main             | log_api_request | 146  | API 요청 - OPTIONS /api/v1/posts (anonymous)
+[2026-04-20 05:44:23] INFO     | app.main             | log_api_request | 146  | API 요청 - OPTIONS /api/v1/posts (anonymous)
+[2026-04-20 05:44:23] INFO     | app.main             | log_api_response | 151  | API 응답 - OPTIONS /api/v1/posts - 200 (0.002s)
+[2026-04-20 05:44:23] INFO     | app.main             | log_api_response | 151  | API 응답 - OPTIONS /api/v1/posts - 200 (0.002s)
+[2026-04-20 05:44:23] INFO     | app.main             | log_api_request | 146  | API 요청 - GET /api/v1/posts (anonymous)
+[2026-04-20 05:44:23] INFO     | app.main             | log_api_response | 151  | API 응답 - GET /api/v1/posts - 307 (0.001s)
+[2026-04-20 05:44:23] INFO     | app.main             | log_api_request | 146  | API 요청 - GET /api/v1/posts (anonymous)
+[2026-04-20 05:44:23] INFO     | app.main             | log_api_response | 151  | API 응답 - GET /api/v1/posts - 307 (0.001s)
+[2026-04-20 05:44:24] INFO     | app.main             | log_api_request | 146  | API 요청 - OPTIONS /api/v1/posts/ (anonymous)
+[2026-04-20 05:44:24] INFO     | app.main             | log_api_request | 146  | API 요청 - OPTIONS /api/v1/posts/ (anonymous)
+[2026-04-20 05:44:24] INFO     | app.main             | log_api_response | 151  | API 응답 - OPTIONS /api/v1/posts/ - 200 (0.002s)
+[2026-04-20 05:44:24] INFO     | app.main             | log_api_response | 151  | API 응답 - OPTIONS /api/v1/posts/ - 200 (0.002s)
+[2026-04-20 05:44:24] INFO     | app.main             | log_api_request | 146  | API 요청 - GET /api/v1/posts/ (anonymous)
+[2026-04-20 05:44:24] ERROR    | app.api.v1.endpoints.post_route | get_posts       | 544  | 게시글 목록 조회 실패: (pymysql.err.OperationalError) (1054, "Unknown column 'posts.status' in 'field list'")
+[SQL: SELECT count(*) AS count_1 
+FROM (SELECT posts.id AS posts_id, posts.title AS posts_title, posts.description AS posts_description, posts.tags AS posts_tags, posts.status AS posts_status, posts.user_id AS posts_user_id, posts.created_at AS posts_created_at, posts.updated_at AS posts_updated_at, posts.recommended_route AS posts_recommended_route 
+FROM posts 
+WHERE posts.status = %(status_1)s) AS anon_1]
+[parameters: {'status_1': 'published'}]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+[2026-04-20 05:44:24] INFO     | app.main             | log_api_response | 151  | API 응답 - GET /api/v1/posts/ - 500 (0.086s)
+[2026-04-20 05:44:24] INFO     | app.main             | log_api_request | 146  | API 요청 - GET /api/v1/posts/ (anonymous)
+[2026-04-20 05:44:24] ERROR    | app.api.v1.endpoints.post_route | get_posts       | 544  | 게시글 목록 조회 실패: (pymysql.err.OperationalError) (1054, "Unknown column 'posts.status' in 'field list'")
+[SQL: SELECT count(*) AS count_1 
+FROM (SELECT posts.id AS posts_id, posts.title AS posts_title, posts.description AS posts_description, posts.tags AS posts_tags, posts.status AS posts_status, posts.user_id AS posts_user_id, posts.created_at AS posts_created_at, posts.updated_at AS posts_updated_at, posts.recommended_route AS posts_recommended_route 
+FROM posts 
+WHERE posts.status = %(status_1)s) AS anon_1]
+[parameters: {'status_1': 'published'}]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+[2026-04-20 05:44:24] INFO     | app.main             | log_api_response | 151  | API 응답 - GET /api/v1/posts/ - 500 (0.003s)
+[2026-04-20 05:44:25] INFO     | app.main             | log_api_request | 146  | API 요청 - GET /api/v1/posts (anonymous)
+[2026-04-20 05:44:25] INFO     | app.main             | log_api_response | 151  | API 응답 - GET /api/v1/posts - 307 (0.001s)
+[2026-04-20 05:44:25] INFO     | app.main             | log_api_request | 146  | API 요청 - GET /api/v1/posts (anonymous)
+[2026-04-20 05:44:25] INFO     | app.main             | log_api_request | 146  | API 요청 - GET /api/v1/posts/ (anonymous)
+[2026-04-20 05:44:25] INFO     | app.main             | log_api_response | 151  | API 응답 - GET /api/v1/posts - 307 (0.002s)
+[2026-04-20 05:44:25] ERROR    | app.api.v1.endpoints.post_route | get_posts       | 544  | 게시글 목록 조회 실패: (pymysql.err.OperationalError) (1054, "Unknown column 'posts.status' in 'field list'")
+[SQL: SELECT count(*) AS count_1 
+FROM (SELECT posts.id AS posts_id, posts.title AS posts_title, posts.description AS posts_description, posts.tags AS posts_tags, posts.status AS posts_status, posts.user_id AS posts_user_id, posts.created_at AS posts_created_at, posts.updated_at AS posts_updated_at, posts.recommended_route AS posts_recommended_route 
+FROM posts 
+WHERE posts.status = %(status_1)s) AS anon_1]
+[parameters: {'status_1': 'published'}]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+[2026-04-20 05:44:25] INFO     | app.main             | log_api_response | 151  | API 응답 - GET /api/v1/posts/ - 500 (0.004s)
+[2026-04-20 05:44:25] INFO     | app.main             | log_api_request | 146  | API 요청 - GET /api/v1/posts/ (anonymous)
+[2026-04-20 05:44:25] ERROR    | app.api.v1.endpoints.post_route | get_posts       | 544  | 게시글 목록 조회 실패: (pymysql.err.OperationalError) (1054, "Unknown column 'posts.status' in 'field list'")
+[SQL: SELECT count(*) AS count_1 
+FROM (SELECT posts.id AS posts_id, posts.title AS posts_title, posts.description AS posts_description, posts.tags AS posts_tags, posts.status AS posts_status, posts.user_id AS posts_user_id, posts.created_at AS posts_created_at, posts.updated_at AS posts_updated_at, posts.recommended_route AS posts_recommended_route 
+FROM posts 
+WHERE posts.status = %(status_1)s) AS anon_1]
+[parameters: {'status_1': 'published'}]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+[2026-04-20 05:44:25] INFO     | app.main             | log_api_response | 151  | API 응답 - GET /api/v1/posts/ - 500 (0.003s)
+[2026-04-20 05:44:27] INFO     | app.main             | log_api_request | 146  | API 요청 - GET /api/v1/posts (anonymous)
+[2026-04-20 05:44:27] INFO     | app.main             | log_api_response | 151  | API 응답 - GET /api/v1/posts - 307 (0.001s)
+[2026-04-20 05:44:27] INFO     | app.main             | log_api_request | 146  | API 요청 - GET /api/v1/posts/ (anonymous)
+[2026-04-20 05:44:27] INFO     | app.main             | log_api_request | 146  | API 요청 - GET /api/v1/posts (anonymous)
+[2026-04-20 05:44:27] INFO     | app.main             | log_api_response | 151  | API 응답 - GET /api/v1/posts - 307 (0.001s)
+[2026-04-20 05:44:27] ERROR    | app.api.v1.endpoints.post_route | get_posts       | 544  | 게시글 목록 조회 실패: (pymysql.err.OperationalError) (1054, "Unknown column 'posts.status' in 'field list'")
+[SQL: SELECT count(*) AS count_1 
+FROM (SELECT posts.id AS posts_id, posts.title AS posts_title, posts.description AS posts_description, posts.tags AS posts_tags, posts.status AS posts_status, posts.user_id AS posts_user_id, posts.created_at AS posts_created_at, posts.updated_at AS posts_updated_at, posts.recommended_route AS posts_recommended_route 
+FROM posts 
+WHERE posts.status = %(status_1)s) AS anon_1]
+[parameters: {'status_1': 'published'}]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+[2026-04-20 05:44:27] INFO     | app.main             | log_api_response | 151  | API 응답 - GET /api/v1/posts/ - 500 (0.006s)
+[2026-04-20 05:44:27] INFO     | app.main             | log_api_request | 146  | API 요청 - GET /api/v1/posts/ (anonymous)
+[2026-04-20 05:44:27] ERROR    | app.api.v1.endpoints.post_route | get_posts       | 544  | 게시글 목록 조회 실패: (pymysql.err.OperationalError) (1054, "Unknown column 'posts.status' in 'field list'")
+[SQL: SELECT count(*) AS count_1 
+FROM (SELECT posts.id AS posts_id, posts.title AS posts_title, posts.description AS posts_description, posts.tags AS posts_tags, posts.status AS posts_status, posts.user_id AS posts_user_id, posts.created_at AS posts_created_at, posts.updated_at AS posts_updated_at, posts.recommended_route AS posts_recommended_route 
+FROM posts 
+WHERE posts.status = %(status_1)s) AS anon_1]
+[parameters: {'status_1': 'published'}]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+[2026-04-20 05:44:27] INFO     | app.main             | log_api_response | 151  | API 응답 - GET /api/v1/posts/ - 500 (0.004s)
+[2026-04-20 05:44:29] INFO     | app.main             | log_api_request | 146  | API 요청 - OPTIONS /api/v1/notifications/unread-count (anonymous)
+[2026-04-20 05:44:29] INFO     | app.main             | log_api_request | 146  | API 요청 - OPTIONS /api/v1/users/me (anonymous)
+[2026-04-20 05:44:29] INFO     | app.main             | log_api_response | 151  | API 응답 - OPTIONS /api/v1/notifications/unread-count - 200 (0.002s)
+[2026-04-20 05:44:29] INFO     | app.main             | log_api_response | 151  | API 응답 - OPTIONS /api/v1/users/me - 200 (0.003s)
+[2026-04-20 05:44:29] INFO     | app.main             | log_api_request | 146  | API 요청 - GET /api/v1/notifications/unread-count (user:google-oauth2|117208914445325353857)
+[2026-04-20 05:44:29] INFO     | app.main             | log_api_request | 146  | API 요청 - OPTIONS /api/v1/posts (anonymous)
+[2026-04-20 05:44:29] INFO     | app.main             | log_api_request | 146  | API 요청 - GET /api/v1/users/me (user:google-oauth2|117208914445325353857)
+[2026-04-20 05:44:29] INFO     | app.main             | log_api_response | 151  | API 응답 - OPTIONS /api/v1/posts - 200 (0.003s)
+[2026-04-20 05:44:29] INFO     | app.main             | log_api_request | 146  | API 요청 - GET /api/v1/posts (user:google-oauth2|117208914445325353857)
+[2026-04-20 05:44:29] INFO     | app.main             | log_api_response | 151  | API 응답 - GET /api/v1/posts - 307 (0.007s)
+[2026-04-20 05:44:29] INFO     | app.main             | log_api_request | 146  | API 요청 - OPTIONS /api/v1/notifications/unread-count (anonymous)
+[2026-04-20 05:44:29] INFO     | app.main             | log_api_request | 146  | API 요청 - OPTIONS /api/v1/users/me (anonymous)
+[2026-04-20 05:44:29] INFO     | app.main             | log_api_request | 146  | API 요청 - OPTIONS /api/v1/posts/ (anonymous)
+[2026-04-20 05:44:29] INFO     | app.main             | log_api_response | 151  | API 응답 - OPTIONS /api/v1/notifications/unread-count - 200 (0.003s)
+[2026-04-20 05:44:29] INFO     | app.main             | log_api_response | 151  | API 응답 - OPTIONS /api/v1/users/me - 200 (0.004s)
+[2026-04-20 05:44:29] INFO     | app.main             | log_api_response | 151  | API 응답 - OPTIONS /api/v1/posts/ - 200 (0.005s)
+[2026-04-20 05:44:29] INFO     | app.main             | log_api_request | 146  | API 요청 - GET /api/v1/posts/ (user:google-oauth2|117208914445325353857)
+[2026-04-20 05:44:29] INFO     | app.api.user_auth0   | log_api_request | 146  | API 요청 - GET /me (user:google-oauth2|117208914445325353857)
+[2026-04-20 05:44:29] INFO     | app.api.user_auth0   | get_current_user_info | 258  | 현재 사용자 정보 조회 완료: google-oauth2|117208914445325353857
+[2026-04-20 05:44:29] INFO     | app.main             | log_api_response | 151  | API 응답 - GET /api/v1/users/me - 200 (0.321s)
+[2026-04-20 05:44:29] INFO     | app.main             | log_api_request | 146  | API 요청 - GET /api/v1/users/me (user:google-oauth2|117208914445325353857)
+[2026-04-20 05:44:29] INFO     | app.api.user_auth0   | log_api_request | 146  | API 요청 - GET /me (user:google-oauth2|117208914445325353857)
+[2026-04-20 05:44:29] INFO     | app.api.user_auth0   | get_current_user_info | 258  | 현재 사용자 정보 조회 완료: google-oauth2|117208914445325353857
+[2026-04-20 05:44:29] INFO     | app.main             | log_api_response | 151  | API 응답 - GET /api/v1/users/me - 200 (0.006s)
+[2026-04-20 05:44:29] INFO     | app.main             | log_api_response | 151  | API 응답 - GET /api/v1/notifications/unread-count - 200 (0.353s)
+[2026-04-20 05:44:29] INFO     | app.main             | log_api_request | 146  | API 요청 - GET /api/v1/notifications/unread-count (user:google-oauth2|117208914445325353857)
+[2026-04-20 05:44:29] INFO     | app.main             | log_api_response | 151  | API 응답 - GET /api/v1/notifications/unread-count - 200 (0.005s)
+[2026-04-20 05:44:29] ERROR    | app.api.v1.endpoints.post_route | get_posts       | 544  | 게시글 목록 조회 실패: (pymysql.err.OperationalError) (1054, "Unknown column 'posts.status' in 'field list'")
+[SQL: SELECT count(*) AS count_1 
+FROM (SELECT posts.id AS posts_id, posts.title AS posts_title, posts.description AS posts_description, posts.tags AS posts_tags, posts.status AS posts_status, posts.user_id AS posts_user_id, posts.created_at AS posts_created_at, posts.updated_at AS posts_updated_at, posts.recommended_route AS posts_recommended_route 
+FROM posts 
+WHERE posts.status = %(status_1)s) AS anon_1]
+[parameters: {'status_1': 'published'}]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+[2026-04-20 05:44:29] INFO     | app.main             | log_api_response | 151  | API 응답 - GET /api/v1/posts/ - 500 (0.356s)
+[2026-04-20 05:44:30] INFO     | app.main             | log_api_request | 146  | API 요청 - GET /api/v1/posts (user:google-oauth2|117208914445325353857)
+[2026-04-20 05:44:30] INFO     | app.main             | log_api_response | 151  | API 응답 - GET /api/v1/posts - 307 (0.001s)
+[2026-04-20 05:44:30] INFO     | app.main             | log_api_request | 146  | API 요청 - GET /api/v1/posts/ (user:google-oauth2|117208914445325353857)
+[2026-04-20 05:44:30] ERROR    | app.api.v1.endpoints.post_route | get_posts       | 544  | 게시글 목록 조회 실패: (pymysql.err.OperationalError) (1054, "Unknown column 'posts.status' in 'field list'")
+[SQL: SELECT count(*) AS count_1 
+FROM (SELECT posts.id AS posts_id, posts.title AS posts_title, posts.description AS posts_description, posts.tags AS posts_tags, posts.status AS posts_status, posts.user_id AS posts_user_id, posts.created_at AS posts_created_at, posts.updated_at AS posts_updated_at, posts.recommended_route AS posts_recommended_route 
+FROM posts 
+WHERE posts.status = %(status_1)s) AS anon_1]
+[parameters: {'status_1': 'published'}]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+[2026-04-20 05:44:30] INFO     | app.main             | log_api_response | 151  | API 응답 - GET /api/v1/posts/ - 500 (0.005s)
+[2026-04-20 05:44:32] INFO     | app.main             | log_api_request | 146  | API 요청 - GET /api/v1/posts (user:google-oauth2|117208914445325353857)
+[2026-04-20 05:44:32] INFO     | app.main             | log_api_response | 151  | API 응답 - GET /api/v1/posts - 307 (0.002s)
+[2026-04-20 05:44:32] INFO     | app.main             | log_api_request | 146  | API 요청 - GET /api/v1/posts/ (user:google-oauth2|117208914445325353857)
+[2026-04-20 05:44:32] ERROR    | app.api.v1.endpoints.post_route | get_posts       | 544  | 게시글 목록 조회 실패: (pymysql.err.OperationalError) (1054, "Unknown column 'posts.status' in 'field list'")
+[SQL: SELECT count(*) AS count_1 
+FROM (SELECT posts.id AS posts_id, posts.title AS posts_title, posts.description AS posts_description, posts.tags AS posts_tags, posts.status AS posts_status, posts.user_id AS posts_user_id, posts.created_at AS posts_created_at, posts.updated_at AS posts_updated_at, posts.recommended_route AS posts_recommended_route 
+FROM posts 
+WHERE posts.status = %(status_1)s) AS anon_1]
+[parameters: {'status_1': 'published'}]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+[2026-04-20 05:44:32] INFO     | app.main             | log_api_response | 151  | API 응답 - GET /api/v1/posts/ - 500 (0.004s)
+[2026-04-20 05:44:33] INFO     | app.main             | log_api_request | 146  | API 요청 - GET /api/v1/posts (anonymous)
+[2026-04-20 05:44:33] INFO     | app.main             | log_api_response | 151  | API 응답 - GET /api/v1/posts - 307 (0.001s)
+[2026-04-20 05:44:33] INFO     | app.main             | log_api_request | 146  | API 요청 - GET /api/v1/posts (anonymous)
+[2026-04-20 05:44:33] INFO     | app.main             | log_api_request | 146  | API 요청 - GET /api/v1/posts/ (anonymous)
+[2026-04-20 05:44:33] INFO     | app.main             | log_api_response | 151  | API 응답 - GET /api/v1/posts - 307 (0.003s)
+[2026-04-20 05:44:33] ERROR    | app.api.v1.endpoints.post_route | get_posts       | 544  | 게시글 목록 조회 실패: (pymysql.err.OperationalError) (1054, "Unknown column 'posts.status' in 'field list'")
+[SQL: SELECT count(*) AS count_1 
+FROM (SELECT posts.id AS posts_id, posts.title AS posts_title, posts.description AS posts_description, posts.tags AS posts_tags, posts.status AS posts_status, posts.user_id AS posts_user_id, posts.created_at AS posts_created_at, posts.updated_at AS posts_updated_at, posts.recommended_route AS posts_recommended_route 
+FROM posts 
+WHERE posts.status = %(status_1)s) AS anon_1]
+[parameters: {'status_1': 'published'}]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+[2026-04-20 05:44:33] INFO     | app.main             | log_api_response | 151  | API 응답 - GET /api/v1/posts/ - 500 (0.005s)
+[2026-04-20 05:44:33] INFO     | app.main             | log_api_request | 146  | API 요청 - GET /api/v1/posts/ (anonymous)
+[2026-04-20 05:44:33] ERROR    | app.api.v1.endpoints.post_route | get_posts       | 544  | 게시글 목록 조회 실패: (pymysql.err.OperationalError) (1054, "Unknown column 'posts.status' in 'field list'")
+[SQL: SELECT count(*) AS count_1 
+FROM (SELECT posts.id AS posts_id, posts.title AS posts_title, posts.description AS posts_description, posts.tags AS posts_tags, posts.status AS posts_status, posts.user_id AS posts_user_id, posts.created_at AS posts_created_at, posts.updated_at AS posts_updated_at, posts.recommended_route AS posts_recommended_route 
+FROM posts 
+WHERE posts.status = %(status_1)s) AS anon_1]
+[parameters: {'status_1': 'published'}]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+[2026-04-20 05:44:33] INFO     | app.main             | log_api_response | 151  | API 응답 - GET /api/v1/posts/ - 500 (0.004s)
+[2026-04-20 05:45:29] INFO     | app.main             | shutdown_event  | 282  | IWT API 서버가 종료됩니다.
