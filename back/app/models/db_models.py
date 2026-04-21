@@ -343,6 +343,22 @@ class RouteSegment(Base):
     to_stop = relationship("RouteStop", foreign_keys=[to_stop_id])
 
 
+class UserLLMPreference(Base):
+    """사용자별 LLM 파이프라인 커스터마이즈 설정"""
+    __tablename__ = "user_llm_preferences"
+
+    user_id      = Column(String(255), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    tone         = Column(String(50),  nullable=False, default="casual")   # casual|formal|poetic|humorous
+    style        = Column(String(50),  nullable=False, default="blog")     # blog|diary|travel_guide
+    lang         = Column(String(10),  nullable=False, default="ko")       # ko|en|ja|zh|fr
+    stage1_extra = Column(Text, nullable=True)   # Stage1 추가 지침
+    stage2_extra = Column(Text, nullable=True)   # Stage2 추가 지침
+    stage3_extra = Column(Text, nullable=True)   # Stage3 추가 지침
+    updated_at   = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    user = relationship("User")
+
+
 class UserCorrection(Base):
     """사용자 수정 이력 - AI 학습 라벨용"""
     __tablename__ = "user_corrections"

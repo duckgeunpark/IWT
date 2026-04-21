@@ -5,7 +5,7 @@ import json
 from datetime import datetime
 
 from app.core.auth import get_current_user, get_optional_current_user
-from app.models.db_models import PostLike, PostBookmark, Comment
+from app.models.db_models import PostLike, PostBookmark, Comment, Post, Photo, Location, Category, User, UserLLMPreference
 from sqlalchemy import func, or_
 from app.schemas.post import (
     PostCreateRequest,
@@ -13,21 +13,20 @@ from app.schemas.post import (
     PostListResponse,
     PostUpdateRequest
 )
-from app.models.db_models import Post, Photo, Location, Category, User
 from app.db.session import get_db
 from sqlalchemy.orm import Session, joinedload
-from app.services.llm_route_recommend import LLMRouteRecommendService
 from app.services.s3_presigned_url import S3PresignedURLService
 from app.services.labeling_service import LabelingService
 from app.services.photo_filter_service import photo_filter
 from app.services.reverse_geocoder import geocoder_service
+from app.services.llm_pipeline import get_llm_pipeline
+from app.services.photo_cluster import cluster_photos_by_location
 
 router = APIRouter(prefix="/posts", tags=["posts"])
 
 logger = logging.getLogger(__name__)
 
 # 서비스 인스턴스
-llm_service = LLMRouteRecommendService()
 s3_service = S3PresignedURLService()
 labeling_service = LabelingService()
 
@@ -250,160 +249,184 @@ async def auto_create_post(
                 except Exception as geo_err:
                     logger.warning(f"역지오코딩 실패: {geo_err}")
 
-        # ── 3단계: PhotoData 객체 변환 ───────────────────────────
-        photo_data_list = []
-        for photo_dict in usable_photos:
-            location_info = None
-            if photo_dict.get("location_info"):
-                loc = photo_dict["location_info"]
-                coordinates = None
-                if loc.get("coordinates"):
-                    coordinates = Coordinates(
-                        latitude=loc["coordinates"]["latitude"],
-                        longitude=loc["coordinates"]["longitude"],
-                    )
-                location_info = LocationInfo(
-                    country=loc.get("country"),
-                    city=loc.get("city"),
-                    region=loc.get("region"),
-                    landmark=loc.get("landmark"),
-                    address=loc.get("address"),
-                    coordinates=coordinates,
-                    confidence=loc.get("confidence"),
-                )
+        # ── 3단계: 클러스터링 ────────────────────────────────────────
+        cluster_input = []
+        for p in usable_photos:
+            lat = p.get("_lat")
+            lon = p.get("_lon")
+            cluster_input.append({
+                **p,
+                "gps": {"lat": lat, "lng": lon} if (lat and lon) else None,
+                "taken_at": (p.get("exif_data") or {}).get("datetime"),
+            })
 
-            photo_data = PhotoData(
-                file_key=photo_dict["file_key"],
-                file_name=photo_dict["file_name"],
-                file_size=photo_dict["file_size"],
-                content_type=photo_dict["content_type"],
-                location_info=location_info,
-                exif_data=photo_dict.get("exif_data"),
+        raw_clusters = cluster_photos_by_location(cluster_input)
+
+        # 날짜 기준 일차 계산
+        date_to_day: dict = {}
+        for cluster in raw_clusters:
+            start = cluster.get("start_time")
+            if start:
+                d = start[:10]
+                if d not in date_to_day:
+                    date_to_day[d] = len(date_to_day) + 1
+
+        # 파이프라인용 클러스터 구성 (대표사진 URL 포함)
+        pipeline_clusters = []
+        for i, cluster in enumerate(raw_clusters):
+            start = cluster.get("start_time")
+            date_str = start[:10] if start else None
+            day = date_to_day.get(date_str, 1)
+
+            cluster_photo_list = cluster["photos"]
+            rep_photo = max(cluster_photo_list, key=lambda p: p.get("file_size", 0))
+            try:
+                rep_url = await s3_service.generate_download_url(rep_photo["file_key"])
+            except Exception:
+                rep_url = ""
+
+            loc_info = next(
+                (p["location_info"] for p in cluster_photo_list if p.get("location_info")),
+                None,
             )
-            photo_data_list.append(photo_data)
+            location_name = (
+                loc_info.get("landmark") or loc_info.get("city") or loc_info.get("region") or "알 수 없는 장소"
+                if loc_info else "알 수 없는 장소"
+            )
 
-        # ── 4단계: LLM — 정제된 데이터로 게시글 콘텐츠 생성 ─────
-        travel_summary = await llm_service.generate_travel_summary(photo_data_list)
-        travel_tags = await llm_service.generate_travel_tags(photo_data_list)
-        route_analysis = await llm_service.analyze_travel_route(photo_data_list)
-        
+            pipeline_clusters.append({
+                "cluster_id": i,
+                "day": day,
+                "location_name": location_name,
+                "location_info": {
+                    "country": loc_info.get("country", "") if loc_info else "",
+                    "city": loc_info.get("city", "") if loc_info else "",
+                    "address": loc_info.get("address", "") if loc_info else "",
+                },
+                # photos 포함 → 증분 업데이트 fingerprint 계산에 사용
+                "photos": [{"file_key": p.get("file_key", "")} for p in cluster_photo_list],
+                "representative_photo_url": rep_url,
+                "photo_count": cluster["photo_count"],
+                "start_time": cluster.get("start_time"),
+                "end_time": cluster.get("end_time"),
+            })
+
+        # ── 4단계: 사용자 LLM 설정 로드 ─────────────────────────────
+        user_id = current_user["sub"]
+        user_pref_row = db.query(UserLLMPreference).filter(
+            UserLLMPreference.user_id == user_id
+        ).first()
+        user_prefs = {
+            "tone": user_pref_row.tone,
+            "style": user_pref_row.style,
+            "lang": user_pref_row.lang,
+            "stage1_extra": user_pref_row.stage1_extra,
+            "stage2_extra": user_pref_row.stage2_extra,
+            "stage3_extra": user_pref_row.stage3_extra,
+        } if user_pref_row else None
+
+        # ── 5단계: LLM 파이프라인 실행 ───────────────────────────────
+        pipeline = get_llm_pipeline()
+        pipeline_result = await pipeline.run(pipeline_clusters, user_prefs)
+
+        # 유저 자동 등록 (FK 제약 조건)
+        existing_user = db.query(User).filter(User.id == user_id).first()
+        if not existing_user:
+            db.add(User(
+                id=user_id,
+                email=current_user.get("email", f"{user_id}@unknown.com"),
+                name=current_user.get("name"),
+                picture=current_user.get("picture"),
+            ))
+            db.flush()
+
         # 게시글 생성
         post = Post(
-            title=travel_summary.get("title", "여행 기록"),
-            description=travel_summary.get("description", "여행 사진을 업로드했습니다."),
-            tags=travel_tags,
-            user_id=current_user['sub'],
+            title=pipeline_result["title"],
+            description=pipeline_result["markdown"],
+            tags=json.dumps(pipeline_result["tags"], ensure_ascii=False),
+            status="published",
+            user_id=user_id,
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow(),
-            recommended_route={
-                **route_analysis,
-                "segments": clean_result["segments"],
-                "usage_report": clean_result["usage_report"],
-                "clean_summary": clean_result["summary"],
-            },
+            recommended_route=json.dumps({
+                "itinerary_table": pipeline_result["itinerary_table"],
+                "stage2_cache":    pipeline_result.get("stage2_cache", {}),
+                "segments":        clean_result["segments"],
+                "usage_report":    clean_result["usage_report"],
+                "clean_summary":   clean_result["summary"],
+            }, ensure_ascii=False),
         )
-        
         db.add(post)
         db.flush()
-        
-        # 사진 정보 저장 및 임시 파일을 영구 저장소로 이동
-        for photo_data in photo_data_list:
-            # 임시 파일을 영구 저장소로 이동
-            temp_key = photo_data.file_key
-            permanent_key = f"post/{current_user['sub']}/{post.id}/{photo_data.file_name}"
-            
+
+        # ── 6단계: 사진 S3 이동 + DB 저장 ────────────────────────────
+        for photo_dict in usable_photos:
+            temp_key = photo_dict["file_key"]
+            permanent_key = f"post/{user_id}/{post.id}/{photo_dict['file_name']}"
+
             move_success = await s3_service.move_temp_to_permanent(
                 temp_key=temp_key,
-                permanent_key=permanent_key
+                permanent_key=permanent_key,
             )
-            
+
             if move_success:
                 photo = Photo(
                     post_id=post.id,
                     file_key=permanent_key,
-                    file_name=photo_data.file_name,
-                    file_size=photo_data.file_size,
-                    content_type=photo_data.content_type,
-                    upload_time=datetime.utcnow()
+                    file_name=photo_dict["file_name"],
+                    file_size=photo_dict["file_size"],
+                    content_type=photo_dict["content_type"],
+                    upload_time=datetime.utcnow(),
                 )
                 db.add(photo)
-                
-                # 위치 정보 저장
-                if photo_data.location_info:
-                    location = Location(
+                db.flush()
+
+                loc_info = photo_dict.get("location_info")
+                if loc_info:
+                    coords = loc_info.get("coordinates") or {}
+                    db.add(Location(
                         photo_id=photo.id,
-                        country=photo_data.location_info.country,
-                        city=photo_data.location_info.city,
-                        region=photo_data.location_info.region,
-                        landmark=photo_data.location_info.landmark,
-                        address=photo_data.location_info.address,
-                        latitude=photo_data.location_info.coordinates.latitude if photo_data.location_info.coordinates else None,
-                        longitude=photo_data.location_info.coordinates.longitude if photo_data.location_info.coordinates else None,
-                        confidence=photo_data.location_info.confidence
-                    )
-                    db.add(location)
-                
-                # 라벨링 데이터 저장 (LLM 분석 결과가 있는 경우)
-                if hasattr(photo_data, 'llm_analysis') and photo_data.llm_analysis:
-                    # EXIF 라벨 저장
-                    if hasattr(photo_data, 'exif_data') and photo_data.exif_data:
-                        await labeling_service.save_exif_labels(db, photo.id, photo_data.exif_data)
-                    
-                    # LLM 분석 결과 저장
-                    for analysis_type, analysis_data in photo_data.llm_analysis.get('results', {}).items():
-                        await labeling_service.save_llm_analysis(
-                            db, photo.id, analysis_type, analysis_data, 
-                            confidence=analysis_data.get('confidence', 0.8), 
-                            model_used="gemini"
-                        )
-                    
-                    # LLM 라벨 저장
-                    if hasattr(photo_data, 'labeling_data') and photo_data.labeling_data:
-                        await labeling_service.save_llm_labels(db, photo.id, photo_data.labeling_data)
-                    
-                    # 이미지 메타데이터 저장
-                    if hasattr(photo_data, 'exif_data') and photo_data.exif_data:
-                        await labeling_service.save_image_metadata(db, photo.id, "exif", photo_data.exif_data)
-        
-        # 카테고리 정보 자동 생성
-        countries = set()
-        cities = set()
-        for photo_data in photo_data_list:
-            if photo_data.location_info:
-                if photo_data.location_info.country:
-                    countries.add(photo_data.location_info.country)
-                if photo_data.location_info.city:
-                    cities.add(photo_data.location_info.city)
-        
-        # 카테고리 저장
+                        country=loc_info.get("country"),
+                        city=loc_info.get("city"),
+                        region=loc_info.get("region"),
+                        landmark=loc_info.get("landmark"),
+                        address=loc_info.get("address"),
+                        latitude=coords.get("latitude") if coords else photo_dict.get("_lat"),
+                        longitude=coords.get("longitude") if coords else photo_dict.get("_lon"),
+                        confidence=loc_info.get("confidence"),
+                    ))
+
+        # 카테고리 저장 (국가/도시)
+        countries = {
+            p["location_info"]["country"]
+            for p in usable_photos
+            if (p.get("location_info") or {}).get("country")
+        }
+        cities = {
+            p["location_info"]["city"]
+            for p in usable_photos
+            if (p.get("location_info") or {}).get("city")
+        }
         for country in countries:
-            category = Category(
-                post_id=post.id,
-                category_type="country",
-                category_name=country
-            )
-            db.add(category)
-        
+            db.add(Category(post_id=post.id, category_type="country", category_name=country))
         for city in cities:
-            category = Category(
-                post_id=post.id,
-                category_type="city",
-                category_name=city
-            )
-            db.add(category)
-        
+            db.add(Category(post_id=post.id, category_type="city", category_name=city))
+
         db.commit()
-        
+
         return PostResponse(
             id=post.id,
             title=post.title,
             description=post.description,
             tags=json.loads(post.tags) if post.tags else [],
             created_at=post.created_at,
-            photo_count=len(photo_data_list),
-            user_id=post.user_id
+            photo_count=len(usable_photos),
+            user_id=post.user_id,
         )
-        
+
+    except HTTPException:
+        raise
     except Exception as e:
         db.rollback()
         logger.error(f"자동 게시글 생성 실패: {str(e)}")
@@ -418,57 +441,79 @@ async def preview_post(
     게시글 미리보기 생성 (DB 저장 없이)
     """
     try:
-        # PhotoData 객체로 변환
-        from app.schemas.photo import PhotoData, LocationInfo, Coordinates
-        
-        photo_data_list = []
-        for photo_dict in photos:
-            location_info = None
-            if photo_dict.get("location_info"):
-                loc = photo_dict["location_info"]
-                coordinates = None
-                if loc.get("coordinates"):
-                    coordinates = Coordinates(
-                        latitude=loc["coordinates"]["latitude"],
-                        longitude=loc["coordinates"]["longitude"]
-                    )
-                location_info = LocationInfo(
-                    country=loc.get("country"),
-                    city=loc.get("city"),
-                    region=loc.get("region"),
-                    landmark=loc.get("landmark"),
-                    address=loc.get("address"),
-                    coordinates=coordinates,
-                    confidence=loc.get("confidence")
-                )
-            
-            photo_data = PhotoData(
-                file_key=photo_dict["file_key"],
-                file_name=photo_dict["file_name"],
-                file_size=photo_dict["file_size"],
-                content_type=photo_dict["content_type"],
-                location_info=location_info,
-                exif_data=photo_dict.get("exif_data")
+        # 클러스터링
+        cluster_input = []
+        for p in photos:
+            lat = p.get("_lat") or (p.get("location_info") or {}).get("coordinates", {}).get("latitude")
+            lon = p.get("_lon") or (p.get("location_info") or {}).get("coordinates", {}).get("longitude")
+            cluster_input.append({
+                **p,
+                "gps": {"lat": lat, "lng": lon} if (lat and lon) else None,
+                "taken_at": (p.get("exif_data") or {}).get("datetime"),
+            })
+
+        raw_clusters = cluster_photos_by_location(cluster_input)
+
+        date_to_day: dict = {}
+        for cluster in raw_clusters:
+            start = cluster.get("start_time")
+            if start:
+                d = start[:10]
+                if d not in date_to_day:
+                    date_to_day[d] = len(date_to_day) + 1
+
+        pipeline_clusters = []
+        for i, cluster in enumerate(raw_clusters):
+            start = cluster.get("start_time")
+            date_str = start[:10] if start else None
+            day = date_to_day.get(date_str, 1)
+
+            cluster_photo_list = cluster["photos"]
+            rep_photo = max(cluster_photo_list, key=lambda p: p.get("file_size", 0))
+            try:
+                rep_url = await s3_service.generate_download_url(rep_photo["file_key"])
+            except Exception:
+                rep_url = ""
+
+            loc_info = next(
+                (p["location_info"] for p in cluster_photo_list if p.get("location_info")),
+                None,
             )
-            photo_data_list.append(photo_data)
-        
-        # LLM을 통한 미리보기 생성
-        travel_summary = await llm_service.generate_travel_summary(photo_data_list)
-        travel_tags = await llm_service.generate_travel_tags(photo_data_list)
-        route_analysis = await llm_service.analyze_travel_route(photo_data_list)
-        photo_descriptions = await llm_service.generate_photo_descriptions(photo_data_list)
-        
+            location_name = (
+                loc_info.get("landmark") or loc_info.get("city") or loc_info.get("region") or "알 수 없는 장소"
+                if loc_info else "알 수 없는 장소"
+            )
+
+            pipeline_clusters.append({
+                "cluster_id": i,
+                "day": day,
+                "location_name": location_name,
+                "location_info": {
+                    "country": loc_info.get("country", "") if loc_info else "",
+                    "city": loc_info.get("city", "") if loc_info else "",
+                    "address": loc_info.get("address", "") if loc_info else "",
+                },
+                "representative_photo_url": rep_url,
+                "photo_count": cluster["photo_count"],
+                "start_time": cluster.get("start_time"),
+                "end_time": cluster.get("end_time"),
+            })
+
+        # 미리보기는 기본 preferences 사용
+        pipeline = get_llm_pipeline()
+        pipeline_result = await pipeline.run(pipeline_clusters, None)
+
         return {
             "preview": {
-                "title": travel_summary.get("title", "여행 기록"),
-                "description": travel_summary.get("description", "여행 사진을 업로드했습니다."),
-                "tags": travel_tags,
-                "route_analysis": route_analysis,
-                "photo_descriptions": photo_descriptions,
-                "photo_count": len(photo_data_list)
+                "title": pipeline_result["title"],
+                "markdown": pipeline_result["markdown"],
+                "tags": pipeline_result["tags"],
+                "itinerary_table": pipeline_result["itinerary_table"],
+                "photo_count": len(photos),
+                "cluster_count": len(pipeline_clusters),
             }
         }
-        
+
     except Exception as e:
         logger.error(f"게시글 미리보기 생성 실패: {str(e)}")
         raise HTTPException(status_code=500, detail="게시글 미리보기 생성에 실패했습니다.")
@@ -756,6 +801,172 @@ async def get_similar_posts(
     except Exception as e:
         logger.error(f"유사 게시글 조회 실패: {str(e)}")
         raise HTTPException(status_code=500, detail="유사 게시글 조회에 실패했습니다.")
+
+
+@router.post("/{post_id}/ai-update")
+async def ai_update_post(
+    post_id: int,
+    photos: List[dict],
+    current_user = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    편집창에서 'AI로 게시글 생성' 버튼 클릭 시 호출.
+
+    - 변경된 클러스터만 Stage 2 재실행 (캐시 히트 시 재사용)
+    - Stage 1 · Stage 3은 항상 재실행
+    - post.description(마크다운) + recommended_route(캐시) 갱신
+    """
+    try:
+        user_id = current_user["sub"]
+
+        # 게시글 조회 + 권한 확인
+        post = db.query(Post).filter(Post.id == post_id).first()
+        if not post:
+            raise HTTPException(status_code=404, detail="게시글을 찾을 수 없습니다.")
+        if post.user_id != user_id:
+            raise HTTPException(status_code=403, detail="수정 권한이 없습니다.")
+
+        # 기존 stage2_cache 추출
+        existing_route = {}
+        if post.recommended_route:
+            try:
+                existing_route = json.loads(post.recommended_route)
+            except Exception:
+                pass
+        stage2_cache: dict = existing_route.get("stage2_cache", {})
+
+        # ── 1단계: Nominatim 역지오코딩 ─────────────────────────────
+        for photo_dict in photos:
+            lat = photo_dict.get("_lat")
+            lon = photo_dict.get("_lon")
+            if lat and lon and not photo_dict.get("location_info"):
+                try:
+                    addr = await geocoder_service.reverse_geocode(lat, lon)
+                    photo_dict["location_info"] = {
+                        "country": addr.get("country"),
+                        "city": addr.get("city"),
+                        "region": addr.get("state"),
+                        "address": addr.get("full_address"),
+                        "coordinates": {"latitude": lat, "longitude": lon},
+                    }
+                except Exception as geo_err:
+                    logger.warning(f"역지오코딩 실패: {geo_err}")
+
+        # ── 2단계: 클러스터링 ────────────────────────────────────────
+        cluster_input = []
+        for p in photos:
+            lat = p.get("_lat")
+            lon = p.get("_lon")
+            cluster_input.append({
+                **p,
+                "gps": {"lat": lat, "lng": lon} if (lat and lon) else None,
+                "taken_at": (p.get("exif_data") or {}).get("datetime"),
+            })
+
+        raw_clusters = cluster_photos_by_location(cluster_input)
+
+        date_to_day: dict = {}
+        for cluster in raw_clusters:
+            start = cluster.get("start_time")
+            if start:
+                d = start[:10]
+                if d not in date_to_day:
+                    date_to_day[d] = len(date_to_day) + 1
+
+        pipeline_clusters = []
+        for i, cluster in enumerate(raw_clusters):
+            start = cluster.get("start_time")
+            date_str = start[:10] if start else None
+            day = date_to_day.get(date_str, 1)
+
+            cluster_photo_list = cluster["photos"]
+            rep_photo = max(cluster_photo_list, key=lambda p: p.get("file_size", 0))
+            try:
+                rep_url = await s3_service.generate_download_url(rep_photo["file_key"])
+            except Exception:
+                rep_url = ""
+
+            loc_info = next(
+                (p["location_info"] for p in cluster_photo_list if p.get("location_info")),
+                None,
+            )
+            location_name = (
+                loc_info.get("landmark") or loc_info.get("city") or loc_info.get("region") or "알 수 없는 장소"
+                if loc_info else "알 수 없는 장소"
+            )
+
+            pipeline_clusters.append({
+                "cluster_id": i,
+                "day": day,
+                "location_name": location_name,
+                "location_info": {
+                    "country": loc_info.get("country", "") if loc_info else "",
+                    "city":    loc_info.get("city", "") if loc_info else "",
+                    "address": loc_info.get("address", "") if loc_info else "",
+                },
+                # photos 포함 → fingerprint 계산에 사용
+                "photos": [{"file_key": p.get("file_key", "")} for p in cluster_photo_list],
+                "representative_photo_url": rep_url,
+                "photo_count": cluster["photo_count"],
+                "start_time": cluster.get("start_time"),
+                "end_time":   cluster.get("end_time"),
+            })
+
+        # ── 3단계: 사용자 LLM 설정 ───────────────────────────────────
+        user_pref_row = db.query(UserLLMPreference).filter(
+            UserLLMPreference.user_id == user_id
+        ).first()
+        user_prefs = {
+            "tone":         user_pref_row.tone,
+            "style":        user_pref_row.style,
+            "lang":         user_pref_row.lang,
+            "stage1_extra": user_pref_row.stage1_extra,
+            "stage2_extra": user_pref_row.stage2_extra,
+            "stage3_extra": user_pref_row.stage3_extra,
+        } if user_pref_row else None
+
+        # ── 4단계: 증분 파이프라인 실행 ──────────────────────────────
+        pipeline = get_llm_pipeline()
+        result = await pipeline.run_incremental(pipeline_clusters, stage2_cache, user_prefs)
+
+        cache_stats = result.get("cache_stats", {})
+        logger.info(
+            f"ai-update post={post_id} | "
+            f"hit={cache_stats.get('hit',0)} "
+            f"miss={cache_stats.get('miss',0)} "
+            f"removed={cache_stats.get('removed',0)}"
+        )
+
+        # ── 5단계: 포스트 갱신 ───────────────────────────────────────
+        post.title       = result["title"]
+        post.description = result["markdown"]
+        post.tags        = json.dumps(result["tags"], ensure_ascii=False)
+        post.updated_at  = datetime.utcnow()
+        post.recommended_route = json.dumps({
+            **existing_route,
+            "itinerary_table": result["itinerary_table"],
+            "stage2_cache":    result["stage2_cache"],
+        }, ensure_ascii=False)
+
+        db.commit()
+        db.refresh(post)
+
+        return {
+            "id":           post.id,
+            "title":        post.title,
+            "markdown":     post.description,
+            "tags":         json.loads(post.tags) if post.tags else [],
+            "updated_at":   post.updated_at.isoformat(),
+            "cache_stats":  cache_stats,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"AI 업데이트 실패 post={post_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail="AI 게시글 업데이트에 실패했습니다.")
 
 
 @router.put("/{post_id}", response_model=PostResponse)

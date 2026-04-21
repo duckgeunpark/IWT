@@ -10,7 +10,7 @@ from fastapi.exceptions import RequestValidationError
 import time
 import logging
 
-from app.api.v1.endpoints import user_auth0, photo_route, llm_route, post_route, image_metadata, social_route, search_route, photo_filter_route, directions_route, notification_route
+from app.api.v1.endpoints import user_auth0, photo_route, llm_route, post_route, image_metadata, social_route, search_route, photo_filter_route, directions_route, notification_route, llm_preference_route
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
@@ -222,6 +222,11 @@ def setup_routers(app: FastAPI) -> None:
         notification_route.router,
         prefix=api_prefix,
         tags=["알림"]
+    )
+    app.include_router(
+        llm_preference_route.router,
+        prefix=api_prefix,
+        tags=["LLM 설정"]
     )
     
     # 헬스체크 엔드포인트
