@@ -92,6 +92,32 @@ def _format_visit_time(start: Optional[str], end: Optional[str]) -> str:
     return "시간 정보 없음"
 
 
+def _inject_table(markdown: str, itinerary_table: str) -> str:
+    """
+    완성된 마크다운에 일정 표를 강제 삽입.
+    # 제목 바로 다음, 첫 번째 ## 섹션 바로 앞에 위치.
+    이미 표(|---|)가 있으면 스킵.
+    """
+    if not itinerary_table or "|---" in markdown:
+        return markdown
+
+    lines = markdown.split("\n")
+
+    # 첫 번째 ## 위치 탐색
+    insert_at = len(lines)
+    for i, line in enumerate(lines):
+        if line.startswith("##"):
+            insert_at = i
+            break
+
+    # 빈 줄 포함해서 표 삽입
+    table_block = ["", itinerary_table, ""]
+    for j, row in enumerate(table_block):
+        lines.insert(insert_at + j, row)
+
+    return "\n".join(lines)
+
+
 def _extract_tags_from_markdown(markdown: str) -> List[str]:
     """<!-- tags: tag1, tag2 --> 주석에서 태그 추출"""
     match = re.search(r"<!--\s*tags:\s*(.+?)\s*-->", markdown)
@@ -246,30 +272,43 @@ class LLMPipeline:
 
     def _assemble_draft(
         self,
-        itinerary_table: str,
         stage2_results: List[Dict],
-    ) -> str:
+    ) -> Tuple[str, Dict[str, str]]:
         """
         Stage 2 결과를 마크다운 초안으로 조립.
-        ## 장소명
-        ![location_name](photo_url)
-        단락
+
+        LLM 전달용 draft에는 실제 S3 URL 대신 [PHOTO_n] 플레이스홀더를 사용.
+        Stage 3 완료 후 _inject_photos()로 실제 이미지 마크다운을 삽입.
+
+        Returns:
+            draft_for_llm: LLM에 전달할 초안 (플레이스홀더 포함)
+            photo_map:     {플레이스홀더: "![name](url)"} 매핑
         """
         sections = []
-        for item in stage2_results:
+        photo_map: Dict[str, str] = {}
+
+        for i, item in enumerate(stage2_results):
             heading = f"## {item['location_name']}"
-            photo_md = (
-                f"![{item['location_name']}]({item['photo_url']})"
-                if item.get("photo_url")
-                else ""
-            )
-            parts = [heading]
-            if photo_md:
-                parts.append(photo_md)
-            parts.append(item["paragraph"])
+            placeholder = f"[PHOTO_{i}]"
+
+            if item.get("photo_url"):
+                photo_map[placeholder] = (
+                    f"![{item['location_name']}]({item['photo_url']})"
+                )
+                parts = [heading, placeholder, item["paragraph"]]
+            else:
+                parts = [heading, item["paragraph"]]
+
             sections.append("\n".join(parts))
 
-        return "\n\n".join(sections)
+        return "\n\n".join(sections), photo_map
+
+    @staticmethod
+    def _inject_photos(markdown: str, photo_map: Dict[str, str]) -> str:
+        """Stage 3 출력의 [PHOTO_n] 플레이스홀더를 실제 이미지 마크다운으로 교체."""
+        for placeholder, img_md in photo_map.items():
+            markdown = markdown.replace(placeholder, img_md)
+        return markdown
 
     # ── Stage 3 ─────────────────────────────────────────────────────
 
@@ -298,13 +337,15 @@ class LLMPipeline:
                         "content": (
                             "당신은 여행 블로그 에디터입니다. "
                             "초안을 자연스럽게 다듬어 완성된 마크다운 포스트를 출력합니다. "
-                            "이미지 마크다운(![...](URL))은 절대 수정하지 않습니다."
+                            "제목(# 으로 시작)은 반드시 한국어로만 작성합니다. "
+                            "방문 장소가 일본·중국·유럽 어디든 제목은 항상 한국어입니다. "
+                            "[PHOTO_숫자] 형태의 태그는 절대 수정·삭제하지 않습니다."
                         ),
                     },
                     {"role": "user", "content": prompt},
                 ],
                 temperature=0.5,
-                max_tokens=3000,
+                max_tokens=4096,
             )
             return result.strip()
         except Exception as e:
@@ -358,8 +399,8 @@ class LLMPipeline:
         # 일차 → 클러스터 순서로 정렬 (day 오름차순, cluster_id 오름차순)
         stage2_results.sort(key=lambda x: (x.get("day", 0), x.get("cluster_id", 0)))
 
-        # 초안 조립
-        draft_body = self._assemble_draft(itinerary_table, stage2_results)
+        # 초안 조립 (LLM 전달용 — 사진 URL 대신 플레이스홀더)
+        draft_body, photo_map = self._assemble_draft(stage2_results)
         place_names = [r["location_name"] for r in stage2_results]
 
         # Stage 3: 최종 합성
@@ -370,6 +411,11 @@ class LLMPipeline:
             place_names=place_names,
             prefs=prefs,
         )
+
+        # 표 삽입 (LLM 의존 없이 직접)
+        final_markdown = _inject_table(final_markdown, itinerary_table)
+        # 사진 플레이스홀더 → 실제 이미지 마크다운 교체
+        final_markdown = self._inject_photos(final_markdown, photo_map)
 
         # Stage 2 결과를 지문 기준으로 캐시 저장
         stage2_cache = {
@@ -484,7 +530,7 @@ class LLMPipeline:
 
         # ── Stage 3: 항상 재실행 ──────────────────────────────────────
         logger.info("Incremental Stage3 시작")
-        draft_body  = self._assemble_draft(itinerary_table, stage2_results)
+        draft_body, photo_map = self._assemble_draft(stage2_results)
         place_names = [r["location_name"] for r in stage2_results]
         final_markdown = await self._run_stage3(
             itinerary_table=itinerary_table,
@@ -503,6 +549,10 @@ class LLMPipeline:
                 "paragraph":     r["paragraph"],
                 "photo_url":     r["photo_url"],
             }
+
+        # 표 삽입 + 사진 플레이스홀더 교체
+        final_markdown = _inject_table(final_markdown, itinerary_table)
+        final_markdown = self._inject_photos(final_markdown, photo_map)
 
         return {
             "markdown":      final_markdown,

@@ -43,7 +43,7 @@ const parseSections = (content) => {
   return sections;
 };
 
-const DocumentPanel = ({ initialContent, initialTitle, onContentChange }) => {
+const DocumentPanel = ({ initialContent, initialTitle, onContentChange, postId }) => {
   const { photos, locations } = useSelector(state => state.photos);
   const clusters = useSelector(state => state.clusters.clusters);
   const toast = useToast();
@@ -149,14 +149,32 @@ const DocumentPanel = ({ initialContent, initialTitle, onContentChange }) => {
 
     setIsLLMProcessing(true);
     try {
+      // ── 편집 모드: 증분 ai-update 호출 ──
+      if (postId) {
+        const photoData = photos.map(p => ({
+          file_key: p.fileKey || '',
+          file_name: p.name,
+          file_size: p.size,
+          content_type: p.type,
+          _lat: p.gpsData?.lat || null,
+          _lon: p.gpsData?.lng || null,
+          location_info: p.locationInfo || null,
+        }));
+
+        const response = await apiClient.post(`/api/v1/posts/${postId}/ai-update`, photoData);
+        if (response.markdown) {
+          updateContent(response.markdown);
+        } else {
+          throw new Error('ai-update 응답에 markdown 없음');
+        }
+        return;
+      }
+
+      // ── 신규 모드: 기존 generate-itinerary 흐름 유지 ──
       const photoData = photos.map(p => ({
         name: p.name,
         captureTime: p.captureTime,
         gps: p.gpsData,
-        exif: p.exifData?.backendData ? {
-          imageWidth: p.exifData.backendData.imageWidth,
-          imageHeight: p.exifData.backendData.imageHeight,
-        } : null,
       }));
 
       const locationData = locations.map(loc => ({
@@ -171,34 +189,17 @@ const DocumentPanel = ({ initialContent, initialTitle, onContentChange }) => {
           locations: locationData,
           total_photos: photos.length,
         },
-        user_preferences: {
-          language: 'ko',
-          format: 'markdown',
-        },
+        user_preferences: { language: 'ko', format: 'markdown' },
       });
 
       if (response.success && response.itinerary) {
-        setContent(response.itinerary);
+        updateContent(response.itinerary);
       } else {
         throw new Error(response.error_message || 'LLM 생성 실패');
       }
     } catch (error) {
       console.error('LLM 처리 중 오류:', error);
-      // API 실패 시 로컬 데이터 기반 기본 생성
-      const locationSummary = locations.map((loc, i) =>
-        `${i + 1}. **${loc.name}** - ${loc.time} (${loc.coordinates.lat.toFixed(4)}, ${loc.coordinates.lng.toFixed(4)})`
-      ).join('\n');
-
-      setContent(`## 여행 요약 (로컬 생성)
-
-> 총 ${photos.length}장의 사진, ${locations.length}개의 위치가 기록되었습니다.
-
-### 방문 장소
-${locationSummary || '- 위치 정보가 있는 사진이 없습니다.'}
-
----
-*서버 연결 후 AI가 더 상세한 여행 기록을 생성합니다.*
-`);
+      toast.error('AI 생성에 실패했습니다. 다시 시도해주세요.');
     } finally {
       setIsLLMProcessing(false);
     }

@@ -130,25 +130,14 @@ const CreateTripPage = ({ toggleTheme, theme }) => {
         if (res.success && res.itinerary) {
           let updatedItinerary = res.itinerary;
           
+          // [PHOTO:n] 플레이스홀더 제거 (S3 URL이 없으므로 표시하지 않음)
           if (res.clusters && Array.isArray(res.clusters)) {
-             res.clusters.forEach(bc => {
-                const backendPhotoIds = bc.photo_ids || [];
-                let repPhotoId = backendPhotoIds[0];
-                for (const fc of clusters) {
-                   if (fc.representative_photo_id && backendPhotoIds.includes(String(fc.representative_photo_id))) {
-                      repPhotoId = fc.representative_photo_id;
-                      break;
-                   }
-                }
-                const photo = photos.find(p => String(p.id) === String(repPhotoId));
-                const placeholder = `[PHOTO:${bc.cluster_id}]`;
-                if (photo && updatedItinerary.includes(placeholder)) {
-                   updatedItinerary = updatedItinerary.replaceAll(placeholder, `!image`);
-                } else {
-                   updatedItinerary = updatedItinerary.replaceAll(placeholder + '\n\n', '');
-                   updatedItinerary = updatedItinerary.replaceAll(placeholder, '');
-                }
-             });
+            res.clusters.forEach(bc => {
+              const placeholder = `[PHOTO:${bc.cluster_id}]`;
+              updatedItinerary = updatedItinerary.replaceAll(placeholder + '\n\n', '');
+              updatedItinerary = updatedItinerary.replaceAll(placeholder + '\n', '');
+              updatedItinerary = updatedItinerary.replaceAll(placeholder, '');
+            });
           }
           
           setContent(updatedItinerary);
@@ -598,6 +587,7 @@ const CreateTripPage = ({ toggleTheme, theme }) => {
               key={content ? 'has-content' : 'no-content'}
               initialContent={content}
               onContentChange={setContent}
+              postId={isEditMode ? editPostId : null}
             />
           </div>
 

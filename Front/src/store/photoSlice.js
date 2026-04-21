@@ -102,21 +102,28 @@ const photoSlice = createSlice({
 
     // 편집 모드: 서버에서 불러온 기존 사진을 Redux에 로드
     loadExistingPhoto: (state, action) => {
-      const photo = action.payload; // { id, file_name, file_size, content_type, url, location, upload_time }
+      const photo = action.payload; // { id, file_key, file_name, file_size, content_type, url, location, upload_time }
       const captureTimestamp = new Date(photo.upload_time || Date.now()).getTime();
       const photoData = {
         id: `existing_${photo.id}`,
-        dbId: photo.id,           // DB ID (keep_photo_ids에 사용)
+        dbId: photo.id,
+        fileKey: photo.file_key || '',   // ai-update fingerprint 계산용
         name: photo.file_name,
         size: photo.file_size || 0,
         type: photo.content_type || 'image/jpeg',
-        preview: photo.url,       // S3 presigned URL → 미리보기로 사용
+        preview: photo.url,
         captureTime: photo.upload_time || new Date().toISOString(),
         captureTimestamp,
         isActive: true,
-        isExisting: true,         // 이미 서버에 있는 사진 표시
+        isExisting: true,
         color: `#${Math.floor(Math.random() * 16777215).toString(16).padStart(6, '0')}`,
         gpsData: photo.location ? { lat: photo.location.lat, lng: photo.location.lng } : null,
+        locationInfo: photo.location ? {
+          country: photo.location.country || '',
+          city: photo.location.city || '',
+          address: photo.location.address || '',
+          coordinates: { latitude: photo.location.lat, longitude: photo.location.lng },
+        } : null,
       };
       state.photos.push(photoData);
       state.photos.sort((a, b) => (a.captureTimestamp || 0) - (b.captureTimestamp || 0));

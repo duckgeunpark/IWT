@@ -674,6 +674,7 @@ async def get_post_photos(
                 }
             photo_list.append({
                 "id": photo.id,
+                "file_key": photo.file_key,
                 "file_name": photo.file_name,
                 "file_size": photo.file_size,
                 "content_type": photo.content_type,
