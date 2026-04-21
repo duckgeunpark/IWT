@@ -43,7 +43,7 @@ const parseSections = (content) => {
   return sections;
 };
 
-const DocumentPanel = ({ initialContent, initialTitle, onContentChange, postId }) => {
+const DocumentPanel = ({ initialContent, initialTitle, onContentChange, postId, onAIResult }) => {
   const { photos, locations } = useSelector(state => state.photos);
   const clusters = useSelector(state => state.clusters.clusters);
   const toast = useToast();
@@ -164,6 +164,7 @@ const DocumentPanel = ({ initialContent, initialTitle, onContentChange, postId }
         const response = await apiClient.post(`/api/v1/posts/${postId}/ai-update`, photoData);
         if (response.markdown) {
           updateContent(response.markdown);
+          onAIResult?.({ title: response.title, tags: response.tags });
         } else {
           throw new Error('ai-update 응답에 markdown 없음');
         }

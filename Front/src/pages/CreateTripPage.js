@@ -52,9 +52,11 @@ const CreateTripPage = ({ toggleTheme, theme }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [isGeneratingContent, setIsGeneratingContent] = useState(false);
-  const [clusterCount, setClusterCount] = useState(null);
   const [editLoading, setEditLoading] = useState(isEditMode);
   const [isDraftPost, setIsDraftPost] = useState(false);
+  const [showLLMSettings, setShowLLMSettings] = useState(false);
+  const [llmPrefs, setLlmPrefs] = useState({ tone: 'casual', style: 'blog', lang: 'ko', stage1_extra: '', stage2_extra: '', stage3_extra: '' });
+  const [llmPrefsSaving, setLlmPrefsSaving] = useState(false);
 
   // ── 신규 모드: 이전 사진 세션 초기화 + 하이라이트 적용 ──
   // fromRecord: NewTripPage에서 사진을 이미 Redux에 넣고 넘어온 경우 → 초기화 금지
@@ -108,45 +110,52 @@ const CreateTripPage = ({ toggleTheme, theme }) => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isEditMode, editPostId]);
 
-  // ── AI 자동 생성 (신규 모드, draft 없을 때) ──
+  // ── AI 자동 생성 (신규 모드) — S3 temp 업로드 → auto-create → 편집 모드로 이동 ──
   useEffect(() => {
     if (isEditMode || draft?.content || photos.length === 0 || isGeneratingContent) return;
     const generateContent = async () => {
       setIsGeneratingContent(true);
       try {
-        const photoData = photos.map(p => ({
-          id: String(p.id),
-          file_name: p.name,
-          file_size: p.size,
-          gps: p.gpsData ? { lat: p.gpsData.lat, lng: p.gpsData.lng } : null,
-          taken_at: p.captureTime || null,
-        }));
-
-        const res = await apiClient.post('/api/v1/llm/generate-itinerary-clustered', {
-          photos: photoData,
-          user_preferences: { language: 'ko' },
-        });
-
-        if (res.success && res.itinerary) {
-          let updatedItinerary = res.itinerary;
-          
-          // [PHOTO:n] 플레이스홀더 제거 (S3 URL이 없으므로 표시하지 않음)
-          if (res.clusters && Array.isArray(res.clusters)) {
-            res.clusters.forEach(bc => {
-              const placeholder = `[PHOTO:${bc.cluster_id}]`;
-              updatedItinerary = updatedItinerary.replaceAll(placeholder + '\n\n', '');
-              updatedItinerary = updatedItinerary.replaceAll(placeholder + '\n', '');
-              updatedItinerary = updatedItinerary.replaceAll(placeholder, '');
-            });
-          }
-          
-          setContent(updatedItinerary);
-          if (res.title) setTripTitle(res.title);
-          if (res.tags?.length) setTags(res.tags);
-          if (res.cluster_count) setClusterCount(res.cluster_count);
+        // 1. S3 temp 업로드
+        const photoPayload = [];
+        for (const photo of photos) {
+          const file = fileStore.get(photo.id);
+          if (!file) continue;
+          const presignedData = await apiClient.post('/api/v1/photos/presigned-url', {
+            file_name: photo.name, content_type: photo.type,
+          });
+          const uploadRes = await fetch(presignedData.presigned_url, {
+            method: 'PUT', body: file, headers: { 'Content-Type': photo.type },
+          });
+          if (!uploadRes.ok) continue;
+          photoPayload.push({
+            file_key: presignedData.file_key,
+            file_name: photo.name,
+            file_size: photo.size,
+            content_type: photo.type || 'image/jpeg',
+            _lat: photo.gpsData?.lat || null,
+            _lon: photo.gpsData?.lng || null,
+            location_info: null,
+            exif_data: { datetime: photo.captureTime || null },
+          });
         }
+
+        if (photoPayload.length === 0) {
+          toast.warning('업로드 가능한 사진이 없습니다.');
+          return;
+        }
+
+        // 2. 3단계 LLM 파이프라인 + 게시글 자동 생성
+        const res = await apiClient.post('/api/v1/posts/auto-create', photoPayload);
+
+        // 3. 완료 → 편집 모드로 이동 (생성된 post의 edit 페이지)
+        dispatch(clearPhotos());
+        dispatch(clearClusters());
+        fileStore.clear();
+        navigate(`/trip/${res.id}/edit`);
       } catch (err) {
         console.warn('AI 초안 자동 생성 실패:', err);
+        toast.error('AI 게시글 생성에 실패했습니다. 다시 시도해주세요.');
       } finally {
         setIsGeneratingContent(false);
       }
@@ -154,6 +163,63 @@ const CreateTripPage = ({ toggleTheme, theme }) => {
     generateContent();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // ── ai-update 완료 후 title/tags 동기화 ──
+  const handleAIResult = useCallback(({ title, tags: newTags }) => {
+    if (title) setTripTitle(title);
+    if (newTags?.length) setTags(newTags);
+  }, []);
+
+  // ── LLM 설정 로드 (편집 모드 또는 모달 오픈 시) ──
+  useEffect(() => {
+    if (!isEditMode) return;
+    apiClient.get('/api/v1/llm-preferences/').then(prefs => {
+      setLlmPrefs({
+        tone: prefs.tone || 'casual',
+        style: prefs.style || 'blog',
+        lang: prefs.lang || 'ko',
+        stage1_extra: prefs.stage1_extra || '',
+        stage2_extra: prefs.stage2_extra || '',
+        stage3_extra: prefs.stage3_extra || '',
+      });
+    }).catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEditMode]);
+
+  const handleLLMSettingsOpen = useCallback(async () => {
+    try {
+      const prefs = await apiClient.get('/api/v1/llm-preferences/');
+      setLlmPrefs({
+        tone: prefs.tone || 'casual',
+        style: prefs.style || 'blog',
+        lang: prefs.lang || 'ko',
+        stage1_extra: prefs.stage1_extra || '',
+        stage2_extra: prefs.stage2_extra || '',
+        stage3_extra: prefs.stage3_extra || '',
+      });
+    } catch (e) {}
+    setShowLLMSettings(true);
+  }, []);
+
+  const handleLLMSettingsSave = useCallback(async () => {
+    setLlmPrefsSaving(true);
+    try {
+      await apiClient.put('/api/v1/llm-preferences/', {
+        tone: llmPrefs.tone,
+        style: llmPrefs.style,
+        lang: llmPrefs.lang,
+        stage1_extra: llmPrefs.stage1_extra || null,
+        stage2_extra: llmPrefs.stage2_extra || null,
+        stage3_extra: llmPrefs.stage3_extra || null,
+      });
+      toast.success('AI 설정이 저장됐습니다.');
+      setShowLLMSettings(false);
+    } catch (e) {
+      toast.error('설정 저장에 실패했습니다.');
+    } finally {
+      setLlmPrefsSaving(false);
+    }
+  }, [llmPrefs, toast]);
 
   // ── 인증 확인 ──
   useEffect(() => {
@@ -447,10 +513,7 @@ const CreateTripPage = ({ toggleTheme, theme }) => {
           <div style={{ textAlign:'center' }}>
             <p style={{ fontSize:'18px', fontWeight:'600', marginBottom:'8px' }}>AI가 여행 기록을 작성하는 중입니다</p>
             <p style={{ fontSize:'14px', color:'var(--text-secondary, #888)' }}>
-              {clusterCount
-                ? `장소 ${clusterCount}곳을 분석해 단락을 생성하고 있어요. 잠시만 기다려주세요.`
-                : '사진을 분석해 여행 일지를 자동으로 생성하고 있어요. 잠시만 기다려주세요.'
-              }
+              사진을 분석하고 여행 일지를 생성하고 있어요. 잠시만 기다려주세요.
             </p>
           </div>
         </div>
@@ -491,6 +554,7 @@ const CreateTripPage = ({ toggleTheme, theme }) => {
               {theme === 'light' ? '🌙' : '☀️'}
             </button>
           )}
+          <button className="theme-toggle" onClick={handleLLMSettingsOpen} title="AI 생성 설정">⚙️</button>
           {(!isEditMode || isDraftPost) && (
             <button className="action-btn temp-save-btn" onClick={handleTempSave} disabled={isUploading}>
               임시저장
@@ -544,6 +608,62 @@ const CreateTripPage = ({ toggleTheme, theme }) => {
         </div>
       </div>
 
+      {/* LLM 설정 모달 */}
+      {showLLMSettings && (
+        <div className="llm-settings-overlay" onClick={() => setShowLLMSettings(false)}>
+          <div className="llm-settings-modal" onClick={e => e.stopPropagation()}>
+            <div className="llm-settings-header">
+              <h3>AI 생성 설정</h3>
+              <button className="llm-settings-close" onClick={() => setShowLLMSettings(false)}>×</button>
+            </div>
+            <div className="llm-settings-body">
+              <label>
+                글투 (Tone)
+                <select value={llmPrefs.tone} onChange={e => setLlmPrefs(p => ({ ...p, tone: e.target.value }))}>
+                  <option value="casual">친근한 (Casual)</option>
+                  <option value="formal">격식체 (Formal)</option>
+                  <option value="poetic">시적인 (Poetic)</option>
+                  <option value="humorous">유머러스 (Humorous)</option>
+                </select>
+              </label>
+              <label>
+                스타일 (Style)
+                <select value={llmPrefs.style} onChange={e => setLlmPrefs(p => ({ ...p, style: e.target.value }))}>
+                  <option value="blog">블로그</option>
+                  <option value="diary">일기</option>
+                  <option value="travel_guide">여행 가이드</option>
+                </select>
+              </label>
+              <label>
+                제목 언어 (Lang)
+                <select value={llmPrefs.lang} onChange={e => setLlmPrefs(p => ({ ...p, lang: e.target.value }))}>
+                  <option value="ko">한국어</option>
+                  <option value="en">English</option>
+                  <option value="ja">日本語</option>
+                  <option value="zh">中文</option>
+                  <option value="fr">Français</option>
+                </select>
+              </label>
+              <label>
+                추가 지침 (선택)
+                <textarea
+                  placeholder="AI에게 추가로 전달할 지침을 입력하세요..."
+                  value={llmPrefs.stage3_extra || ''}
+                  onChange={e => setLlmPrefs(p => ({ ...p, stage3_extra: e.target.value }))}
+                  rows={3}
+                />
+              </label>
+            </div>
+            <div className="llm-settings-footer">
+              <button className="llm-settings-cancel" onClick={() => setShowLLMSettings(false)}>취소</button>
+              <button className="llm-settings-save" onClick={handleLLMSettingsSave} disabled={llmPrefsSaving}>
+                {llmPrefsSaving ? '저장 중...' : '저장'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 임시저장 draft 편집 중 안내 */}
       {isDraftPost && (
         <div className="draft-restore-banner">
@@ -588,6 +708,7 @@ const CreateTripPage = ({ toggleTheme, theme }) => {
               initialContent={content}
               onContentChange={setContent}
               postId={isEditMode ? editPostId : null}
+              onAIResult={handleAIResult}
             />
           </div>
 

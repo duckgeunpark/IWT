@@ -98,7 +98,7 @@ def _inject_table(markdown: str, itinerary_table: str) -> str:
     # 제목 바로 다음, 첫 번째 ## 섹션 바로 앞에 위치.
     이미 표(|---|)가 있으면 스킵.
     """
-    if not itinerary_table or "|---" in markdown:
+    if not itinerary_table or "| 날짜 |" in markdown:
         return markdown
 
     lines = markdown.split("\n")
