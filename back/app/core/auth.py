@@ -6,6 +6,13 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import jwt, JWTError
 import httpx
 
+# 콤마로 구분된 관리자 이메일 목록 (예: "admin@example.com,dev@example.com")
+_ADMIN_EMAILS = {
+    e.strip().lower()
+    for e in os.getenv("ADMIN_EMAILS", "").split(",")
+    if e.strip()
+}
+
 security = HTTPBearer()
 
 AUTH0_DOMAIN = os.getenv("AUTH0_DOMAIN")
@@ -100,6 +107,17 @@ async def verify_jwt_token(token: str) -> Dict:
 
 async def get_current_user(token: str = Depends(get_token_auth_header)) -> Dict:
     return await verify_jwt_token(token)
+
+
+async def require_admin(current_user: Dict = Depends(get_current_user)) -> Dict:
+    """관리자 전용 엔드포인트 의존성. ADMIN_EMAILS 환경변수에 이메일이 있어야 통과."""
+    email = (current_user.get("email") or "").lower()
+    if not _ADMIN_EMAILS or email not in _ADMIN_EMAILS:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="관리자 권한이 필요합니다.",
+        )
+    return current_user
 
 
 async def get_optional_current_user(

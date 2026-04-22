@@ -224,26 +224,31 @@ async def auto_create_post(
             f"제거 {clean_result['summary']['total_removed']}장"
         )
 
-        # 활용 가능한 사진만 추출 (전체 구간 펼치기)
+        # 활용 가능한 사진 추출 (GPS 있는 구간 + GPS 없는 사진 합산)
         usable_photos = [
             p for seg in clean_result["segments"] for p in seg["photos"]
         ]
+        # GPS 없는 사진도 포함 (위치 정보 없이도 게시글 생성 가능)
+        usable_photos += clean_result.get("no_gps_photos", [])
 
         if not usable_photos:
-            raise HTTPException(status_code=422, detail="활용 가능한 사진이 없습니다. GPS 데이터 또는 촬영 날짜를 확인해주세요.")
+            raise HTTPException(status_code=422, detail="활용 가능한 사진이 없습니다. 촬영 날짜를 확인해주세요.")
 
-        # ── 2단계: Nominatim으로 GPS → 위치명 변환 ──────────────
+        # ── 2단계: Google Maps 역지오코딩 (Place DB 캐시 우선) ──────
+        from app.services.reverse_geocoder import reverse_geocode as _reverse_geocode
         for photo_dict in usable_photos:
             lat = photo_dict.get("_lat")
             lon = photo_dict.get("_lon")
             if lat and lon and not photo_dict.get("location_info"):
                 try:
-                    addr = await geocoder_service.reverse_geocode(lat, lon)
+                    addr = await _reverse_geocode(lat, lon, db)
                     photo_dict["location_info"] = {
-                        "country": addr.get("country"),
-                        "city": addr.get("city"),
-                        "region": addr.get("state"),
-                        "address": addr.get("full_address"),
+                        "country":  addr.get("country"),
+                        "city":     addr.get("city"),
+                        "region":   addr.get("region"),
+                        "landmark": addr.get("landmark"),
+                        "address":  addr.get("address"),
+                        "place_db_id": addr.get("place_db_id"),
                         "coordinates": {"latitude": lat, "longitude": lon},
                     }
                 except Exception as geo_err:
@@ -260,7 +265,12 @@ async def auto_create_post(
                 "taken_at": (p.get("exif_data") or {}).get("datetime"),
             })
 
-        raw_clusters = cluster_photos_by_location(cluster_input)
+        from app.services.system_config import system_config_service
+        raw_clusters = cluster_photos_by_location(
+            cluster_input,
+            distance_km=system_config_service.get_float("cluster_distance_km", 0.5, db),
+            time_hours=system_config_service.get_float("cluster_time_hours", 2.0, db),
+        )
 
         # 날짜 기준 일차 계산
         date_to_day: dict = {}

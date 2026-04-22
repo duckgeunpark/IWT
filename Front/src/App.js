@@ -17,6 +17,7 @@ const ExplorePage = React.lazy(() => import('./pages/ExplorePage'));
 const ProfilePage = React.lazy(() => import('./pages/ProfilePage'));
 const FeedPage = React.lazy(() => import('./pages/FeedPage'));
 const UserProfilePage = React.lazy(() => import('./pages/UserProfilePage'));
+const AdminSettingsPage = React.lazy(() => import('./pages/AdminSettingsPage'));
 
 const LoadingFallback = () => (
   <div className="page-loading">
@@ -87,6 +88,7 @@ function AppContent() {
                 <Route path="/trip/:id/edit" element={<CreateTripPage toggleTheme={toggleTheme} theme={theme} />} />
                 <Route path="/profile" element={<ProfilePage toggleTheme={toggleTheme} theme={theme} />} />
                 <Route path="/profile/:userId" element={<UserProfilePage toggleTheme={toggleTheme} theme={theme} />} />
+                <Route path="/admin/settings" element={<AdminSettingsPage toggleTheme={toggleTheme} theme={theme} />} />
                 {/* 레거시 경로 호환 */}
                 <Route path="/create-trip" element={<CreateTripPage toggleTheme={toggleTheme} theme={theme} />} />
               </Routes>

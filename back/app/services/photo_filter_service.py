@@ -660,6 +660,12 @@ class PhotoFilterService:
 
     def _cb_extract_gps(self, photo: Dict) -> Tuple[Optional[float], Optional[float]]:
         try:
+            # _lat/_lon 필드 우선 확인 (auto-create 엔드포인트에서 전송)
+            if photo.get("_lat") is not None and photo.get("_lon") is not None:
+                lat, lon = float(photo["_lat"]), float(photo["_lon"])
+                if not (lat == 0.0 and lon == 0.0) and (-90 <= lat <= 90) and (-180 <= lon <= 180):
+                    return lat, lon
+
             exif = photo.get("exif_data") or {}
             gps = exif.get("gps") or {}
             lat = gps.get("latitude") or photo.get("latitude")

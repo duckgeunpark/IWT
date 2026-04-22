@@ -10,7 +10,7 @@ from fastapi.exceptions import RequestValidationError
 import time
 import logging
 
-from app.api.v1.endpoints import user_auth0, photo_route, llm_route, post_route, image_metadata, social_route, search_route, photo_filter_route, directions_route, notification_route, llm_preference_route
+from app.api.v1.endpoints import user_auth0, photo_route, llm_route, post_route, image_metadata, social_route, search_route, photo_filter_route, directions_route, notification_route, llm_preference_route, admin_route
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
@@ -228,7 +228,12 @@ def setup_routers(app: FastAPI) -> None:
         prefix=api_prefix,
         tags=["LLM 설정"]
     )
-    
+    app.include_router(
+        admin_route.router,
+        prefix=api_prefix,
+        tags=["관리자"]
+    )
+
     # 헬스체크 엔드포인트
     @app.get("/health", tags=["헬스체크"])
     async def health_check():
@@ -260,8 +265,16 @@ def setup_event_handlers(app: FastAPI) -> None:
         """애플리케이션 시작시 실행"""
         # 새 테이블 자동 생성 (기존 테이블은 건드리지 않음)
         from app.models.db_models import Base
-        from app.db.session import get_engine
+        from app.db.session import get_engine, SessionLocal
         Base.metadata.create_all(bind=get_engine(), checkfirst=True)
+
+        # SystemConfig 기본값 초기화
+        from app.services.system_config import system_config_service
+        db = SessionLocal()
+        try:
+            system_config_service.initialize_defaults(db)
+        finally:
+            db.close()
 
         logger.info(f"{settings.app_name} 서버가 시작되었습니다.")
         logger.info(f"디버그 모드: {settings.debug}")

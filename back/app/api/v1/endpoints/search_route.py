@@ -3,11 +3,14 @@ from typing import Optional, List
 import logging
 import json
 
-from app.models.db_models import Post, Photo, Location, Category, PostLike
+from app.models.db_models import Post, Photo, Location, Category, PostLike, User
 from app.db.session import get_db
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func, or_, and_, distinct
 from app.services.llm_route_recommend import LLMRouteRecommendService
+from app.services.s3_presigned_url import S3PresignedURLService
+
+s3_service = S3PresignedURLService()
 
 llm_route_service = LLMRouteRecommendService()
 
@@ -136,6 +139,25 @@ async def search_posts(
             seen.add(p.id)
             unique_posts.append(p)
 
+    # 작성자 캐시 (같은 user_id 반복 쿼리 방지)
+    author_cache: dict = {}
+
+    def _get_author(user_id: str):
+        if user_id in author_cache:
+            return author_cache[user_id]
+        user_obj = db.query(User).filter(User.id == user_id).first()
+        if user_obj:
+            display_name = (
+                user_obj.name
+                or (user_obj.email.split('@')[0] if user_obj.email else None)
+                or user_id.split('|')[-1]
+            )
+            info = {"id": user_obj.id, "name": display_name, "picture": user_obj.picture}
+        else:
+            info = {"id": user_id, "name": user_id.split('|')[-1], "picture": None}
+        author_cache[user_id] = info
+        return info
+
     # 결과 구성
     results = []
     for p in unique_posts:
@@ -166,6 +188,11 @@ async def search_posts(
             except (json.JSONDecodeError, TypeError):
                 tags = []
 
+        # 썸네일 URL (첫 번째 사진)
+        thumbnail_url = None
+        if p.photos:
+            thumbnail_url = s3_service.generate_download_url_sync(p.photos[0].file_key)
+
         results.append(
             {
                 "id": p.id,
@@ -176,6 +203,8 @@ async def search_posts(
                 "user_id": p.user_id,
                 "photo_count": len(p.photos),
                 "likes_count": likes_count,
+                "thumbnail_url": thumbnail_url,
+                "author": _get_author(p.user_id),
                 "categories": category_map,
                 "locations": [
                     {
@@ -184,7 +213,7 @@ async def search_posts(
                         "lat": loc.latitude,
                         "lng": loc.longitude,
                     }
-                    for loc in locations[:5]  # 최대 5개 위치만
+                    for loc in locations[:5]
                 ],
             }
         )
@@ -289,10 +318,29 @@ async def semantic_search(
         conditions.append(Post.description.ilike(kw_like))
         conditions.append(Post.tags.ilike(kw_like))
 
-    query = db.query(Post).filter(or_(*conditions)) if conditions else db.query(Post)
+    query = db.query(Post).options(joinedload(Post.photos)).filter(or_(*conditions)) if conditions else db.query(Post).options(joinedload(Post.photos))
     query = query.order_by(Post.created_at.desc())
 
     posts = query.limit(limit * 2).all()
+
+    # 작성자 캐시
+    sem_author_cache: dict = {}
+
+    def _get_sem_author(user_id: str):
+        if user_id in sem_author_cache:
+            return sem_author_cache[user_id]
+        user_obj = db.query(User).filter(User.id == user_id).first()
+        if user_obj:
+            display_name = (
+                user_obj.name
+                or (user_obj.email.split('@')[0] if user_obj.email else None)
+                or user_id.split('|')[-1]
+            )
+            info = {"id": user_obj.id, "name": display_name, "picture": user_obj.picture}
+        else:
+            info = {"id": user_id, "name": user_id.split('|')[-1], "picture": None}
+        sem_author_cache[user_id] = info
+        return info
 
     # 중복 제거 + 결과 구성
     seen = set()
@@ -308,7 +356,9 @@ async def semantic_search(
                 tags = json.loads(tags)
             except Exception:
                 tags = []
-        thumbnail = next((ph for ph in p.photos if ph.file_key), None)
+        thumbnail_url = None
+        if p.photos:
+            thumbnail_url = s3_service.generate_download_url_sync(p.photos[0].file_key)
         results.append({
             "id": p.id,
             "title": p.title,
@@ -318,6 +368,8 @@ async def semantic_search(
             "user_id": p.user_id,
             "photo_count": len(p.photos),
             "likes_count": likes_count,
+            "thumbnail_url": thumbnail_url,
+            "author": _get_sem_author(p.user_id),
         })
 
     return {

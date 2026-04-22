@@ -1,0 +1,152 @@
+.admin-page {
+  min-height: 100vh;
+  background: var(--bg-primary, #f9fafb);
+}
+
+.admin-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  font-size: 1rem;
+  color: var(--text-secondary, #6b7280);
+}
+
+.admin-container {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 40px 24px 80px;
+}
+
+.admin-header {
+  margin-bottom: 32px;
+}
+
+.admin-header h1 {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--text-primary, #111827);
+  margin: 0 0 8px;
+}
+
+.admin-subtitle {
+  font-size: 0.9rem;
+  color: var(--text-secondary, #6b7280);
+  margin: 0;
+}
+
+.admin-error {
+  background: #fef2f2;
+  border: 1px solid #fca5a5;
+  color: #dc2626;
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 24px;
+  font-size: 0.9rem;
+}
+
+.admin-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.admin-card {
+  background: var(--bg-card, #ffffff);
+  border: 1px solid var(--border-color, #e5e7eb);
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+.admin-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.admin-card-label {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary, #111827);
+}
+
+.admin-card-unit {
+  font-size: 0.8rem;
+  color: var(--text-secondary, #6b7280);
+  background: var(--bg-tag, #f3f4f6);
+  padding: 2px 8px;
+  border-radius: 20px;
+}
+
+.admin-card-desc {
+  font-size: 0.85rem;
+  color: var(--text-secondary, #6b7280);
+  margin: 0 0 20px;
+  line-height: 1.5;
+}
+
+.admin-card-control {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.admin-slider {
+  flex: 1;
+  height: 4px;
+  accent-color: var(--accent-color, #6366f1);
+  cursor: pointer;
+}
+
+.admin-number-input {
+  width: 80px;
+  padding: 6px 10px;
+  border: 1px solid var(--border-color, #d1d5db);
+  border-radius: 8px;
+  font-size: 0.9rem;
+  text-align: center;
+  background: var(--bg-primary, #f9fafb);
+  color: var(--text-primary, #111827);
+  outline: none;
+}
+
+.admin-number-input:focus {
+  border-color: var(--accent-color, #6366f1);
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15);
+}
+
+.admin-card-footer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.admin-save-btn {
+  padding: 8px 20px;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  background: var(--accent-color, #6366f1);
+  color: #ffffff;
+  transition: background 0.15s, opacity 0.15s;
+}
+
+.admin-save-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.admin-save-btn.success {
+  background: #10b981;
+}
+
+.admin-dirty-hint {
+  font-size: 0.8rem;
+  color: #f59e0b;
+  font-weight: 500;
+}

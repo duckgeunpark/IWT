@@ -359,6 +359,16 @@ class UserLLMPreference(Base):
     user = relationship("User")
 
 
+class SystemConfig(Base):
+    """관리자 조정 가능한 시스템 설정 (키-값)"""
+    __tablename__ = "system_configs"
+
+    key         = Column(String(100), primary_key=True)
+    value       = Column(String(500), nullable=False)
+    description = Column(String(255), nullable=True)
+    updated_at  = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class UserCorrection(Base):
     """사용자 수정 이력 - AI 학습 라벨용"""
     __tablename__ = "user_corrections"
