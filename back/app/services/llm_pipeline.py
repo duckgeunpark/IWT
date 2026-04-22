@@ -359,6 +359,7 @@ class LLMPipeline:
         self,
         clusters: List[Dict],
         preferences: Optional[Dict] = None,
+        on_progress=None,
     ) -> Dict[str, Any]:
         """
         파이프라인 실행
@@ -390,10 +391,14 @@ class LLMPipeline:
 
         # Stage 1: 일정 표
         logger.info("Pipeline Stage1 시작")
+        if on_progress:
+            await on_progress("stage1", 48, "일정 표 생성 중...")
         itinerary_table = await self._run_stage1(clusters_by_day, prefs)
 
         # Stage 2: 장소별 단락 (병렬)
         logger.info(f"Pipeline Stage2 시작 — 총 {len(clusters)}개 클러스터")
+        if on_progress:
+            await on_progress("stage2", 68, f"장소별 글 작성 중... ({len(clusters)}곳)")
         stage2_results = await self._run_stage2(clusters, prefs)
 
         # 일차 → 클러스터 순서로 정렬 (day 오름차순, cluster_id 오름차순)
@@ -405,6 +410,8 @@ class LLMPipeline:
 
         # Stage 3: 최종 합성
         logger.info("Pipeline Stage3 시작")
+        if on_progress:
+            await on_progress("stage3", 84, "게시글 완성 중...")
         final_markdown = await self._run_stage3(
             itinerary_table=itinerary_table,
             draft_body=draft_body,
