@@ -365,7 +365,7 @@ async def auto_create_post(
                 "segments":        clean_result["segments"],
                 "usage_report":    clean_result["usage_report"],
                 "clean_summary":   clean_result["summary"],
-            }, ensure_ascii=False),
+            }, ensure_ascii=False, default=lambda o: o.isoformat() if hasattr(o, "isoformat") else str(o)),
         )
         db.add(post)
         db.flush()
