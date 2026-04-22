@@ -14,7 +14,7 @@ from app.services.system_config import system_config_service
 
 logger = logging.getLogger(__name__)
 
-GOOGLE_MAPS_API_KEY = os.getenv("GOOGLE_MAPS_API_KEY", "")
+GOOGLE_MAPS_API_KEY = os.getenv("GOOGLE_MAPS_API_KEY") or os.getenv("REACT_APP_GOOGLE_MAPS_API_KEY", "")
 _GEOCODE_URL = "https://maps.googleapis.com/maps/api/geocode/json"
 
 # place_type 변환 우선순위 (앞쪽일수록 더 구체적)
