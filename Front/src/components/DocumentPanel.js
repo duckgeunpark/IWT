@@ -149,7 +149,7 @@ const DocumentPanel = ({ initialContent, initialTitle, onContentChange, postId, 
 
     setIsLLMProcessing(true);
     try {
-      // ── 편집 모드: 증분 ai-update 호출 ──
+      // ── 편집 모드: 증분 ai-update 호출 (현재 문서 내용 포함 → 편집 보존) ──
       if (postId) {
         const photoData = photos.map(p => ({
           file_key: p.fileKey || '',
@@ -161,10 +161,21 @@ const DocumentPanel = ({ initialContent, initialTitle, onContentChange, postId, 
           location_info: p.locationInfo || null,
         }));
 
-        const response = await apiClient.post(`/api/v1/posts/${postId}/ai-update`, photoData);
+        const response = await apiClient.post(`/api/v1/posts/${postId}/ai-update`, {
+          photos: photoData,
+          current_content: content,  // 현재 편집 내용 전달 → 머지 모드
+        });
         if (response.markdown) {
           updateContent(response.markdown);
           onAIResult?.({ title: response.title, tags: response.tags });
+          const stats = response.cache_stats;
+          if (stats) {
+            const parts = [
+              stats.miss > 0 && `${stats.miss}개 섹션 업데이트`,
+              stats.new_sections > 0 && `${stats.new_sections}개 새 섹션 추가`,
+            ].filter(Boolean);
+            if (parts.length) toast.success(parts.join(', '));
+          }
         } else {
           throw new Error('ai-update 응답에 markdown 없음');
         }

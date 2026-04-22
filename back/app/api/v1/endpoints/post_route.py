@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from typing import List, Optional
+from pydantic import BaseModel
 import logging
 import json
 import asyncio
@@ -21,7 +22,7 @@ from app.services.s3_presigned_url import S3PresignedURLService
 from app.services.labeling_service import LabelingService
 from app.services.photo_filter_service import photo_filter
 from app.services.reverse_geocoder import geocoder_service
-from app.services.llm_pipeline import get_llm_pipeline
+from app.services.llm_pipeline import get_llm_pipeline, _merge_into_document, _extract_title_from_markdown, _extract_tags_from_markdown
 from app.services.photo_cluster import cluster_photos_by_location
 
 router = APIRouter(prefix="/posts", tags=["posts"])
@@ -797,10 +798,15 @@ async def get_similar_posts(
         raise HTTPException(status_code=500, detail="유사 게시글 조회에 실패했습니다.")
 
 
+class AIUpdateRequest(BaseModel):
+    photos: List[dict]
+    current_content: Optional[str] = None  # 현재 편집 중인 문서 — 없으면 Stage 3 전체 재생성
+
+
 @router.post("/{post_id}/ai-update")
 async def ai_update_post(
     post_id: int,
-    photos: List[dict],
+    request: AIUpdateRequest,
     current_user = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -830,18 +836,21 @@ async def ai_update_post(
                 pass
         stage2_cache: dict = existing_route.get("stage2_cache", {})
 
-        # ── 1단계: Nominatim 역지오코딩 ─────────────────────────────
+        photos = request.photos
+
+        # ── 1단계: 역지오코딩 ────────────────────────────────────────
         for photo_dict in photos:
             lat = photo_dict.get("_lat")
             lon = photo_dict.get("_lon")
             if lat and lon and not photo_dict.get("location_info"):
                 try:
-                    addr = await geocoder_service.reverse_geocode(lat, lon)
+                    from app.services.reverse_geocoder import reverse_geocode as _rg
+                    addr = await _rg(lat, lon, db)
                     photo_dict["location_info"] = {
                         "country": addr.get("country"),
                         "city": addr.get("city"),
-                        "region": addr.get("state"),
-                        "address": addr.get("full_address"),
+                        "region": addr.get("region"),
+                        "address": addr.get("address"),
                         "coordinates": {"latitude": lat, "longitude": lon},
                     }
                 except Exception as geo_err:
@@ -922,20 +931,43 @@ async def ai_update_post(
 
         # ── 4단계: 증분 파이프라인 실행 ──────────────────────────────
         pipeline = get_llm_pipeline()
-        result = await pipeline.run_incremental(pipeline_clusters, stage2_cache, user_prefs)
+        use_merge = bool(request.current_content)
+        result = await pipeline.run_incremental(
+            pipeline_clusters, stage2_cache, user_prefs,
+            skip_stage3=use_merge,
+        )
 
         cache_stats = result.get("cache_stats", {})
         logger.info(
-            f"ai-update post={post_id} | "
+            f"ai-update post={post_id} merge={use_merge} | "
             f"hit={cache_stats.get('hit',0)} "
             f"miss={cache_stats.get('miss',0)} "
-            f"removed={cache_stats.get('removed',0)}"
+            f"removed={cache_stats.get('removed',0)} "
+            f"new={cache_stats.get('new_sections',0)}"
         )
 
-        # ── 5단계: 포스트 갱신 ───────────────────────────────────────
-        post.title       = result["title"]
-        post.description = result["markdown"]
-        post.tags        = json.dumps(result["tags"], ensure_ascii=False)
+        # ── 5단계: 결과 마크다운 결정 ────────────────────────────────
+        if use_merge:
+            # 편집 내용 보존 모드: 문서 머지 (Stage 3 스킵)
+            final_markdown = _merge_into_document(
+                current_content=request.current_content,
+                stage2_results=result["stage2_results"],
+                cache_hit_ids=result["cache_hit_ids"],
+                itinerary_table=result["itinerary_table"],
+            )
+            final_title = _extract_title_from_markdown(final_markdown)
+            existing_tags = json.loads(post.tags) if post.tags else []
+            final_tags = _extract_tags_from_markdown(final_markdown) or existing_tags
+        else:
+            # 전체 재생성 모드: Stage 3 출력 그대로
+            final_markdown = result["markdown"]
+            final_title    = result["title"]
+            final_tags     = result["tags"]
+
+        # ── 6단계: 포스트 갱신 ───────────────────────────────────────
+        post.title       = final_title
+        post.description = final_markdown
+        post.tags        = json.dumps(final_tags, ensure_ascii=False)
         post.updated_at  = datetime.utcnow()
         post.recommended_route = json.dumps({
             **existing_route,
@@ -948,9 +980,9 @@ async def ai_update_post(
 
         return {
             "id":           post.id,
-            "title":        post.title,
-            "markdown":     post.description,
-            "tags":         json.loads(post.tags) if post.tags else [],
+            "title":        final_title,
+            "markdown":     final_markdown,
+            "tags":         final_tags,
             "updated_at":   post.updated_at.isoformat(),
             "cache_stats":  cache_stats,
         }

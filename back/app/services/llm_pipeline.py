@@ -94,28 +94,125 @@ def _format_visit_time(start: Optional[str], end: Optional[str]) -> str:
 
 def _inject_table(markdown: str, itinerary_table: str) -> str:
     """
-    완성된 마크다운에 일정 표를 강제 삽입.
-    # 제목 바로 다음, 첫 번째 ## 섹션 바로 앞에 위치.
-    이미 표(|---|)가 있으면 스킵.
+    Stage 3 출력에 일정 표를 강제 삽입.
+    LLM이 표를 중간에 생성했을 경우 먼저 제거 후, 첫 번째 ## 앞에 삽입.
     """
-    if not itinerary_table or "| 날짜 |" in markdown:
+    if not itinerary_table:
         return markdown
 
     lines = markdown.split("\n")
 
-    # 첫 번째 ## 위치 탐색
-    insert_at = len(lines)
-    for i, line in enumerate(lines):
+    # LLM이 임의로 생성한 표 블록 제거 (| 로 시작하는 연속 줄)
+    cleaned: List[str] = []
+    i = 0
+    while i < len(lines):
+        if lines[i].strip().startswith("|"):
+            while i < len(lines) and lines[i].strip().startswith("|"):
+                i += 1
+        else:
+            cleaned.append(lines[i])
+            i += 1
+
+    # 첫 번째 ## 위치 탐색 → 그 앞에 삽입
+    insert_at = len(cleaned)
+    for idx, line in enumerate(cleaned):
         if line.startswith("##"):
-            insert_at = i
+            insert_at = idx
             break
 
-    # 빈 줄 포함해서 표 삽입
-    table_block = ["", itinerary_table, ""]
-    for j, row in enumerate(table_block):
-        lines.insert(insert_at + j, row)
+    cleaned.insert(insert_at, "")
+    cleaned.insert(insert_at + 1, itinerary_table)
+    cleaned.insert(insert_at + 2, "")
+    return "\n".join(cleaned)
 
-    return "\n".join(lines)
+
+def _parse_sections(markdown: str) -> List[Dict]:
+    """H2(##) 기준으로 마크다운을 섹션 목록으로 파싱."""
+    lines = markdown.split("\n")
+    sections: List[Dict] = []
+    current: Dict = {"heading": None, "lines": []}
+    for line in lines:
+        if line.startswith("## "):
+            sections.append(current)
+            current = {"heading": line[3:].strip(), "lines": []}
+        else:
+            current["lines"].append(line)
+    sections.append(current)
+    return sections
+
+
+def _reassemble_sections(sections: List[Dict]) -> str:
+    """섹션 목록을 마크다운 문자열로 재조합."""
+    parts: List[str] = []
+    for sec in sections:
+        if sec["heading"] is not None:
+            parts.append(f"## {sec['heading']}")
+        parts.extend(sec["lines"])
+    return "\n".join(parts)
+
+
+def _merge_into_document(
+    current_content: str,
+    stage2_results: List[Dict],
+    cache_hit_ids: set,
+    itinerary_table: str,
+) -> str:
+    """
+    사용자가 편집 중인 문서에 Stage 2 결과를 머지.
+    - 캐시 히트 섹션: 기존 문서 내용 유지 (사용자 편집 보존)
+    - 캐시 미스 섹션: 새 단락으로 교체 (또는 새 섹션으로 추가)
+    - 새 일정표: 인트로 섹션의 기존 표만 교체 (다른 섹션 내용 무관)
+    """
+    sections = _parse_sections(current_content)
+
+    # 캐시 미스 결과 처리
+    added_new: List[Dict] = []
+    for r in stage2_results:
+        if r["cluster_id"] in cache_hit_ids:
+            continue  # 캐시 히트 → 기존 섹션 그대로
+
+        heading = r["location_name"]
+        new_lines: List[str] = []
+        if r.get("photo_url"):
+            new_lines.append(f"![{heading}]({r['photo_url']})")
+        new_lines.append("")
+        new_lines.append(r["paragraph"])
+
+        matched = False
+        for sec in sections:
+            if sec["heading"] and sec["heading"].strip() == heading.strip():
+                sec["lines"] = new_lines
+                matched = True
+                break
+        if not matched:
+            added_new.append({"heading": heading, "lines": new_lines})
+
+    sections.extend(added_new)
+
+    # 인트로 섹션(heading=None)의 일정표만 교체 — 다른 섹션 내 사용자 표는 건드리지 않음
+    if itinerary_table and sections and sections[0]["heading"] is None:
+        intro = sections[0]["lines"]
+        clean_intro: List[str] = []
+        i = 0
+        while i < len(intro):
+            if intro[i].strip().startswith("|"):
+                while i < len(intro) and intro[i].strip().startswith("|"):
+                    i += 1
+            else:
+                clean_intro.append(intro[i])
+                i += 1
+        # # 제목 줄 바로 뒤에 삽입
+        insert_pos = len(clean_intro)
+        for j, line in enumerate(clean_intro):
+            if line.startswith("#") and not line.startswith("##"):
+                insert_pos = j + 1
+                break
+        clean_intro.insert(insert_pos, "")
+        clean_intro.insert(insert_pos + 1, itinerary_table)
+        clean_intro.insert(insert_pos + 2, "")
+        sections[0]["lines"] = clean_intro
+
+    return _reassemble_sections(sections)
 
 
 def _extract_tags_from_markdown(markdown: str) -> List[str]:
@@ -448,6 +545,7 @@ class LLMPipeline:
         clusters: List[Dict],
         stage2_cache: Dict[str, Dict],
         preferences: Optional[Dict] = None,
+        skip_stage3: bool = False,
     ) -> Dict[str, Any]:
         """
         증분 업데이트 파이프라인.
@@ -535,17 +633,6 @@ class LLMPipeline:
         ]
         stage2_results.sort(key=lambda x: (x.get("day", 0), x.get("cluster_id", 0)))
 
-        # ── Stage 3: 항상 재실행 ──────────────────────────────────────
-        logger.info("Incremental Stage3 시작")
-        draft_body, photo_map = self._assemble_draft(stage2_results)
-        place_names = [r["location_name"] for r in stage2_results]
-        final_markdown = await self._run_stage3(
-            itinerary_table=itinerary_table,
-            draft_body=draft_body,
-            place_names=place_names,
-            prefs=prefs,
-        )
-
         # 갱신된 캐시 (히트 항목 유지 + 미스 항목 신규 추가)
         new_cache = {fp: stage2_cache[fp] for fp in fingerprints if fp in stage2_cache}
         for i in misses:
@@ -556,6 +643,37 @@ class LLMPipeline:
                 "paragraph":     r["paragraph"],
                 "photo_url":     r["photo_url"],
             }
+
+        # skip_stage3=True → Stage 2 결과만 반환 (머지는 호출부에서 처리)
+        if skip_stage3:
+            cache_hit_ids = {r["cluster_id"] for _, r in hits}
+            return {
+                "markdown":        None,
+                "title":           None,
+                "tags":            [],
+                "itinerary_table": itinerary_table,
+                "stage2_results":  stage2_results,
+                "cache_hit_ids":   cache_hit_ids,
+                "stage2_cache":    new_cache,
+                "cache_stats":     {
+                    "hit": cache_hit, "miss": cache_miss,
+                    "removed": removed, "new_sections": len([
+                        r for r in stage2_results
+                        if r["cluster_id"] not in cache_hit_ids
+                    ]),
+                },
+            }
+
+        # ── Stage 3: 항상 재실행 ──────────────────────────────────────
+        logger.info("Incremental Stage3 시작")
+        draft_body, photo_map = self._assemble_draft(stage2_results)
+        place_names = [r["location_name"] for r in stage2_results]
+        final_markdown = await self._run_stage3(
+            itinerary_table=itinerary_table,
+            draft_body=draft_body,
+            place_names=place_names,
+            prefs=prefs,
+        )
 
         # 표 삽입 + 사진 플레이스홀더 교체
         final_markdown = _inject_table(final_markdown, itinerary_table)
