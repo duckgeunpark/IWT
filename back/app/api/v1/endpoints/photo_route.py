@@ -20,7 +20,7 @@ from app.schemas.photo import (
 )
 from app.services.s3_presigned_url import S3PresignedURLService
 from app.services.exif_extract_service import ExifExtractService
-from app.services.reverse_geocoder import ReverseGeocoderService
+from app.services.reverse_geocoder import geocoder_service
 from app.services.llm_location_search import LLMLocationSearchService
 from app.services.labeling_service import LabelingService
 from app.db.session import get_db
@@ -33,7 +33,6 @@ logger = logging.getLogger(__name__)
 # 서비스 인스턴스
 s3_service = S3PresignedURLService()
 exif_service = ExifExtractService()
-geocoder_service = ReverseGeocoderService()
 llm_location_service = LLMLocationSearchService()
 labeling_service = LabelingService()
 

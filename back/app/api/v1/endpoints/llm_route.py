@@ -32,7 +32,7 @@ from app.schemas.llm import (
     TagGenerateResponse,
 )
 from app.services.photo_cluster import cluster_photos_by_location
-from app.services.reverse_geocoder import ReverseGeocoderService
+from app.services.reverse_geocoder import geocoder_service
 
 router = APIRouter(prefix="/llm", tags=["llm"])
 
@@ -40,7 +40,6 @@ router = APIRouter(prefix="/llm", tags=["llm"])
 llm_location_service = LLMLocationSearchService()
 llm_route_service = LLMRouteRecommendService()
 ocr_service = OCRAugmenterService()
-geocoder_service = ReverseGeocoderService()
 
 logger = logging.getLogger(__name__)
 
