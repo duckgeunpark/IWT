@@ -266,7 +266,12 @@ def setup_event_handlers(app: FastAPI) -> None:
         # 새 테이블 자동 생성 (기존 테이블은 건드리지 않음)
         from app.models.db_models import Base
         from app.db.session import get_engine, SessionLocal
-        Base.metadata.create_all(bind=get_engine(), checkfirst=True)
+        engine = get_engine()
+        Base.metadata.create_all(bind=engine, checkfirst=True)
+
+        # 기존 테이블 누락 컬럼 자동 추가 (db_models.py 수정 시 자동 반영)
+        from app.db.migrations import run_column_migrations
+        run_column_migrations(engine, Base.metadata)
 
         # SystemConfig 기본값 초기화
         from app.services.system_config import system_config_service
