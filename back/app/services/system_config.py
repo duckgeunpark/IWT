@@ -15,7 +15,7 @@ _DEFAULTS: Dict[str, Dict[str, str]] = {
         "description": "Place DB 캐시 매칭 반경 (미터). 이 반경 내 기존 Place가 있으면 Google Maps API 호출 생략.",
     },
     "cluster_distance_km": {
-        "value": "0.5",
+        "value": "0.1",
         "description": "사진 클러스터링 거리 기준 (km). 직전 사진과 이 거리 이내이면 같은 클러스터로 분류.",
     },
     "cluster_time_hours": {

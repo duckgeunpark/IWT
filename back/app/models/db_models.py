@@ -18,13 +18,38 @@ class Post(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     recommended_route = Column(Text, nullable=True)  # 추천 경로 정보를 JSON 문자열로 저장
-    
+    blocks         = Column(Text, nullable=True)          # JSON blocks[] — 블록 기반 콘텐츠
+    blocks_version = Column(Integer, default=0)           # 재생성 이력 추적용 버전 번호
+    has_user_edits = Column(Boolean, default=False)       # 사용자 편집 여부 플래그
+
     # 관계
     photos = relationship("Photo", back_populates="post", cascade="all, delete-orphan")
     categories = relationship("Category", back_populates="post", cascade="all, delete-orphan")
     likes = relationship("PostLike", back_populates="post", cascade="all, delete-orphan")
     bookmarks = relationship("PostBookmark", back_populates="post", cascade="all, delete-orphan")
     comments = relationship("Comment", back_populates="post", cascade="all, delete-orphan")
+    clusters = relationship("Cluster", back_populates="post", cascade="all, delete-orphan")
+
+class Cluster(Base):
+    """사진 클러스터 — GPS centroid + 날짜 기반 stable identity"""
+    __tablename__ = "clusters"
+
+    id            = Column(Integer, primary_key=True, index=True)
+    post_id       = Column(Integer, ForeignKey("posts.id", ondelete="CASCADE"), nullable=False, index=True)
+    cluster_hash  = Column(String(64), nullable=False, index=True)  # GPS grid + date hash (안정적 identity)
+    centroid_lat  = Column(Float, nullable=True)
+    centroid_lng  = Column(Float, nullable=True)
+    location_name = Column(String(255), nullable=True)
+    city          = Column(String(100), nullable=True)
+    country       = Column(String(100), nullable=True)
+    time_start    = Column(DateTime, nullable=True)
+    time_end      = Column(DateTime, nullable=True)
+    photo_count   = Column(Integer, default=0)
+    cluster_order = Column(Integer, default=0)
+    ai_paragraph  = Column(Text, nullable=True)  # Stage 2 LLM 결과 (캐시 역할)
+
+    post = relationship("Post", back_populates="clusters")
+
 
 class Photo(Base):
     __tablename__ = "photos"

@@ -93,11 +93,36 @@ const request = async (method, path, body, options = {}) => {
   return handleResponse(response);
 };
 
+/**
+ * SSE(Server-Sent Events) 스트리밍용 POST — 파싱하지 않고 raw Response 반환
+ */
+const postStreamRaw = async (path, body, options = {}) => {
+  const authHeaders = await getAuthHeaders();
+  const headers = {
+    'Content-Type': 'application/json',
+    ...authHeaders,
+    ...options.headers,
+  };
+  const response = await fetch(`${API_BASE}${path}`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    const error = new Error(errorData.detail || `HTTP ${response.status}`);
+    error.status = response.status;
+    throw error;
+  }
+  return response;
+};
+
 export const apiClient = {
   get: (path, options = {}) => request('GET', path, null, options),
   post: (path, body, options = {}) => request('POST', path, body, options),
   put: (path, body, options = {}) => request('PUT', path, body, options),
   delete: (path, options = {}) => request('DELETE', path, null, options),
+  postStream: postStreamRaw,
 };
 
 export default apiClient;

@@ -34,7 +34,7 @@ def _parse_datetime(dt_str: Optional[str]) -> Optional[datetime]:
 
 def cluster_photos_by_location(
     photos: List[Dict[str, Any]],
-    distance_km: float = 0.5,
+    distance_km: float = 0.1,
     time_hours: float = 2.0,
 ) -> List[Dict[str, Any]]:
     """

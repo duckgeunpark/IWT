@@ -32,6 +32,100 @@
   margin: 0;
 }
 
+/* ── AI Progress Full-Screen ── */
+.ai-progress-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: calc(100vh - 80px);
+  padding: 24px;
+}
+.ai-progress-card {
+  background: var(--bg-card, #fff);
+  border: 1px solid var(--border-color, #e5e7eb);
+  border-radius: 16px;
+  padding: 40px 48px;
+  max-width: 480px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+}
+.ai-progress-spinner {
+  width: 48px;
+  height: 48px;
+  border: 4px solid var(--border-color, #e5e7eb);
+  border-top-color: var(--accent-color, #6366f1);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  flex-shrink: 0;
+}
+.ai-progress-title {
+  font-size: 17px;
+  font-weight: 700;
+  margin: 0;
+  text-align: center;
+  color: var(--text-primary, #111);
+}
+.ai-progress-message {
+  font-size: 14px;
+  color: var(--text-secondary, #6b7280);
+  margin: 0;
+  text-align: center;
+  min-height: 20px;
+}
+.ai-progress-bar-wrap {
+  width: 100%;
+  height: 8px;
+  background: var(--border-color, #e5e7eb);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.ai-progress-bar {
+  height: 100%;
+  background: var(--accent-color, #6366f1);
+  border-radius: 4px;
+  transition: width 0.4s ease;
+}
+.ai-progress-percent {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent-color, #6366f1);
+  margin: 0;
+}
+.ai-progress-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  justify-content: center;
+  margin-top: 4px;
+}
+.ai-progress-step {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--text-muted, #aaa);
+}
+.ai-progress-step.done { color: var(--text-secondary, #6b7280); }
+.ai-progress-step.active { color: var(--accent-color, #6366f1); font-weight: 600; }
+.step-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+}
+.ai-progress-step.active .step-dot {
+  animation: pulse-dot 1s ease-in-out infinite;
+}
+@keyframes pulse-dot {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.5); opacity: 0.6; }
+}
+
 /* ── 임시저장 복원 배너 ── */
 /* ── Tag Bar ── */
 .tag-bar {

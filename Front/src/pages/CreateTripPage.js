@@ -52,6 +52,7 @@ const CreateTripPage = ({ toggleTheme, theme }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [isGeneratingContent, setIsGeneratingContent] = useState(false);
+  const [progress, setProgress] = useState(null);
   const [editLoading, setEditLoading] = useState(isEditMode);
   const [isDraftPost, setIsDraftPost] = useState(false);
   const [showLLMSettings, setShowLLMSettings] = useState(false);
@@ -145,14 +146,35 @@ const CreateTripPage = ({ toggleTheme, theme }) => {
           return;
         }
 
-        // 2. 3단계 LLM 파이프라인 + 게시글 자동 생성
-        const res = await apiClient.post('/api/v1/posts/auto-create', photoPayload);
+        // 2. 3단계 LLM 파이프라인 + 게시글 자동 생성 (SSE 스트리밍)
+        const response = await apiClient.postStream('/api/v1/posts/auto-create', photoPayload);
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let postId = null;
+
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop();
+          for (const line of lines) {
+            if (!line.startsWith('data: ')) continue;
+            const data = JSON.parse(line.slice(6));
+            setProgress(data);
+            if (data.step === 'done') postId = data.post_id;
+            if (data.step === 'error') throw new Error(data.message);
+          }
+        }
+
+        if (!postId) throw new Error('게시글 ID를 받지 못했습니다.');
 
         // 3. 완료 → 편집 모드로 이동 (생성된 post의 edit 페이지)
         dispatch(clearPhotos());
         dispatch(clearClusters());
         fileStore.clear();
-        navigate(`/trip/${res.id}/edit`);
+        navigate(`/trip/${postId}/edit`);
       } catch (err) {
         console.warn('AI 초안 자동 생성 실패:', err);
         toast.error('AI 게시글 생성에 실패했습니다. 다시 시도해주세요.');
@@ -496,6 +518,19 @@ const CreateTripPage = ({ toggleTheme, theme }) => {
     );
   }
 
+  const STEP_LABELS = {
+    filtering: '사진 분석',
+    geocoding: '위치 정보 확인',
+    clustering: '여행 경로 분석',
+    stage1: '일정표 생성',
+    stage2: '장소별 글 작성',
+    stage3: '게시글 완성',
+    saving: '저장',
+    done: '완료',
+  };
+  const ALL_STEPS = ['filtering', 'geocoding', 'clustering', 'stage1', 'stage2', 'stage3', 'saving', 'done'];
+  const currentStepIdx = progress ? ALL_STEPS.indexOf(progress.step) : -1;
+
   if (isGeneratingContent) {
     return (
       <div className="create-trip-page">
@@ -508,13 +543,35 @@ const CreateTripPage = ({ toggleTheme, theme }) => {
           </div>
           <div className="title-section"><h1 className="page-title">{tripTitle}</h1></div>
         </div>
-        <div style={{ display:'flex', flexDirection:'column', justifyContent:'center', alignItems:'center', height:'calc(100vh - 80px)', gap:'24px' }}>
-          <div style={{ width:'56px', height:'56px', border:'5px solid var(--border-color, #e0e0e0)', borderTopColor:'var(--primary-color, #4285F4)', borderRadius:'50%', animation:'spin 1s linear infinite' }} />
-          <div style={{ textAlign:'center' }}>
-            <p style={{ fontSize:'18px', fontWeight:'600', marginBottom:'8px' }}>AI가 여행 기록을 작성하는 중입니다</p>
-            <p style={{ fontSize:'14px', color:'var(--text-secondary, #888)' }}>
-              사진을 분석하고 여행 일지를 생성하고 있어요. 잠시만 기다려주세요.
+        <div className="ai-progress-container">
+          <div className="ai-progress-card">
+            <div className="ai-progress-spinner" />
+            <h2 className="ai-progress-title">AI가 여행 기록을 작성하는 중입니다</h2>
+            <p className="ai-progress-message">
+              {progress ? progress.message : '사진을 업로드하는 중...'}
             </p>
+            <div className="ai-progress-bar-wrap">
+              <div
+                className="ai-progress-bar"
+                style={{ width: `${progress ? progress.progress : 0}%` }}
+              />
+            </div>
+            <p className="ai-progress-percent">{progress ? progress.progress : 0}%</p>
+            <div className="ai-progress-steps">
+              {ALL_STEPS.map((step, idx) => (
+                <div
+                  key={step}
+                  className={[
+                    'ai-progress-step',
+                    idx < currentStepIdx ? 'done' : '',
+                    idx === currentStepIdx ? 'active' : '',
+                  ].join(' ').trim()}
+                >
+                  <span className="step-dot" />
+                  <span className="step-label">{STEP_LABELS[step]}</span>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </div>

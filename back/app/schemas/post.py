@@ -24,6 +24,8 @@ class PostResponse(BaseModel):
     id: int
     title: str
     description: Optional[str] = None
+    blocks: Optional[List[Dict[str, Any]]] = None  # 블록 기반 콘텐츠 (없으면 description 사용)
+    blocks_version: Optional[int] = None
     tags: List[str] = []
     status: str = 'published'
     created_at: datetime
