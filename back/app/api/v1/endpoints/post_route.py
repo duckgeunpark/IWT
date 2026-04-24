@@ -421,6 +421,14 @@ async def auto_create_post(
                 post.blocks = json.dumps(blocks_list, ensure_ascii=False)
                 post.blocks_version = 1
 
+                # temp file_key → DB cluster.id 매핑 (사진 저장 시 cluster_id 설정용)
+                temp_key_to_cluster_id: dict = {}
+                for pc in pipeline_clusters:
+                    db_cid = db_cluster_id_map.get(pc["cluster_id"])
+                    if db_cid:
+                        for photo_item in pc.get("photos", []):
+                            temp_key_to_cluster_id[photo_item["file_key"]] = db_cid
+
                 for photo_dict in usable_photos:
                     temp_key = photo_dict["file_key"]
                     permanent_key = f"post/{user_id}/{post.id}/{photo_dict['file_name']}"
@@ -434,6 +442,7 @@ async def auto_create_post(
                             file_size=photo_dict["file_size"],
                             content_type=photo_dict["content_type"],
                             upload_time=datetime.utcnow(),
+                            cluster_id=temp_key_to_cluster_id.get(temp_key),
                         )
                         db.add(photo)
                         db.flush()
@@ -727,6 +736,7 @@ async def get_post_photos(
                 "file_name": photo.file_name,
                 "file_size": photo.file_size,
                 "content_type": photo.content_type,
+                "cluster_id": photo.cluster_id,
                 "url": url,
                 "location": location,
                 "upload_time": photo.upload_time.isoformat() if photo.upload_time else None,

@@ -54,9 +54,10 @@ class Cluster(Base):
 
 class Photo(Base):
     __tablename__ = "photos"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     post_id = Column(Integer, ForeignKey("posts.id"), nullable=False)
+    cluster_id = Column(Integer, ForeignKey("clusters.id"), nullable=True, index=True)
     file_key = Column(String(500), nullable=False)  # S3 파일 키
     file_name = Column(String(255), nullable=False)
     file_size = Column(Integer, nullable=False)

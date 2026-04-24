@@ -19,6 +19,67 @@ import '../styles/TripDetailPage.css';
 
 const GOOGLE_MAPS_KEY = process.env.REACT_APP_GOOGLE_MAPS_API_KEY;
 
+// 블록 뷰어 (읽기 전용)
+const BlockViewer = ({ blocks, photos }) => (
+  <div className="block-viewer">
+    {blocks.map(block => {
+      const content = block.user_content ?? block.ai_content ?? '';
+
+      switch (block.block_type) {
+        case 'title':
+          return null; // 상단 meta에 이미 표시
+
+        case 'cluster_photos': {
+          const clusterPhotos = photos.filter(p => p.cluster_id === block.cluster_id);
+          if (clusterPhotos.length === 0) return null;
+          return (
+            <div key={block.block_id} className="bv-block bv-cluster-photos">
+              {clusterPhotos.map(p => (
+                <img key={p.id} src={p.url} alt={p.file_name} className="bv-photo" />
+              ))}
+            </div>
+          );
+        }
+
+        case 'itinerary':
+          if (!content) return null;
+          return (
+            <div key={block.block_id} className="bv-block bv-itinerary">
+              <MarkdownPreview content={content} />
+            </div>
+          );
+
+        case 'cluster_text':
+          if (!content) return null;
+          return (
+            <div key={block.block_id} className="bv-block bv-cluster-text">
+              <MarkdownPreview content={content} />
+            </div>
+          );
+
+        case 'conclusion':
+          if (!content) return null;
+          return (
+            <div key={block.block_id} className="bv-block bv-conclusion">
+              <MarkdownPreview content={content} />
+            </div>
+          );
+
+        case 'user_insert':
+          if (!content) return null;
+          return (
+            <div key={block.block_id} className="bv-block bv-user-insert">
+              <MarkdownPreview content={content} />
+            </div>
+          );
+
+        default:
+          return null;
+      }
+    })}
+  </div>
+);
+
 const TripDetailPage = ({ toggleTheme, theme }) => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -203,6 +264,7 @@ const TripDetailPage = ({ toggleTheme, theme }) => {
   }
 
   const isOwner = isAuthenticated && trip.user_id === user?.sub;
+  const hasBlocks = Array.isArray(trip.blocks) && trip.blocks.length > 0;
   const isFollowing = followStatus[trip.user_id]?.following || false;
   const tags = Array.isArray(trip.tags) ? trip.tags : [];
   const activePhoto = photos[activePhotoIndex];
@@ -358,7 +420,9 @@ const TripDetailPage = ({ toggleTheme, theme }) => {
       {/* ── 본문 (단일 컬럼) ── */}
       <div className="trip-body">
         <div className="trip-content">
-          {trip.description ? (
+          {hasBlocks ? (
+            <BlockViewer blocks={trip.blocks} photos={photos} />
+          ) : trip.description ? (
             <MarkdownPreview content={trip.description} />
           ) : (
             <p className="trip-no-content">내용이 없습니다.</p>

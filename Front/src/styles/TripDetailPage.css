@@ -316,6 +316,47 @@
 .trip-content { width: 100%; }
 .trip-no-content { color: var(--text-muted); font-size: 14px; }
 
+/* ── Block Viewer ── */
+.block-viewer { display: flex; flex-direction: column; }
+.bv-block { width: 100%; }
+.bv-itinerary {
+  margin-bottom: 36px;
+  padding: 20px;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+  overflow-x: auto;
+}
+.bv-cluster-text { margin-bottom: 40px; }
+.bv-conclusion {
+  margin-top: 16px;
+  padding-top: 32px;
+  border-top: 1px solid var(--border-color);
+}
+.bv-user-insert {
+  margin-bottom: 32px;
+  padding: 16px 20px;
+  border-left: 3px solid var(--accent-color);
+  background: var(--bg-tertiary);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+.bv-cluster-photos {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 8px;
+  margin-bottom: 24px;
+}
+.bv-photo {
+  width: 100%;
+  aspect-ratio: 4/3;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  display: block;
+}
+@media (max-width: 600px) {
+  .bv-cluster-photos { grid-template-columns: repeat(2, 1fr); gap: 4px; }
+}
+
 /* ── Comments (full width) ── */
 .trip-comments-outer {
   background: var(--bg-secondary);
