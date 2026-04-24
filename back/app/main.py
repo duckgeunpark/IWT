@@ -270,8 +270,9 @@ def setup_event_handlers(app: FastAPI) -> None:
         Base.metadata.create_all(bind=engine, checkfirst=True)
 
         # 기존 테이블 누락 컬럼 자동 추가 (db_models.py 수정 시 자동 반영)
-        from app.db.migrations import run_column_migrations
+        from app.db.migrations import run_column_migrations, run_type_migrations
         run_column_migrations(engine, Base.metadata)
+        run_type_migrations(engine)
 
         # SystemConfig 기본값 초기화
         from app.services.system_config import system_config_service

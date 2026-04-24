@@ -13,6 +13,34 @@ from sqlalchemy import String, Text, Integer, Boolean, Float, DateTime, Numeric
 
 logger = logging.getLogger(__name__)
 
+# 컬럼 타입 변경이 필요한 케이스 (table, column, 현재 DB 타입, 변경할 DDL)
+# TEXT → LONGTEXT처럼 safe한 확장 방향만 여기에 추가
+_TYPE_MIGRATIONS = [
+    ("posts", "blocks", {"text"}, "ALTER TABLE `posts` MODIFY COLUMN `blocks` LONGTEXT NULL"),
+    ("posts", "description", {"text"}, "ALTER TABLE `posts` MODIFY COLUMN `description` LONGTEXT NULL"),
+]
+
+
+def run_type_migrations(engine) -> None:
+    """특정 컬럼의 타입을 안전한 방향으로 변경 (TEXT → LONGTEXT 등)"""
+    inspector = inspect(engine)
+    db_tables = set(inspector.get_table_names())
+
+    for table, column, old_types, ddl in _TYPE_MIGRATIONS:
+        if table not in db_tables:
+            continue
+        cols = {c["name"]: c for c in inspector.get_columns(table)}
+        if column not in cols:
+            continue
+        current_type = str(cols[column]["type"]).lower()
+        if any(t in current_type for t in old_types):
+            try:
+                with engine.begin() as conn:
+                    conn.execute(text(ddl))
+                logger.info(f"[migration] {table}.{column} 타입 변경 완료 ({current_type} → LONGTEXT)")
+            except Exception as e:
+                logger.error(f"[migration] {table}.{column} 타입 변경 실패: {e}")
+
 
 def _col_type_sql(col) -> str:
     """SQLAlchemy 컬럼 타입 → MySQL DDL 타입 문자열"""

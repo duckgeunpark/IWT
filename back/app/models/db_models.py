@@ -1,4 +1,5 @@
 from sqlalchemy import Column, Integer, String, Text, DateTime, Float, Boolean, ForeignKey, UniqueConstraint
+from sqlalchemy.dialects.mysql import LONGTEXT
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 from datetime import datetime
@@ -18,7 +19,7 @@ class Post(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     recommended_route = Column(Text, nullable=True)  # 추천 경로 정보를 JSON 문자열로 저장
-    blocks         = Column(Text, nullable=True)          # JSON blocks[] — 블록 기반 콘텐츠
+    blocks         = Column(LONGTEXT, nullable=True)        # JSON blocks[] — 블록 기반 콘텐츠
     blocks_version = Column(Integer, default=0)           # 재생성 이력 추적용 버전 번호
     has_user_edits = Column(Boolean, default=False)       # 사용자 편집 여부 플래그
 
