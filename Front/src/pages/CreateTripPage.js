@@ -525,7 +525,7 @@ const CreateTripPage = ({ toggleTheme, theme }) => {
     stage1: '일정표 생성',
     stage2: '장소별 글 작성',
     stage3: '게시글 완성',
-    saving: '저장',
+    saving: '임시저장',
     done: '완료',
   };
   const ALL_STEPS = ['filtering', 'geocoding', 'clustering', 'stage1', 'stage2', 'stage3', 'saving', 'done'];

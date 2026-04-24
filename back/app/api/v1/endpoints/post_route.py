@@ -347,7 +347,7 @@ async def auto_create_post(
                 pipeline_result = await pipeline.run(pipeline_clusters, user_prefs, on_progress=on_progress)
 
                 # 6단계: DB 저장
-                await on_progress("saving", 93, "저장 중...")
+                await on_progress("saving", 93, "임시저장 중...")
                 existing_user = db.query(User).filter(User.id == user_id).first()
                 if not existing_user:
                     db.add(User(
@@ -362,7 +362,7 @@ async def auto_create_post(
                     title=pipeline_result["title"],
                     description=pipeline_result["markdown"],
                     tags=json.dumps(pipeline_result["tags"], ensure_ascii=False),
-                    status="published",
+                    status="draft",
                     user_id=user_id,
                     created_at=datetime.utcnow(),
                     updated_at=datetime.utcnow(),

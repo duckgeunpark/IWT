@@ -19,6 +19,31 @@ import '../styles/TripDetailPage.css';
 
 const GOOGLE_MAPS_KEY = process.env.REACT_APP_GOOGLE_MAPS_API_KEY;
 
+// 클러스터 사진 캐러셀
+const ClusterCarousel = ({ photos }) => {
+  const [idx, setIdx] = useState(0);
+  if (photos.length === 0) return null;
+  const prev = () => setIdx(i => (i - 1 + photos.length) % photos.length);
+  const next = () => setIdx(i => (i + 1) % photos.length);
+  return (
+    <div className="cluster-carousel">
+      <img src={photos[idx].url} alt={photos[idx].file_name} className="cluster-carousel-img" />
+      {photos.length > 1 && (
+        <>
+          <button className="carousel-btn carousel-btn-prev" onClick={prev}>‹</button>
+          <button className="carousel-btn carousel-btn-next" onClick={next}>›</button>
+          <div className="carousel-counter">{idx + 1} / {photos.length}</div>
+          <div className="carousel-dots">
+            {photos.map((_, i) => (
+              <span key={i} className={`carousel-dot${i === idx ? ' active' : ''}`} onClick={() => setIdx(i)} />
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
+
 // 블록 뷰어 (읽기 전용)
 const BlockViewer = ({ blocks, photos }) => (
   <div className="block-viewer">
@@ -34,9 +59,7 @@ const BlockViewer = ({ blocks, photos }) => (
           if (clusterPhotos.length === 0) return null;
           return (
             <div key={block.block_id} className="bv-block bv-cluster-photos">
-              {clusterPhotos.map(p => (
-                <img key={p.id} src={p.url} alt={p.file_name} className="bv-photo" />
-              ))}
+              <ClusterCarousel photos={clusterPhotos} />
             </div>
           );
         }

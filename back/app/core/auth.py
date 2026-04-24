@@ -110,9 +110,10 @@ async def get_current_user(token: str = Depends(get_token_auth_header)) -> Dict:
 
 
 async def require_admin(current_user: Dict = Depends(get_current_user)) -> Dict:
-    """관리자 전용 엔드포인트 의존성. ADMIN_EMAILS 환경변수에 이메일이 있어야 통과."""
+    """관리자 전용 엔드포인트 의존성. ADMIN_EMAILS에 email 또는 sub가 있으면 통과."""
     email = (current_user.get("email") or "").lower()
-    if not _ADMIN_EMAILS or email not in _ADMIN_EMAILS:
+    sub = (current_user.get("sub") or "").lower()
+    if not _ADMIN_EMAILS or (email not in _ADMIN_EMAILS and sub not in _ADMIN_EMAILS):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="관리자 권한이 필요합니다.",
