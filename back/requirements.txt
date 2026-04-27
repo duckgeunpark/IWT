@@ -15,5 +15,3 @@ python-dotenv==1.0.0
 alembic==1.13.1
 redis==5.0.0
 slowapi==0.1.9
-# LangChain / ChromaDB는 requirements.base.txt 참조
--r requirements.base.txt
