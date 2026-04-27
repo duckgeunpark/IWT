@@ -19,6 +19,7 @@ jobs:
           host: ${{ secrets.OCI_VM_IP }}
           username: ${{ secrets.OCI_VM_USER }}
           key: ${{ secrets.OCI_SSH_PRIVATE_KEY }}
+          command_timeout: 30m
           script: |
             set -e
             cd /opt/iwt
@@ -32,8 +33,8 @@ jobs:
               exit 1
             fi
 
-            # 이미지 재빌드 및 컨테이너 재시작
-            docker compose --env-file /opt/iwt/.env.prod -f docker-compose.prod.yml build --no-cache
+            # 이미지 재빌드 (캐시 활용 — requirements.txt 변경 시에만 pip 재설치)
+            docker compose --env-file /opt/iwt/.env.prod -f docker-compose.prod.yml build
             docker compose --env-file /opt/iwt/.env.prod -f docker-compose.prod.yml up -d
 
             # 오래된 이미지 정리
