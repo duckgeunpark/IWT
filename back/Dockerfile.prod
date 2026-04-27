@@ -3,12 +3,17 @@ FROM python:3.11-slim
 WORKDIR /app
 
 # 시스템 의존성
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# 의존성 설치 (빌드 캐시 활용)
+# ── 레이어 1: 무거운 의존성 (langchain, chromadb) ──────────────────
+# 이 파일이 바뀌지 않으면 Docker 캐시 재사용 → 재설치 안 함
+COPY requirements.base.txt .
+RUN pip install --no-cache-dir -r requirements.base.txt
+
+# ── 레이어 2: 나머지 의존성 (자주 바뀔 수 있음) ────────────────────
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
@@ -18,7 +23,6 @@ COPY . .
 EXPOSE 8000
 
 # 프로덕션: 멀티 워커 (VM.Standard.A1.Flex = 4 OCPU)
-# workers = 2 * CPU + 1 = 9
 CMD ["uvicorn", "app.main:app", \
      "--host", "0.0.0.0", \
      "--port", "8000", \

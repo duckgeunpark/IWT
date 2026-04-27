@@ -1,0 +1,11 @@
+# 무거운 의존성 — 거의 바뀌지 않음, Docker 레이어로 캐시됨
+# requirements.txt가 바뀌어도 이 파일이 유지되면 재설치 안 함
+langchain>=0.3.0
+langchain-core>=0.3.0
+langchain-google-genai>=2.0.0
+langchain-groq>=0.2.0
+langchain-openai>=0.2.0
+langchain-anthropic>=0.3.0
+langchain-community>=0.3.0
+langsmith>=0.1.0
+chromadb>=0.5.0

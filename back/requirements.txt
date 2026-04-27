@@ -15,12 +15,5 @@ python-dotenv==1.0.0
 alembic==1.13.1
 redis==5.0.0
 slowapi==0.1.9
-langchain>=0.3.0
-langchain-core>=0.3.0
-langchain-google-genai>=2.0.0
-langchain-groq>=0.2.0
-langchain-openai>=0.2.0
-langchain-anthropic>=0.3.0
-langchain-community>=0.3.0
-langsmith>=0.1.0
-chromadb>=0.5.0
+# LangChain / ChromaDB는 requirements.base.txt 참조
+-r requirements.base.txt

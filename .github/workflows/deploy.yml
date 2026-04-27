@@ -19,7 +19,7 @@ jobs:
           host: ${{ secrets.OCI_VM_IP }}
           username: ${{ secrets.OCI_VM_USER }}
           key: ${{ secrets.OCI_SSH_PRIVATE_KEY }}
-          command_timeout: 30m
+          command_timeout: 60m
           script: |
             set -e
             cd /opt/iwt
