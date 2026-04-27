@@ -61,7 +61,7 @@ _REWRITE_PROMPT = ChatPromptTemplate.from_messages([
 {issues}
 
 [규칙]
-- depth={depth}: {"main → 150~250자" if "{depth}" == "main" else "brief → 2~3문장 40~80자"}
+- depth={depth}: {depth_rule}
 - 헤딩 없이 본문만 출력
 - 피드백의 문제를 해결하되 원본의 좋은 부분은 유지
 
@@ -151,11 +151,17 @@ async def evaluate_and_rewrite(
                 f"이름: {note.place_name}, 카테고리: {note.category}, "
                 f"분위기: {', '.join(note.mood_keywords)}, 핵심장면: {note.highlight_scene}"
             )
+            depth_rule = (
+                "main → 150~250자"
+                if block["depth"] == "main"
+                else "brief → 2~3문장 40~80자"
+            )
             result = await _get_rewrite_chain().ainvoke({
                 "original_text": block["ai_content"],
                 "place_info":    place_info,
                 "issues":        "\n".join(f"- {i}" for i in issues),
                 "depth":         block["depth"],
+                "depth_rule":    depth_rule,
             })
             block["ai_content"] = result.strip()
             block["quality_score"] = 0.75  # 재작성 후 기본 점수

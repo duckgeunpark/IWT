@@ -34,7 +34,7 @@ def get_llm(
     if p == "gemini":
         from langchain_google_genai import ChatGoogleGenerativeAI
         kwargs: dict = {
-            "model": os.getenv("GEMINI_MODEL", "gemini-1.5-flash"),
+            "model": os.getenv("GEMINI_MODEL") or os.getenv("LLM_MODEL_NAME", "gemini-3.1-flash-lite-preview"),
             "temperature": temperature,
             "google_api_key": os.getenv("GEMINI_API_KEY"),
         }
