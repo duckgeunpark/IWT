@@ -1,5 +1,5 @@
 """
-LLM 파이프라인 프롬프트 템플릿
+LLM 파이프라인 프롬프트 템플릿 (LangChain ChatPromptTemplate 기반)
 
 BASE 구조는 고정, 아래 항목만 사용자 커스터마이즈 가능:
   - tone:  casual | formal | poetic | humorous
@@ -7,6 +7,8 @@ BASE 구조는 고정, 아래 항목만 사용자 커스터마이즈 가능:
   - stage1_extra / stage2_extra / stage3_extra: 자유 텍스트 지침
   - lang:  ko | en | ja | zh | fr (제목 언어)
 """
+
+from langchain_core.prompts import ChatPromptTemplate
 
 # ── 커스터마이즈 가이드 ──────────────────────────────────────────────
 
@@ -43,34 +45,14 @@ DEFAULT_PREFERENCES = {
 
 # ── Stage 1: 전체 일정 표 ──────────────────────────────────────────
 
-def build_stage1_prompt(
-    clusters_by_day: list,
-    tone: str = "casual",
-    style: str = "blog",
-    extra: str = None,
-) -> str:
-    """
-    clusters_by_day: [
-        {"day": 1, "clusters": [{"location_name": str, ...}, ...]},
-        {"day": 2, "clusters": [...]},
-        ...
-    ]
-    """
-    tone_text  = TONE_GUIDE.get(tone, TONE_GUIDE["casual"])
-    style_text = STYLE_GUIDE.get(style, STYLE_GUIDE["blog"])
-    extra_line = f"\n추가 지침: {extra}" if extra else ""
-
-    day_lines = []
-    for day_info in clusters_by_day:
-        places = ", ".join(
-            c.get("location_name", "알 수 없는 장소")
-            for c in day_info["clusters"]
-        )
-        day_lines.append(f"- {day_info['day']}일차: {places}")
-
-    days_text = "\n".join(day_lines)
-
-    return f"""다음 여행 일정을 바탕으로 전체 일정 표를 마크다운으로 작성해주세요.
+STAGE1_PROMPT = ChatPromptTemplate.from_messages([
+    (
+        "system",
+        "당신은 여행 일정을 정리하는 전문가입니다. 마크다운 표만 출력합니다.",
+    ),
+    (
+        "human",
+        """다음 여행 일정을 바탕으로 전체 일정 표를 마크다운으로 작성해주세요.
 
 여행 일정:
 {days_text}
@@ -84,30 +66,44 @@ def build_stage1_prompt(
 출력 (표만):
 | 날짜 | 장소 | 메모 |
 |------|------|------|
-| 1일차 | 장소명 | 메모 |"""
+| 1일차 | 장소명 | 메모 |""",
+    ),
+])
+
+
+def build_stage1_inputs(
+    clusters_by_day: list,
+    tone: str = "casual",
+    style: str = "blog",
+    extra: str = None,
+) -> dict:
+    """Stage 1 프롬프트 입력값 딕셔너리 반환"""
+    day_lines = []
+    for day_info in clusters_by_day:
+        places = ", ".join(
+            c.get("location_name", "알 수 없는 장소")
+            for c in day_info["clusters"]
+        )
+        day_lines.append(f"- {day_info['day']}일차: {places}")
+
+    return {
+        "days_text": "\n".join(day_lines),
+        "tone_text": TONE_GUIDE.get(tone, TONE_GUIDE["casual"]),
+        "style_text": STYLE_GUIDE.get(style, STYLE_GUIDE["blog"]),
+        "extra_line": f"\n추가 지침: {extra}" if extra else "",
+    }
 
 
 # ── Stage 2: 개별 장소 단락 ───────────────────────────────────────
 
-def build_stage2_prompt(
-    location_name: str,
-    country: str,
-    photo_count: int,
-    visit_time: str,
-    tone: str = "casual",
-    style: str = "blog",
-    extra: str = None,
-) -> str:
-    """
-    장소 하나에 대한 짧은 블로그 단락 생성.
-    토큰 절약을 위해 150~250자로 제한.
-    ## 소제목은 포함하지 않음 — 파이프라인이 직접 조립함.
-    """
-    tone_text  = TONE_GUIDE.get(tone, TONE_GUIDE["casual"])
-    style_text = STYLE_GUIDE.get(style, STYLE_GUIDE["blog"])
-    extra_line = f"\n추가 지침: {extra}" if extra else ""
-
-    return f"""다음 여행 장소에 대한 짧은 단락을 작성해주세요.
+STAGE2_PROMPT = ChatPromptTemplate.from_messages([
+    (
+        "system",
+        "당신은 여행 블로거입니다. 지정된 글자 수 범위의 단락만 출력합니다.",
+    ),
+    (
+        "human",
+        """다음 여행 장소에 대한 짧은 단락을 작성해주세요.
 
 장소: {location_name} ({country})
 방문 시간대: {visit_time}
@@ -120,36 +116,54 @@ def build_stage2_prompt(
 4. 장소의 분위기·특징·인상 위주로 묘사
 5. 첫 문장 시작 방식 다양하게 (질문형·감탄형·묘사형·회상형 중 택1){extra_line}
 
-본문만 출력, 다른 설명 없이."""
+본문만 출력, 다른 설명 없이.""",
+    ),
+])
+
+
+def build_stage2_inputs(
+    location_name: str,
+    country: str,
+    photo_count: int,
+    visit_time: str,
+    tone: str = "casual",
+    style: str = "blog",
+    extra: str = None,
+) -> dict:
+    """Stage 2 프롬프트 입력값 딕셔너리 반환"""
+    return {
+        "location_name": location_name,
+        "country": country,
+        "photo_count": photo_count,
+        "visit_time": visit_time,
+        "tone_text": TONE_GUIDE.get(tone, TONE_GUIDE["casual"]),
+        "style_text": STYLE_GUIDE.get(style, STYLE_GUIDE["blog"]),
+        "extra_line": f"\n추가 지침: {extra}" if extra else "",
+    }
 
 
 # ── Stage 3: 전체 합성 및 다듬기 ─────────────────────────────────
 
-def build_stage3_prompt(
-    itinerary_table: str,
-    draft_body: str,
-    place_names: list,
-    lang: str = "ko",
-    tone: str = "casual",
-    style: str = "blog",
-    extra: str = None,
-) -> str:
-    """
-    draft_body: 파이프라인이 조립한 초안
-      (## 장소명 → ![photo](url) → 단락 반복)
-    """
-    tone_text  = TONE_GUIDE.get(tone, TONE_GUIDE["casual"])
-    style_text = STYLE_GUIDE.get(style, STYLE_GUIDE["blog"])
-    lang_title = LANG_TITLE_GUIDE.get(lang, LANG_TITLE_GUIDE["ko"])
-    extra_line = f"\n추가 지침: {extra}" if extra else ""
-
-    return f"""다음 여행 블로그 초안을 완성된 포스트로 다듬어주세요.
+STAGE3_PROMPT = ChatPromptTemplate.from_messages([
+    (
+        "system",
+        (
+            "당신은 여행 블로그 에디터입니다. "
+            "초안을 자연스럽게 다듬어 완성된 마크다운 포스트를 출력합니다. "
+            "제목(# 으로 시작)은 반드시 한국어로만 작성합니다. "
+            "방문 장소가 일본·중국·유럽 어디든 제목은 항상 한국어입니다. "
+            "[PHOTO_숫자] 형태의 태그는 절대 수정·삭제하지 않습니다."
+        ),
+    ),
+    (
+        "human",
+        """다음 여행 블로그 초안을 완성된 포스트로 다듬어주세요.
 
 [장소별 초안]
 {draft_body}
 
 [방문 장소 목록]
-{', '.join(place_names)}
+{place_names_text}
 
 작성 규칙:
 1. 첫 줄: # 제목 — {lang_title}. 방문지가 일본·중국·유럽 등 외국이어도 제목은 반드시 한국어로만 작성. (25자 이내)
@@ -162,4 +176,26 @@ def build_stage3_prompt(
 8. 마지막 줄: <!-- tags: 태그1, 태그2, 태그3, 태그4, 태그5 -->
 9. 표(| 로 시작하는 행)는 절대 작성하지 마세요. 일정표는 코드가 자동으로 삽입합니다.{extra_line}
 
-완성된 마크다운 전체 출력, 다른 설명 없이."""
+완성된 마크다운 전체 출력, 다른 설명 없이.""",
+    ),
+])
+
+
+def build_stage3_inputs(
+    itinerary_table: str,
+    draft_body: str,
+    place_names: list,
+    lang: str = "ko",
+    tone: str = "casual",
+    style: str = "blog",
+    extra: str = None,
+) -> dict:
+    """Stage 3 프롬프트 입력값 딕셔너리 반환"""
+    return {
+        "draft_body": draft_body,
+        "place_names_text": ", ".join(place_names),
+        "lang_title": LANG_TITLE_GUIDE.get(lang, LANG_TITLE_GUIDE["ko"]),
+        "tone_text": TONE_GUIDE.get(tone, TONE_GUIDE["casual"]),
+        "style_text": STYLE_GUIDE.get(style, STYLE_GUIDE["blog"]),
+        "extra_line": f"\n추가 지침: {extra}" if extra else "",
+    }

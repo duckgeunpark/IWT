@@ -19,9 +19,12 @@ class Post(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     recommended_route = Column(Text, nullable=True)  # 추천 경로 정보를 JSON 문자열로 저장
-    blocks         = Column(LONGTEXT, nullable=True)        # JSON blocks[] — 블록 기반 콘텐츠
+    blocks         = Column(LONGTEXT, nullable=True)        # JSON blocks[] — 레거시 (blocks_mode='legacy')
     blocks_version = Column(Integer, default=0)           # 재생성 이력 추적용 버전 번호
     has_user_edits = Column(Boolean, default=False)       # 사용자 편집 여부 플래그
+    blocks_mode    = Column(String(20), default='legacy', server_default='legacy')
+    # 'legacy': posts.blocks JSON 사용 (기존 게시글)
+    # 'v2':     post_blocks 테이블 사용 (신규 게시글)
 
     # 관계
     photos = relationship("Photo", back_populates="post", cascade="all, delete-orphan")
@@ -30,6 +33,8 @@ class Post(Base):
     bookmarks = relationship("PostBookmark", back_populates="post", cascade="all, delete-orphan")
     comments = relationship("Comment", back_populates="post", cascade="all, delete-orphan")
     clusters = relationship("Cluster", back_populates="post", cascade="all, delete-orphan")
+    post_blocks = relationship("PostBlock", back_populates="post", cascade="all, delete-orphan",
+                               order_by="PostBlock.block_order")
 
 class Cluster(Base):
     """사진 클러스터 — GPS centroid + 날짜 기반 stable identity"""
@@ -47,7 +52,8 @@ class Cluster(Base):
     time_end      = Column(DateTime, nullable=True)
     photo_count   = Column(Integer, default=0)
     cluster_order = Column(Integer, default=0)
-    ai_paragraph  = Column(Text, nullable=True)  # Stage 2 LLM 결과 (캐시 역할)
+    ai_paragraph  = Column(Text, nullable=True)  # 레거시 Stage 2 단락 캐시
+    place_note    = Column(LONGTEXT, nullable=True)  # v2 PlaceNote JSON 캐시 (fingerprint 기반 재사용)
 
     post = relationship("Post", back_populates="clusters")
 
@@ -411,3 +417,51 @@ class UserCorrection(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     user = relationship("User")
+
+
+# ═══════════════════════════════════════════
+# v2 블록 기반 게시글 시스템
+# ═══════════════════════════════════════════
+
+class PostBlock(Base):
+    """
+    게시글 블록 — v2 생성 시스템에서 사용.
+    posts.blocks_mode = 'v2' 인 게시글은 이 테이블에서 블록을 읽는다.
+
+    블록 타입:
+      title       — 게시글 제목 (1개)
+      intro       — 여행 전체 도입부 (1개)
+      day_header  — n일차 헤더 (지도 핀 JSON + 타임라인 데이터, LLM 없음)
+      place       — 장소 블록 (시간순, depth=main|brief)
+      day_outro   — 일차 마무리 (선택)
+      tags        — 태그 목록 (1개)
+    """
+    __tablename__ = "post_blocks"
+
+    id          = Column(Integer, primary_key=True, index=True)
+    post_id     = Column(Integer, ForeignKey("posts.id", ondelete="CASCADE"), nullable=False, index=True)
+    block_type  = Column(String(30), nullable=False)
+    block_order = Column(Integer, nullable=False)
+    day         = Column(Integer, nullable=True)
+    cluster_id  = Column(Integer, ForeignKey("clusters.id", ondelete="SET NULL"), nullable=True)
+    pin_number  = Column(Integer, nullable=True)
+
+    # 타임라인 정보 (place 블록만)
+    stay_min              = Column(Integer, nullable=True)
+    travel_from_prev_min  = Column(Integer, nullable=True)
+    distance_from_prev_km = Column(Float, nullable=True)
+    transport             = Column(String(20), nullable=True)
+
+    # 콘텐츠
+    depth         = Column(String(10), default='brief')
+    ai_content    = Column(LONGTEXT, nullable=True)
+    user_content  = Column(LONGTEXT, nullable=True)
+    locked        = Column(Boolean, default=False)
+    quality_score = Column(Float, nullable=True)
+
+    version    = Column(Integer, default=1)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    post    = relationship("Post", back_populates="post_blocks")
+    cluster = relationship("Cluster")

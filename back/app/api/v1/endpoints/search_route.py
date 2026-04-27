@@ -7,12 +7,11 @@ from app.models.db_models import Post, Photo, Location, Category, PostLike, User
 from app.db.session import get_db
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func, or_, and_, distinct
-from app.services.llm_route_recommend import LLMRouteRecommendService
+from app.services.llm_route_recommend import llm_route_service
 from app.services.s3_presigned_url import S3PresignedURLService
+from app.services.utils import parse_llm_json
 
 s3_service = S3PresignedURLService()
-
-llm_route_service = LLMRouteRecommendService()
 
 router = APIRouter(prefix="/search", tags=["검색"])
 logger = logging.getLogger(__name__)
@@ -297,15 +296,16 @@ async def semantic_search(
 아래 JSON 형식으로만 응답하세요. 관련 장소/테마/활동을 포함한 5~10개의 키워드:
 {{"keywords": ["키워드1", "키워드2", "키워드3"]}}"""
 
-        response = await llm_route_service.llm.provider.chat_completion(
-            messages=[
-                {"role": "system", "content": "당신은 여행 검색 전문가입니다. 검색어를 관련 키워드로 확장합니다."},
-                {"role": "user", "content": expand_prompt},
-            ],
-            temperature=0.1,
-            max_tokens=150,
-        )
-        data = llm_route_service._parse_llm_json(response)
+        from langchain_core.prompts import ChatPromptTemplate
+        from langchain_core.output_parsers import StrOutputParser
+        from app.services.llm_factory import get_default_llm
+        _expand_prompt = ChatPromptTemplate.from_messages([
+            ("system", "당신은 여행 검색 전문가입니다. 검색어를 관련 키워드로 확장합니다."),
+            ("human", expand_prompt),
+        ])
+        _expand_chain = _expand_prompt | get_default_llm() | StrOutputParser()
+        response = await _expand_chain.ainvoke({})
+        data = parse_llm_json(response)
         keywords = data.get("keywords", [q])
     except Exception:
         keywords = [q]
@@ -378,3 +378,58 @@ async def semantic_search(
         "expanded_keywords": keywords,
         "total": len(results),
     }
+
+
+@router.get("/similar/{post_id}")
+async def get_similar_posts(
+    post_id: int,
+    k: int = Query(5, ge=1, le=20, description="반환할 유사 게시글 수"),
+    db: Session = Depends(get_db),
+):
+    """
+    RAG 벡터 검색 기반 유사 여행 게시글 추천.
+    TripDetailPage '이런 여행은 어때요?' 섹션에서 호출.
+    """
+    post = db.query(Post).filter(Post.id == post_id).first()
+    if not post:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="게시글을 찾을 수 없습니다.")
+
+    try:
+        from app.services.rag_service import rag_service
+        query_text = f"{post.title or ''} {post.tags or ''}"
+        similar = await rag_service.search_similar(query=query_text, k=k + 1)
+        # 자기 자신 제외
+        similar = [s for s in similar if s.get("post_id") != str(post_id)][:k]
+
+        # DB에서 상세 정보 보완
+        results = []
+        for item in similar:
+            p = db.query(Post).options(joinedload(Post.photos)).filter(
+                Post.id == int(item["post_id"]),
+                Post.status == "published",
+            ).first()
+            if not p:
+                continue
+            thumbnail_url = None
+            if p.photos:
+                thumbnail_url = s3_service.generate_download_url_sync(p.photos[0].file_key)
+            tags = p.tags
+            if isinstance(tags, str):
+                try:
+                    tags = json.loads(tags)
+                except Exception:
+                    tags = []
+            results.append({
+                "id": p.id,
+                "title": p.title,
+                "tags": tags,
+                "thumbnail_url": thumbnail_url,
+                "similarity_score": item.get("score"),
+            })
+
+        return {"post_id": post_id, "similar_posts": results}
+
+    except Exception as e:
+        logger.error(f"유사 게시글 추천 실패: {e}")
+        return {"post_id": post_id, "similar_posts": []}

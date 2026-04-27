@@ -1,117 +1,107 @@
 """
-LLM 서비스 팩토리
-환경 변수에 따라 적절한 LLM 제공자를 선택하여 서비스 인스턴스를 생성
+LangChain 기반 LLM 팩토리
+환경 변수에 따라 적절한 LangChain ChatModel을 반환
 """
 
 import os
+import logging
 from typing import Optional
-from .llm_base import LLMService, LLMProvider
-from .providers.groq_provider import GroqProvider
-from .providers.gemini_provider import GeminiProvider
+from langchain_core.language_models import BaseChatModel
+
+logger = logging.getLogger(__name__)
+
+_default_llm: Optional[BaseChatModel] = None
 
 
-class LLMFactory:
-    """LLM 서비스 팩토리"""
-    
-    @staticmethod
-    def create_llm_service(provider_name: Optional[str] = None) -> LLMService:
-        """
-        LLM 서비스 인스턴스 생성
-        
-        Args:
-            provider_name: 제공자 이름 (None이면 환경 변수에서 자동 선택)
-            
-        Returns:
-            LLMService 인스턴스
-        """
-        if provider_name is None:
-            provider_name = os.getenv('LLM_PROVIDER', 'gemini').lower()
-
-        try:
-            provider = LLMFactory._create_provider(provider_name)
-            return LLMService(provider)
-        except Exception as e:
-            print(f"LLM 서비스 생성 실패: {str(e)}")
-            # 기본 제공자로 재시도
-            try:
-                provider = GeminiProvider()
-                return LLMService(provider)
-            except Exception as fallback_error:
-                print(f"기본 LLM 제공자도 실패: {str(fallback_error)}")
-                raise
-    
-    @staticmethod
-    def _create_provider(provider_name: str) -> LLMProvider:
-        """
-        LLM 제공자 인스턴스 생성
-        
-        Args:
-            provider_name: 제공자 이름
-            
-        Returns:
-            LLMProvider 인스턴스
-        """
-        if provider_name == 'gemini':
-            return GeminiProvider()
-        elif provider_name == 'groq':
-            return GroqProvider()
-        elif provider_name == 'openai':
-            from .providers.openai_provider import OpenAIProvider
-            return OpenAIProvider()
-        elif provider_name == 'anthropic':
-            from .providers.anthropic_provider import AnthropicProvider
-            return AnthropicProvider()
-        else:
-            raise ValueError(f"지원하지 않는 LLM 제공자: {provider_name}")
-
-    @staticmethod
-    def get_available_providers() -> list:
-        """사용 가능한 제공자 목록 반환"""
-        available = []
-        if os.getenv('GEMINI_API_KEY'):
-            available.append('gemini')
-        if os.getenv('GROQ_API_KEY'):
-            available.append('groq')
-        if os.getenv('OPENAI_API_KEY'):
-            available.append('openai')
-        if os.getenv('ANTHROPIC_API_KEY'):
-            available.append('anthropic')
-        return available
-
-
-# 전역 LLM 서비스 인스턴스
-_llm_service: Optional[LLMService] = None
-
-
-def get_llm_service() -> LLMService:
+def get_llm(
+    provider: str = None,
+    temperature: float = 0.5,
+    max_tokens: Optional[int] = None,
+) -> BaseChatModel:
     """
-    전역 LLM 서비스 인스턴스 반환 (싱글톤 패턴)
-    
+    LangChain ChatModel 인스턴스 반환
+
+    Args:
+        provider: 제공자 이름 (None이면 LLM_PROVIDER 환경변수 사용)
+        temperature: 창의성 (0.0~1.0)
+        max_tokens: 최대 출력 토큰 수 (None이면 모델 기본값)
+
     Returns:
-        LLMService 인스턴스
+        BaseChatModel 인스턴스
     """
-    global _llm_service
-    if _llm_service is None:
+    p = (provider or os.getenv("LLM_PROVIDER", "gemini")).lower()
+
+    if p == "gemini":
+        from langchain_google_genai import ChatGoogleGenerativeAI
+        kwargs: dict = {
+            "model": os.getenv("GEMINI_MODEL", "gemini-1.5-flash"),
+            "temperature": temperature,
+            "google_api_key": os.getenv("GEMINI_API_KEY"),
+        }
+        if max_tokens:
+            kwargs["max_output_tokens"] = max_tokens
+        return ChatGoogleGenerativeAI(**kwargs)
+
+    if p == "groq":
+        from langchain_groq import ChatGroq
+        kwargs = {
+            "model": os.getenv("GROQ_MODEL", "llama3-8b-8192"),
+            "temperature": temperature,
+        }
+        if max_tokens:
+            kwargs["max_tokens"] = max_tokens
+        return ChatGroq(**kwargs)
+
+    if p == "openai":
+        from langchain_openai import ChatOpenAI
+        kwargs = {
+            "model": os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
+            "temperature": temperature,
+        }
+        if max_tokens:
+            kwargs["max_tokens"] = max_tokens
+        return ChatOpenAI(**kwargs)
+
+    if p == "anthropic":
+        from langchain_anthropic import ChatAnthropic
+        kwargs = {
+            "model": os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-6"),
+            "temperature": temperature,
+        }
+        if max_tokens:
+            kwargs["max_tokens"] = max_tokens
+        return ChatAnthropic(**kwargs)
+
+    raise ValueError(f"지원하지 않는 LLM 제공자: {p}")
+
+
+def get_default_llm() -> BaseChatModel:
+    """싱글톤 기본 LLM 인스턴스 반환"""
+    global _default_llm
+    if _default_llm is None:
         try:
-            _llm_service = LLMFactory.create_llm_service()
+            _default_llm = get_llm()
         except Exception as e:
-            print(f"LLM 서비스 초기화 실패: {str(e)}")
-            # 더미 서비스 반환 (기능은 제한적이지만 앱이 크래시되지 않음)
-            from .llm_base import LLMProvider
-            
-            class DummyProvider(LLMProvider):
-                async def chat_completion(self, messages, temperature=0.1, max_tokens=500, **kwargs):
-                    return '{"error": "LLM 서비스가 초기화되지 않았습니다."}'
-                
-                async def vision_completion(self, messages, temperature=0.1, max_tokens=500, **kwargs):
-                    return '{"error": "LLM 서비스가 초기화되지 않았습니다."}'
-            
-            _llm_service = LLMService(DummyProvider())
-    
-    return _llm_service
+            logger.error(f"LLM 초기화 실패: {e}")
+            raise
+    return _default_llm
 
 
-def reset_llm_service():
-    """전역 LLM 서비스 인스턴스 재설정"""
-    global _llm_service
-    _llm_service = None 
+def reset_llm():
+    """싱글톤 LLM 인스턴스 초기화 (테스트용)"""
+    global _default_llm
+    _default_llm = None
+
+
+def get_available_providers() -> list:
+    """사용 가능한 제공자 목록 반환"""
+    available = []
+    if os.getenv("GEMINI_API_KEY"):
+        available.append("gemini")
+    if os.getenv("GROQ_API_KEY"):
+        available.append("groq")
+    if os.getenv("OPENAI_API_KEY"):
+        available.append("openai")
+    if os.getenv("ANTHROPIC_API_KEY"):
+        available.append("anthropic")
+    return available

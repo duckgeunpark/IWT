@@ -329,24 +329,90 @@ async def auto_create_post(
                         "end_time": cluster.get("end_time"),
                     })
 
-                # 4단계: 사용자 LLM 설정 로드
+                # 4단계: v2 파이프라인 — 타임라인 + PlaceNote + 블록 생성
                 user_id = current_user["sub"]
-                user_pref_row = db.query(UserLLMPreference).filter(
-                    UserLLMPreference.user_id == user_id
-                ).first()
-                user_prefs = {
-                    "tone": user_pref_row.tone, "style": user_pref_row.style,
-                    "lang": user_pref_row.lang,
-                    "stage1_extra": user_pref_row.stage1_extra,
-                    "stage2_extra": user_pref_row.stage2_extra,
-                    "stage3_extra": user_pref_row.stage3_extra,
-                } if user_pref_row else None
 
-                # 5단계: LLM 파이프라인 (stage1/2/3 내부에서 on_progress 호출)
-                pipeline = get_llm_pipeline()
-                pipeline_result = await pipeline.run(pipeline_clusters, user_prefs, on_progress=on_progress)
+                # pipeline_clusters dict → timeline용 임시 클러스터 객체 변환
+                from dataclasses import dataclass, field as dc_field
+                from datetime import datetime as dt
 
-                # 6단계: DB 저장
+                def _parse_dt(s):
+                    if not s:
+                        return None
+                    for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S.%f"):
+                        try:
+                            return dt.strptime(s[:19], fmt[:19])
+                        except ValueError:
+                            continue
+                    return None
+
+                @dataclass
+                class _TmpCluster:
+                    id: int
+                    cluster_hash: str = ""
+                    centroid_lat: float = None
+                    centroid_lng: float = None
+                    location_name: str = ""
+                    city: str = ""
+                    country: str = ""
+                    time_start: object = None
+                    time_end: object = None
+                    photo_count: int = 0
+                    cluster_order: int = 0
+                    place_note: str = None
+                    photos: list = dc_field(default_factory=list)
+
+                tmp_clusters = []
+                for i, pc in enumerate(pipeline_clusters):
+                    loc = pc.get("location_info") or {}
+                    # centroid GPS
+                    c_lat = (pc.get("center_gps") or {}).get("lat") or loc.get("coordinates", {}).get("latitude") if isinstance(loc.get("coordinates"), dict) else None
+                    c_lng = (pc.get("center_gps") or {}).get("lng") or loc.get("coordinates", {}).get("longitude") if isinstance(loc.get("coordinates"), dict) else None
+                    # GPS가 없으면 사진 GPS에서 첫 번째 추출
+                    if not c_lat:
+                        for pp in pc.get("photos", []):
+                            if pp.get("_lat"):
+                                c_lat, c_lng = pp["_lat"], pp["_lon"]
+                                break
+
+                    tmp = _TmpCluster(
+                        id            = i,
+                        cluster_hash  = "",
+                        centroid_lat  = c_lat,
+                        centroid_lng  = c_lng,
+                        location_name = pc.get("location_name", ""),
+                        city          = loc.get("city", ""),
+                        country       = loc.get("country", ""),
+                        time_start    = _parse_dt(pc.get("start_time")),
+                        time_end      = _parse_dt(pc.get("end_time")),
+                        photo_count   = pc.get("photo_count", 0),
+                        cluster_order = i,
+                        photos        = [type("P", (), {"file_key": p.get("file_key","")})() for p in pc.get("photos", [])],
+                    )
+                    tmp_clusters.append(tmp)
+
+                # 타임라인 계산 (LLM 없음)
+                await on_progress("clustering", 42, "여행 타임라인 분석 중...")
+                from app.services.timeline_service import build_timeline
+                timeline = build_timeline(tmp_clusters)
+
+                # PlaceNote 생성 (LLM, 병렬)
+                await on_progress("stage1", 52, f"장소 분석 중... ({timeline['total_places']}곳)")
+                from app.services.place_note_service import generate_place_notes_batch
+                all_day_items = [item for day_items in timeline["days"].values() for item in day_items]
+                notes = await generate_place_notes_batch(all_day_items)
+
+                # 블록 생성 (LLM, 병렬)
+                await on_progress("stage2", 70, "여행 글 작성 중...")
+                from app.services.block_generator import generate_all_blocks
+                blocks_data, post_title, post_tags = await generate_all_blocks(timeline, notes)
+
+                # 품질 평가 + 재작성
+                await on_progress("stage3", 85, "품질 검토 중...")
+                from app.services.quality_evaluator import evaluate_and_rewrite
+                blocks_data = await evaluate_and_rewrite(blocks_data, notes)
+
+                # DB 저장
                 await on_progress("saving", 93, "임시저장 중...")
                 existing_user = db.query(User).filter(User.id == user_id).first()
                 if not existing_user:
@@ -359,49 +425,43 @@ async def auto_create_post(
                     db.flush()
 
                 post = Post(
-                    title=pipeline_result["title"],
-                    description=pipeline_result["markdown"],
-                    tags=json.dumps(pipeline_result["tags"], ensure_ascii=False),
+                    title=post_title,
+                    description=None,
+                    tags=json.dumps(post_tags, ensure_ascii=False),
                     status="draft",
+                    blocks_mode="v2",
                     user_id=user_id,
                     created_at=datetime.utcnow(),
                     updated_at=datetime.utcnow(),
                     recommended_route=json.dumps({
-                        "itinerary_table": pipeline_result["itinerary_table"],
-                        "stage2_cache":    pipeline_result.get("stage2_cache", {}),
-                        "segments":        clean_result["segments"],
-                        "usage_report":    clean_result["usage_report"],
-                        "clean_summary":   clean_result["summary"],
+                        "segments":      clean_result["segments"],
+                        "usage_report":  clean_result["usage_report"],
+                        "clean_summary": clean_result["summary"],
                     }, ensure_ascii=False, default=lambda o: o.isoformat() if hasattr(o, "isoformat") else str(o)),
                 )
                 db.add(post)
                 db.flush()
 
-                # ── 클러스터 DB 저장 + stable hash 계산 ──────────────────
-                db_cluster_id_map: dict = {}  # pipeline cluster_id → DB Cluster.id
+                # 클러스터 DB 저장
+                db_cluster_id_map: dict = {}
                 for pc in pipeline_clusters:
-                    centroid_lat = pc.get("center_gps", {}).get("lat") if isinstance(pc.get("center_gps"), dict) else None
-                    centroid_lng = pc.get("center_gps", {}).get("lng") if isinstance(pc.get("center_gps"), dict) else None
-                    # location_info에서 centroid 보완
-                    if centroid_lat is None:
-                        loc_info_tmp = pc.get("location_info") or {}
-                        centroid_lat = loc_info_tmp.get("coordinates", {}).get("latitude") if isinstance(loc_info_tmp.get("coordinates"), dict) else None
-                        centroid_lng = loc_info_tmp.get("coordinates", {}).get("longitude") if isinstance(loc_info_tmp.get("coordinates"), dict) else None
+                    loc_info_tmp = pc.get("location_info") or {}
+                    c_lat = (pc.get("center_gps") or {}).get("lat") or loc_info_tmp.get("coordinates", {}).get("latitude") if isinstance(loc_info_tmp.get("coordinates"), dict) else None
+                    c_lng = (pc.get("center_gps") or {}).get("lng") or loc_info_tmp.get("coordinates", {}).get("longitude") if isinstance(loc_info_tmp.get("coordinates"), dict) else None
                     start_t = pc.get("start_time")
                     date_str = start_t[:10] if start_t else None
-                    c_hash = compute_cluster_hash(centroid_lat, centroid_lng, date_str)
+                    c_hash = compute_cluster_hash(c_lat, c_lng, date_str)
 
-                    loc_info_tmp = pc.get("location_info") or {}
                     db_cluster = Cluster(
                         post_id=post.id,
                         cluster_hash=c_hash,
-                        centroid_lat=centroid_lat,
-                        centroid_lng=centroid_lng,
+                        centroid_lat=c_lat,
+                        centroid_lng=c_lng,
                         location_name=pc.get("location_name"),
                         city=loc_info_tmp.get("city"),
                         country=loc_info_tmp.get("country"),
-                        time_start=None,
-                        time_end=None,
+                        time_start=_parse_dt(pc.get("start_time")),
+                        time_end=_parse_dt(pc.get("end_time")),
                         photo_count=pc.get("photo_count", 0),
                         cluster_order=pc["cluster_id"],
                     )
@@ -409,25 +469,42 @@ async def auto_create_post(
                     db.flush()
                     db_cluster_id_map[pc["cluster_id"]] = db_cluster.id
 
-                    # Stage 2 단락 캐시 → ai_paragraph 저장
-                    stage2_cache = pipeline_result.get("stage2_cache", {})
-                    for cached in stage2_cache.values():
-                        if cached.get("location_name") == pc.get("location_name"):
-                            db_cluster.ai_paragraph = cached.get("paragraph")
-                            break
+                    # PlaceNote 캐시 저장
+                    tmp_id = pc["cluster_id"]
+                    note = notes.get(tmp_id)
+                    if note:
+                        from app.services.place_note_service import place_note_to_cache_json, cluster_fingerprint as _fp
+                        db_cluster.place_note = place_note_to_cache_json(note, getattr(note, "_fingerprint", ""))
 
-                # ── blocks[] 조립 + 저장 ──────────────────────────────────
-                blocks_list = assemble_blocks(pipeline_result, pipeline_clusters, db_cluster_id_map)
-                post.blocks = json.dumps(blocks_list, ensure_ascii=False)
-                post.blocks_version = 1
+                # PostBlock 저장
+                from app.models.db_models import PostBlock
+                for bd in blocks_data:
+                    # cluster_id 매핑 (tmp id → DB id)
+                    db_cid = db_cluster_id_map.get(bd.get("cluster_id")) if bd.get("cluster_id") is not None else None
+                    db.add(PostBlock(
+                        post_id               = post.id,
+                        block_type            = bd["block_type"],
+                        block_order           = bd["block_order"],
+                        day                   = bd.get("day"),
+                        cluster_id            = db_cid,
+                        pin_number            = bd.get("pin_number"),
+                        depth                 = bd.get("depth", "brief"),
+                        ai_content            = bd.get("ai_content"),
+                        locked                = False,
+                        quality_score         = bd.get("quality_score"),
+                        stay_min              = bd.get("stay_min"),
+                        travel_from_prev_min  = bd.get("travel_from_prev_min"),
+                        distance_from_prev_km = bd.get("distance_from_prev_km"),
+                        transport             = bd.get("transport"),
+                    ))
 
-                # temp file_key → DB cluster.id 매핑 (사진 저장 시 cluster_id 설정용)
+                # temp → permanent 사진 이동
                 temp_key_to_cluster_id: dict = {}
                 for pc in pipeline_clusters:
                     db_cid = db_cluster_id_map.get(pc["cluster_id"])
                     if db_cid:
                         for photo_item in pc.get("photos", []):
-                            temp_key_to_cluster_id[photo_item["file_key"]] = db_cid
+                            temp_key_to_cluster_id[photo_item.get("file_key", "")] = db_cid
 
                 for photo_dict in usable_photos:
                     temp_key = photo_dict["file_key"]
@@ -1387,6 +1464,15 @@ async def update_post(
         db.commit()
         db.refresh(post)
 
+        # 발행 시 RAG 색인 (draft → published 전환 또는 published 직접 저장)
+        if getattr(post, 'status', None) == 'published':
+            try:
+                from app.services.rag_service import rag_service
+                clusters = post.clusters if hasattr(post, 'clusters') else []
+                rag_service.index_post(post, clusters)
+            except Exception as rag_err:
+                logger.warning(f"RAG 색인 실패 (무시): {rag_err}")
+
         return PostResponse(
             id=post.id,
             title=post.title,
@@ -1397,7 +1483,7 @@ async def update_post(
             photo_count=len(post.photos),
             user_id=post.user_id
         )
-        
+
     except HTTPException:
         raise
     except Exception as e:

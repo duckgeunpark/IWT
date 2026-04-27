@@ -47,6 +47,9 @@ services:
       # MySQL 컨테이너 호스트명으로 덮어쓰기
       DB_HOST: mysql
       REDIS_URL: redis://redis:6379/0
+      CHROMA_DB_PATH: /app/chroma_db
+    volumes:
+      - chroma_data:/app/chroma_db
     depends_on:
       mysql:
         condition: service_healthy
@@ -82,6 +85,7 @@ services:
 volumes:
   mysql_data:
   redis_data:
+  chroma_data:
 
 networks:
   internal:

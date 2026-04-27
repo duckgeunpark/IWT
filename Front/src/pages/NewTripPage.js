@@ -368,19 +368,42 @@ const NewTripPage = ({ toggleTheme, theme }) => {
 
     setIsGenerating(true);
     try {
-      // TODO: 백엔드 API 호출
-      // POST /api/v1/trips/plan
-      // { destination, styles: selectedStyles, duration: selectedDuration, companions }
+      const response = await apiClient.postStream('/api/v1/agent/plan-route', {
+        destination,
+        styles: selectedStyles,
+        duration: selectedDuration || '',
+        companions: companions || '',
+      });
 
-      // 지금은 시뮬레이션 (2초 딜레이)
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let itinerary = '';
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop();
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          try {
+            const data = JSON.parse(line.slice(6));
+            if (data.step === 'done') {
+              itinerary = data.itinerary || '';
+            }
+            if (data.step === 'error') throw new Error(data.message);
+          } catch (_) {}
+        }
+      }
 
       toast.success('AI가 여행 경로를 생성했습니다!');
       navigate('/trip/new/edit', {
         state: {
           fromPlan: true,
-          planData: { destination, styles: selectedStyles, duration: selectedDuration, companions }
-        }
+          planData: { destination, styles: selectedStyles, duration: selectedDuration, companions, itinerary },
+        },
       });
     } catch (err) {
       toast.error('경로 생성에 실패했습니다.');

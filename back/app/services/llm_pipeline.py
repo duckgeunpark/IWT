@@ -1,57 +1,43 @@
 """
-3단계 LLM 파이프라인 오케스트레이터
+3단계 LLM 파이프라인 오케스트레이터 (LangChain LCEL 기반)
 
-Stage 1 → 전체 일정 표 생성 (1개 LLM)
-Stage 2 → 클러스터(장소)별 단락 생성 (N개 병렬, 최대 동시 10개)
-Stage 3 → 전체 합성 및 다듬기 (1개 LLM)
-
-입력 cluster 형식:
-  {
-    "cluster_id": int,
-    "day": int,                        # 1일차, 2일차 ...
-    "location_name": str,              # Nominatim 역지오코딩 결과
-    "location_info": {                 # 상세 위치 정보
-        "country": str,
-        "city": str,
-        "address": str,
-    },
-    "representative_photo_url": str,   # S3 presigned URL (대표 사진)
-    "photo_count": int,
-    "start_time": str | None,          # ISO datetime
-    "end_time": str | None,
-  }
+Stage 1 → 전체 일정 표 생성 (1개 LLM, temperature=0.2)
+Stage 2 → 클러스터(장소)별 단락 생성 (N개 병렬, temperature=0.75, abatch)
+Stage 3 → 전체 합성 및 다듬기 (1개 LLM, temperature=0.5)
 """
 
-import asyncio
 import hashlib
 import logging
+import os
 import re
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
-from app.services.llm_factory import get_llm_service
+from langchain_core.output_parsers import StrOutputParser
+
+from app.services.llm_factory import get_llm
 from app.services.llm_pipeline_prompts import (
     DEFAULT_PREFERENCES,
-    build_stage1_prompt,
-    build_stage2_prompt,
-    build_stage3_prompt,
+    STAGE1_PROMPT,
+    STAGE2_PROMPT,
+    STAGE3_PROMPT,
+    build_stage1_inputs,
+    build_stage2_inputs,
+    build_stage3_inputs,
 )
 
 logger = logging.getLogger(__name__)
 
-# Stage 2 최대 동시 LLM 호출 수
 _STAGE2_CONCURRENCY = 10
 
 
+# ── 유틸 함수 ────────────────────────────────────────────────────────
+
 def cluster_fingerprint(cluster: Dict) -> str:
-    """
-    클러스터의 사진 file_keys를 정렬·해시하여 12자리 지문 반환.
-    같은 사진 구성이면 항상 동일한 지문 → Stage 2 캐시 키로 사용.
-    """
+    """클러스터 사진 구성 → 12자리 MD5 지문 (Stage 2 캐시 키)"""
     file_keys = sorted(
         p.get("file_key", "") for p in cluster.get("photos", [cluster])
     )
-    # photos 키가 없을 때(pipeline_cluster 형태)는 representative_photo_url로 대체
     if not file_keys or file_keys == [""]:
         file_keys = [cluster.get("representative_photo_url", str(cluster.get("cluster_id", "")))]
     content = "|".join(file_keys)
@@ -82,7 +68,6 @@ def _format_visit_time(start: Optional[str], end: Optional[str]) -> str:
 
     s_dt = parse(start)
     e_dt = parse(end)
-
     if s_dt and e_dt:
         delta = int((e_dt - s_dt).total_seconds() / 60)
         dur = f"{delta // 60}시간 {delta % 60}분" if delta >= 60 else f"{delta}분"
@@ -93,16 +78,11 @@ def _format_visit_time(start: Optional[str], end: Optional[str]) -> str:
 
 
 def _inject_table(markdown: str, itinerary_table: str) -> str:
-    """
-    Stage 3 출력에 일정 표를 강제 삽입.
-    LLM이 표를 중간에 생성했을 경우 먼저 제거 후, 첫 번째 ## 앞에 삽입.
-    """
+    """Stage 3 출력에 일정 표 강제 삽입 (LLM 생성 표 제거 후 첫 ## 앞에 삽입)"""
     if not itinerary_table:
         return markdown
 
     lines = markdown.split("\n")
-
-    # LLM이 임의로 생성한 표 블록 제거 (| 로 시작하는 연속 줄)
     cleaned: List[str] = []
     i = 0
     while i < len(lines):
@@ -113,7 +93,6 @@ def _inject_table(markdown: str, itinerary_table: str) -> str:
             cleaned.append(lines[i])
             i += 1
 
-    # 첫 번째 ## 위치 탐색 → 그 앞에 삽입
     insert_at = len(cleaned)
     for idx, line in enumerate(cleaned):
         if line.startswith("##"):
@@ -127,7 +106,7 @@ def _inject_table(markdown: str, itinerary_table: str) -> str:
 
 
 def _parse_sections(markdown: str) -> List[Dict]:
-    """H2(##) 기준으로 마크다운을 섹션 목록으로 파싱."""
+    """H2(##) 기준으로 마크다운을 섹션 목록으로 파싱"""
     lines = markdown.split("\n")
     sections: List[Dict] = []
     current: Dict = {"heading": None, "lines": []}
@@ -142,7 +121,7 @@ def _parse_sections(markdown: str) -> List[Dict]:
 
 
 def _reassemble_sections(sections: List[Dict]) -> str:
-    """섹션 목록을 마크다운 문자열로 재조합."""
+    """섹션 목록을 마크다운 문자열로 재조합"""
     parts: List[str] = []
     for sec in sections:
         if sec["heading"] is not None:
@@ -157,19 +136,13 @@ def _merge_into_document(
     cache_hit_ids: set,
     itinerary_table: str,
 ) -> str:
-    """
-    사용자가 편집 중인 문서에 Stage 2 결과를 머지.
-    - 캐시 히트 섹션: 기존 문서 내용 유지 (사용자 편집 보존)
-    - 캐시 미스 섹션: 새 단락으로 교체 (또는 새 섹션으로 추가)
-    - 새 일정표: 인트로 섹션의 기존 표만 교체 (다른 섹션 내용 무관)
-    """
+    """사용자 편집 중인 문서에 Stage 2 결과 머지 (캐시 히트 섹션은 기존 유지)"""
     sections = _parse_sections(current_content)
 
-    # 캐시 미스 결과 처리
     added_new: List[Dict] = []
     for r in stage2_results:
         if r["cluster_id"] in cache_hit_ids:
-            continue  # 캐시 히트 → 기존 섹션 그대로
+            continue
 
         heading = r["location_name"]
         new_lines: List[str] = []
@@ -189,7 +162,6 @@ def _merge_into_document(
 
     sections.extend(added_new)
 
-    # 인트로 섹션(heading=None)의 일정표만 교체 — 다른 섹션 내 사용자 표는 건드리지 않음
     if itinerary_table and sections and sections[0]["heading"] is None:
         intro = sections[0]["lines"]
         clean_intro: List[str] = []
@@ -201,7 +173,6 @@ def _merge_into_document(
             else:
                 clean_intro.append(intro[i])
                 i += 1
-        # # 제목 줄 바로 뒤에 삽입
         insert_pos = len(clean_intro)
         for j, line in enumerate(clean_intro):
             if line.startswith("#") and not line.startswith("##"):
@@ -241,42 +212,38 @@ def _group_clusters_by_day(clusters: List[Dict]) -> List[Dict]:
     ]
 
 
+# ── LCEL 파이프라인 ──────────────────────────────────────────────────
+
 class LLMPipeline:
-    """3단계 LLM 파이프라인"""
+    """3단계 LLM 파이프라인 (LCEL 기반)"""
 
     def __init__(self):
-        self.llm = get_llm_service()
+        provider = os.getenv("LLM_PROVIDER", "gemini")
+        parser = StrOutputParser()
+
+        # Stage별 온도와 토큰 제한이 다르므로 각각 별도 모델 생성
+        llm1 = get_llm(provider, temperature=0.2, max_tokens=400)
+        llm2 = get_llm(provider, temperature=0.75, max_tokens=300)
+        llm3 = get_llm(provider, temperature=0.5, max_tokens=4096)
+
+        self.stage1_chain = STAGE1_PROMPT | llm1 | parser
+        self.stage2_chain = STAGE2_PROMPT | llm2 | parser
+        self.stage3_chain = STAGE3_PROMPT | llm3 | parser
 
     # ── Stage 1 ─────────────────────────────────────────────────────
 
-    async def _run_stage1(
-        self,
-        clusters_by_day: List[Dict],
-        prefs: Dict,
-    ) -> str:
+    async def _run_stage1(self, clusters_by_day: List[Dict], prefs: Dict) -> str:
         """전체 일정 표 생성 → 마크다운 표 문자열 반환"""
-        prompt = build_stage1_prompt(
+        inputs = build_stage1_inputs(
             clusters_by_day=clusters_by_day,
             tone=prefs["tone"],
             style=prefs["style"],
             extra=prefs.get("stage1_extra"),
         )
         try:
-            result = await self.llm.provider.chat_completion(
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "당신은 여행 일정을 정리하는 전문가입니다. 마크다운 표만 출력합니다.",
-                    },
-                    {"role": "user", "content": prompt},
-                ],
-                temperature=0.2,
-                max_tokens=400,
-            )
-            return result.strip()
+            return (await self.stage1_chain.ainvoke(inputs)).strip()
         except Exception as e:
             logger.error(f"Stage1 실패: {e}")
-            # 폴백: 기본 표 구성
             rows = "\n".join(
                 f"| {d['day']}일차 | "
                 + ", ".join(c.get("location_name", "-") for c in d["clusters"])
@@ -287,122 +254,74 @@ class LLMPipeline:
 
     # ── Stage 2 ─────────────────────────────────────────────────────
 
-    async def _run_stage2_one(
-        self,
-        cluster: Dict,
-        prefs: Dict,
-        semaphore: asyncio.Semaphore,
-    ) -> Dict:
-        """클러스터 하나 → 단락 텍스트 반환"""
-        async with semaphore:
-            location_name = cluster.get("location_name", "알 수 없는 장소")
+    async def _run_stage2(self, clusters: List[Dict], prefs: Dict) -> List[Dict]:
+        """모든 클러스터 병렬 처리 (abatch, max_concurrency=10)"""
+        batch_inputs = []
+        for cluster in clusters:
             loc_info = cluster.get("location_info", {})
-            country = loc_info.get("country", "")
-            visit_time = _format_visit_time(
-                cluster.get("start_time"), cluster.get("end_time")
-            )
-            prompt = build_stage2_prompt(
-                location_name=location_name,
-                country=country,
+            inputs = build_stage2_inputs(
+                location_name=cluster.get("location_name", "알 수 없는 장소"),
+                country=loc_info.get("country", ""),
                 photo_count=cluster.get("photo_count", 0),
-                visit_time=visit_time,
+                visit_time=_format_visit_time(
+                    cluster.get("start_time"), cluster.get("end_time")
+                ),
                 tone=prefs["tone"],
                 style=prefs["style"],
                 extra=prefs.get("stage2_extra"),
             )
-            try:
-                paragraph = await self.llm.provider.chat_completion(
-                    messages=[
-                        {
-                            "role": "system",
-                            "content": "당신은 여행 블로거입니다. 지정된 글자 수 범위의 단락만 출력합니다.",
-                        },
-                        {"role": "user", "content": prompt},
-                    ],
-                    temperature=0.75,
-                    max_tokens=300,
-                )
-                paragraph = paragraph.strip()
-            except Exception as e:
-                logger.warning(f"Stage2 클러스터 {cluster.get('cluster_id')} 실패: {e}")
-                paragraph = f"{location_name}에서의 소중한 시간을 사진에 담았습니다."
+            batch_inputs.append(inputs)
 
-            return {
+        try:
+            paragraphs = await self.stage2_chain.abatch(
+                batch_inputs,
+                config={"max_concurrency": _STAGE2_CONCURRENCY},
+                return_exceptions=True,
+            )
+        except Exception as e:
+            logger.error(f"Stage2 abatch 실패: {e}")
+            paragraphs = [Exception(str(e))] * len(clusters)
+
+        output = []
+        for i, (cluster, result) in enumerate(zip(clusters, paragraphs)):
+            location_name = cluster.get("location_name", "알 수 없는 장소")
+            if isinstance(result, Exception):
+                logger.warning(f"Stage2 cluster[{i}] 실패: {result}")
+                paragraph = f"{location_name}에서의 소중한 시간을 사진에 담았습니다."
+            else:
+                paragraph = result.strip()
+
+            output.append({
                 "cluster_id": cluster.get("cluster_id"),
                 "day": cluster.get("day"),
                 "location_name": location_name,
                 "photo_url": cluster.get("representative_photo_url", ""),
                 "paragraph": paragraph,
-            }
-
-    async def _run_stage2(
-        self,
-        clusters: List[Dict],
-        prefs: Dict,
-    ) -> List[Dict]:
-        """모든 클러스터 병렬 처리 (최대 동시 10개)"""
-        semaphore = asyncio.Semaphore(_STAGE2_CONCURRENCY)
-        tasks = [
-            self._run_stage2_one(cluster, prefs, semaphore)
-            for cluster in clusters
-        ]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-
-        # 예외 처리: 실패한 항목은 기본 단락으로 대체
-        output = []
-        for i, res in enumerate(results):
-            if isinstance(res, Exception):
-                logger.error(f"Stage2 gather 예외 cluster[{i}]: {res}")
-                c = clusters[i]
-                output.append({
-                    "cluster_id": c.get("cluster_id"),
-                    "day": c.get("day"),
-                    "location_name": c.get("location_name", "알 수 없는 장소"),
-                    "photo_url": c.get("representative_photo_url", ""),
-                    "paragraph": "이 장소에서의 여행을 사진으로 담았습니다.",
-                })
-            else:
-                output.append(res)
+            })
         return output
 
-    # ── 중간 조립 ────────────────────────────────────────────────────
+    # ── 초안 조립 ────────────────────────────────────────────────────
 
-    def _assemble_draft(
-        self,
-        stage2_results: List[Dict],
-    ) -> Tuple[str, Dict[str, str]]:
-        """
-        Stage 2 결과를 마크다운 초안으로 조립.
-
-        LLM 전달용 draft에는 실제 S3 URL 대신 [PHOTO_n] 플레이스홀더를 사용.
-        Stage 3 완료 후 _inject_photos()로 실제 이미지 마크다운을 삽입.
-
-        Returns:
-            draft_for_llm: LLM에 전달할 초안 (플레이스홀더 포함)
-            photo_map:     {플레이스홀더: "![name](url)"} 매핑
-        """
+    def _assemble_draft(self, stage2_results: List[Dict]) -> Tuple[str, Dict[str, str]]:
+        """Stage 2 결과를 마크다운 초안으로 조립 (S3 URL → [PHOTO_n] 플레이스홀더)"""
         sections = []
         photo_map: Dict[str, str] = {}
 
         for i, item in enumerate(stage2_results):
             heading = f"## {item['location_name']}"
             placeholder = f"[PHOTO_{i}]"
-
             if item.get("photo_url"):
-                photo_map[placeholder] = (
-                    f"![{item['location_name']}]({item['photo_url']})"
-                )
+                photo_map[placeholder] = f"![{item['location_name']}]({item['photo_url']})"
                 parts = [heading, placeholder, item["paragraph"]]
             else:
                 parts = [heading, item["paragraph"]]
-
             sections.append("\n".join(parts))
 
         return "\n\n".join(sections), photo_map
 
     @staticmethod
     def _inject_photos(markdown: str, photo_map: Dict[str, str]) -> str:
-        """Stage 3 출력의 [PHOTO_n] 플레이스홀더를 실제 이미지 마크다운으로 교체."""
+        """[PHOTO_n] 플레이스홀더 → 실제 이미지 마크다운으로 교체"""
         for placeholder, img_md in photo_map.items():
             markdown = markdown.replace(placeholder, img_md)
         return markdown
@@ -417,7 +336,7 @@ class LLMPipeline:
         prefs: Dict,
     ) -> str:
         """초안 → 완성 마크다운"""
-        prompt = build_stage3_prompt(
+        inputs = build_stage3_inputs(
             itinerary_table=itinerary_table,
             draft_body=draft_body,
             place_names=place_names,
@@ -427,27 +346,9 @@ class LLMPipeline:
             extra=prefs.get("stage3_extra"),
         )
         try:
-            result = await self.llm.provider.chat_completion(
-                messages=[
-                    {
-                        "role": "system",
-                        "content": (
-                            "당신은 여행 블로그 에디터입니다. "
-                            "초안을 자연스럽게 다듬어 완성된 마크다운 포스트를 출력합니다. "
-                            "제목(# 으로 시작)은 반드시 한국어로만 작성합니다. "
-                            "방문 장소가 일본·중국·유럽 어디든 제목은 항상 한국어입니다. "
-                            "[PHOTO_숫자] 형태의 태그는 절대 수정·삭제하지 않습니다."
-                        ),
-                    },
-                    {"role": "user", "content": prompt},
-                ],
-                temperature=0.5,
-                max_tokens=4096,
-            )
-            return result.strip()
+            return (await self.stage3_chain.ainvoke(inputs)).strip()
         except Exception as e:
             logger.error(f"Stage3 실패: {e}")
-            # 폴백: 초안을 제목만 붙여서 반환
             return f"# 여행 기록\n\n{itinerary_table}\n\n{draft_body}"
 
     # ── 메인 엔트리 ──────────────────────────────────────────────────
@@ -459,19 +360,10 @@ class LLMPipeline:
         on_progress=None,
     ) -> Dict[str, Any]:
         """
-        파이프라인 실행
-
-        Args:
-            clusters: 클러스터 리스트 (day, location_name, representative_photo_url 포함)
-            preferences: 사용자 커스터마이즈 설정 (없으면 기본값)
+        파이프라인 전체 실행 (신규 게시글)
 
         Returns:
-            {
-                "markdown": str,    # 완성된 마크다운 포스트
-                "title": str,       # 추출된 제목
-                "tags": List[str],  # 추출된 태그
-                "itinerary_table": str,
-            }
+            {markdown, title, tags, itinerary_table, stage2_cache}
         """
         prefs = {**DEFAULT_PREFERENCES, **(preferences or {})}
 
@@ -481,47 +373,33 @@ class LLMPipeline:
                 "title": "여행 기록",
                 "tags": ["여행"],
                 "itinerary_table": "",
+                "stage2_cache": {},
             }
 
-        # 일차별 그룹핑
         clusters_by_day = _group_clusters_by_day(clusters)
 
-        # Stage 1: 일정 표
         logger.info("Pipeline Stage1 시작")
         if on_progress:
             await on_progress("stage1", 48, "일정 표 생성 중...")
         itinerary_table = await self._run_stage1(clusters_by_day, prefs)
 
-        # Stage 2: 장소별 단락 (병렬)
         logger.info(f"Pipeline Stage2 시작 — 총 {len(clusters)}개 클러스터")
         if on_progress:
             await on_progress("stage2", 68, f"장소별 글 작성 중... ({len(clusters)}곳)")
         stage2_results = await self._run_stage2(clusters, prefs)
-
-        # 일차 → 클러스터 순서로 정렬 (day 오름차순, cluster_id 오름차순)
         stage2_results.sort(key=lambda x: (x.get("day", 0), x.get("cluster_id", 0)))
 
-        # 초안 조립 (LLM 전달용 — 사진 URL 대신 플레이스홀더)
         draft_body, photo_map = self._assemble_draft(stage2_results)
         place_names = [r["location_name"] for r in stage2_results]
 
-        # Stage 3: 최종 합성
         logger.info("Pipeline Stage3 시작")
         if on_progress:
             await on_progress("stage3", 84, "게시글 완성 중...")
-        final_markdown = await self._run_stage3(
-            itinerary_table=itinerary_table,
-            draft_body=draft_body,
-            place_names=place_names,
-            prefs=prefs,
-        )
+        final_markdown = await self._run_stage3(itinerary_table, draft_body, place_names, prefs)
 
-        # 표 삽입 (LLM 의존 없이 직접)
         final_markdown = _inject_table(final_markdown, itinerary_table)
-        # 사진 플레이스홀더 → 실제 이미지 마크다운 교체
         final_markdown = self._inject_photos(final_markdown, photo_map)
 
-        # Stage 2 결과를 지문 기준으로 캐시 저장
         stage2_cache = {
             cluster_fingerprint(clusters[i]): {
                 "location_name": r["location_name"],
@@ -536,9 +414,8 @@ class LLMPipeline:
             "title": _extract_title_from_markdown(final_markdown),
             "tags": _extract_tags_from_markdown(final_markdown),
             "itinerary_table": itinerary_table,
-            "stage2_cache": stage2_cache,   # 다음 증분 업데이트에서 재사용
+            "stage2_cache": stage2_cache,
         }
-
 
     async def run_incremental(
         self,
@@ -548,18 +425,10 @@ class LLMPipeline:
         skip_stage3: bool = False,
     ) -> Dict[str, Any]:
         """
-        증분 업데이트 파이프라인.
+        증분 업데이트 파이프라인 (사진 추가/변경 시)
 
-        Stage 2는 지문이 캐시에 있으면 재사용, 없으면 새로 호출.
-        Stage 1 · Stage 3은 항상 재실행 (빠르고, 변경 반영 필요).
-
-        Args:
-            clusters:      현재 사진으로 계산된 클러스터 리스트
-            stage2_cache:  기존 포스트의 stage2_cache (fingerprint → paragraph dict)
-            preferences:   사용자 LLM 설정
-
-        Returns:
-            run()과 동일한 구조 + "cache_stats" 키 추가
+        Stage 2: 지문 캐시 히트 → 재사용, 미스 → 새로 호출
+        Stage 1/3: 항상 재실행
         """
         prefs = {**DEFAULT_PREFERENCES, **(preferences or {})}
 
@@ -575,57 +444,39 @@ class LLMPipeline:
 
         clusters_by_day = _group_clusters_by_day(clusters)
 
-        # ── Stage 1: 항상 재실행 ──────────────────────────────────────
         logger.info("Incremental Stage1 시작")
         itinerary_table = await self._run_stage1(clusters_by_day, prefs)
 
-        # ── Stage 2: 지문 기반 캐시 히트/미스 판단 ──────────────────
-        hits: List[Tuple[int, Dict]] = []    # (index, cached_result)
-        misses: List[int] = []               # 재실행 필요한 클러스터 인덱스
-
+        # Stage 2: 지문 기반 캐시 히트/미스 판단
         fingerprints = [cluster_fingerprint(c) for c in clusters]
+        hits: List[Tuple[int, Dict]] = []
+        miss_indices: List[int] = []
+
         for i, fp in enumerate(fingerprints):
             if fp in stage2_cache:
                 cached = stage2_cache[fp]
                 hits.append((i, {
-                    "cluster_id": clusters[i].get("cluster_id"),
-                    "day":        clusters[i].get("day"),
+                    "cluster_id":    clusters[i].get("cluster_id"),
+                    "day":           clusters[i].get("day"),
                     "location_name": cached["location_name"],
                     "photo_url":     clusters[i].get("representative_photo_url", cached.get("photo_url", "")),
                     "paragraph":     cached["paragraph"],
                 }))
             else:
-                misses.append(i)
+                miss_indices.append(i)
 
         cache_hit  = len(hits)
-        cache_miss = len(misses)
-        removed    = len(stage2_cache) - cache_hit  # 사라진 클러스터 수
+        cache_miss = len(miss_indices)
+        removed    = len(stage2_cache) - cache_hit
         logger.info(f"Stage2 캐시 — hit:{cache_hit} miss:{cache_miss} removed:{removed}")
 
-        # 캐시 미스 클러스터만 병렬 실행
         miss_results: Dict[int, Dict] = {}
-        if misses:
-            semaphore = asyncio.Semaphore(_STAGE2_CONCURRENCY)
-            tasks = {
-                i: self._run_stage2_one(clusters[i], prefs, semaphore)
-                for i in misses
-            }
-            gathered = await asyncio.gather(*tasks.values(), return_exceptions=True)
-            for idx, result in zip(tasks.keys(), gathered):
-                if isinstance(result, Exception):
-                    logger.error(f"Incremental Stage2 예외 cluster[{idx}]: {result}")
-                    c = clusters[idx]
-                    miss_results[idx] = {
-                        "cluster_id":    c.get("cluster_id"),
-                        "day":           c.get("day"),
-                        "location_name": c.get("location_name", "알 수 없는 장소"),
-                        "photo_url":     c.get("representative_photo_url", ""),
-                        "paragraph":     "이 장소에서의 여행을 사진으로 담았습니다.",
-                    }
-                else:
-                    miss_results[idx] = result
+        if miss_indices:
+            miss_clusters = [clusters[i] for i in miss_indices]
+            miss_stage2 = await self._run_stage2(miss_clusters, prefs)
+            for orig_idx, result in zip(miss_indices, miss_stage2):
+                miss_results[orig_idx] = result
 
-        # 전체 결과를 원래 클러스터 순서대로 재조립
         hit_map = {i: r for i, r in hits}
         stage2_results = [
             hit_map[i] if i in hit_map else miss_results[i]
@@ -633,9 +484,8 @@ class LLMPipeline:
         ]
         stage2_results.sort(key=lambda x: (x.get("day", 0), x.get("cluster_id", 0)))
 
-        # 갱신된 캐시 (히트 항목 유지 + 미스 항목 신규 추가)
         new_cache = {fp: stage2_cache[fp] for fp in fingerprints if fp in stage2_cache}
-        for i in misses:
+        for i in miss_indices:
             fp = fingerprints[i]
             r  = miss_results[i]
             new_cache[fp] = {
@@ -644,7 +494,6 @@ class LLMPipeline:
                 "photo_url":     r["photo_url"],
             }
 
-        # skip_stage3=True → Stage 2 결과만 반환 (머지는 호출부에서 처리)
         if skip_stage3:
             cache_hit_ids = {r["cluster_id"] for _, r in hits}
             return {
@@ -655,37 +504,31 @@ class LLMPipeline:
                 "stage2_results":  stage2_results,
                 "cache_hit_ids":   cache_hit_ids,
                 "stage2_cache":    new_cache,
-                "cache_stats":     {
+                "cache_stats": {
                     "hit": cache_hit, "miss": cache_miss,
-                    "removed": removed, "new_sections": len([
+                    "removed": removed,
+                    "new_sections": len([
                         r for r in stage2_results
                         if r["cluster_id"] not in cache_hit_ids
                     ]),
                 },
             }
 
-        # ── Stage 3: 항상 재실행 ──────────────────────────────────────
         logger.info("Incremental Stage3 시작")
         draft_body, photo_map = self._assemble_draft(stage2_results)
         place_names = [r["location_name"] for r in stage2_results]
-        final_markdown = await self._run_stage3(
-            itinerary_table=itinerary_table,
-            draft_body=draft_body,
-            place_names=place_names,
-            prefs=prefs,
-        )
+        final_markdown = await self._run_stage3(itinerary_table, draft_body, place_names, prefs)
 
-        # 표 삽입 + 사진 플레이스홀더 교체
         final_markdown = _inject_table(final_markdown, itinerary_table)
         final_markdown = self._inject_photos(final_markdown, photo_map)
 
         return {
-            "markdown":      final_markdown,
-            "title":         _extract_title_from_markdown(final_markdown),
-            "tags":          _extract_tags_from_markdown(final_markdown),
+            "markdown":        final_markdown,
+            "title":           _extract_title_from_markdown(final_markdown),
+            "tags":            _extract_tags_from_markdown(final_markdown),
             "itinerary_table": itinerary_table,
-            "stage2_cache":  new_cache,
-            "cache_stats":   {"hit": cache_hit, "miss": cache_miss, "removed": removed},
+            "stage2_cache":    new_cache,
+            "cache_stats":     {"hit": cache_hit, "miss": cache_miss, "removed": removed},
         }
 
 
