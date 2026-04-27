@@ -15,7 +15,7 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel
 
-from app.services.llm_factory import get_llm
+from app.services.llm_factory import get_llm, register_reset_callback
 from app.services.utils import parse_llm_json
 
 logger = logging.getLogger(__name__)
@@ -69,11 +69,12 @@ depth 판단 기준:
 - main: 사진 5장 이상이고 체류 30분 이상이며 여행에서 의미 있는 장소
 - brief: 그 외 (짧게 들르거나 사진이 적은 곳)
 
-아래 JSON 형식으로만 응답하세요. 다른 설명 없이:
+아래 JSON 형식으로만 응답하세요. 다른 설명 없이.
+모든 문자열 필드는 반드시 비어있지 않은 문자열이어야 합니다 — null/빈 문자열 금지:
 {{
-    "place_name": "장소명",
-    "city": "도시명",
-    "country": "국가명",
+    "place_name": "장소명 (모르면 '알 수 없는 장소')",
+    "city": "도시명 (모르면 '위치 불명')",
+    "country": "국가명 (모르면 '국가 불명')",
     "category": "landmark|cafe|nature|restaurant|street|beach|market|transport|etc 중 하나",
     "mood_keywords": ["키워드1", "키워드2", "키워드3"],
     "highlight_scene": "이 장소에서 가장 인상적인 장면을 한 문장으로",
@@ -88,10 +89,17 @@ _chain = None
 def _get_chain():
     global _chain
     if _chain is None:
-        import os
         llm = get_llm(temperature=0.1, max_tokens=300)
         _chain = _PLACE_NOTE_PROMPT | llm | StrOutputParser()
     return _chain
+
+
+def _reset_chain():
+    global _chain
+    _chain = None
+
+
+register_reset_callback(_reset_chain)
 
 
 # ── 단일 클러스터 처리 ────────────────────────────────────────────────
@@ -130,20 +138,20 @@ async def generate_place_note(
         raw = await _get_chain().ainvoke(inputs)
         data = parse_llm_json(raw)
         note = PlaceNote(
-            place_name      = data.get("place_name", cluster.location_name or "장소"),
-            city            = data.get("city", cluster.city or ""),
-            country         = data.get("country", cluster.country or ""),
-            category        = data.get("category", "etc"),
-            mood_keywords   = data.get("mood_keywords", []),
-            highlight_scene = data.get("highlight_scene", ""),
-            depth           = data.get("depth", "brief"),
+            place_name      = data.get("place_name") or cluster.location_name or "알 수 없는 장소",
+            city            = data.get("city") or cluster.city or "위치 불명",
+            country         = data.get("country") or cluster.country or "국가 불명",
+            category        = data.get("category") or "etc",
+            mood_keywords   = data.get("mood_keywords") or [],
+            highlight_scene = data.get("highlight_scene") or "",
+            depth           = data.get("depth") or "brief",
         )
     except Exception as e:
         logger.warning(f"PlaceNote 생성 실패 cluster_id={cluster.id}: {e}")
         note = PlaceNote(
             place_name      = cluster.location_name or "알 수 없는 장소",
-            city            = cluster.city or "",
-            country         = cluster.country or "",
+            city            = cluster.city or "위치 불명",
+            country         = cluster.country or "국가 불명",
             category        = "etc",
             mood_keywords   = [],
             highlight_scene = "",

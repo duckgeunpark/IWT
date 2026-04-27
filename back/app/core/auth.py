@@ -5,6 +5,9 @@ from fastapi import HTTPException, Depends, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import jwt, JWTError
 import httpx
+from sqlalchemy.orm import Session
+
+from app.db.session import get_db
 
 # 콤마로 구분된 관리자 이메일 목록 (예: "admin@example.com,dev@example.com")
 _ADMIN_EMAILS = {
@@ -105,8 +108,28 @@ async def verify_jwt_token(token: str) -> Dict:
         )
 
 
-async def get_current_user(token: str = Depends(get_token_auth_header)) -> Dict:
-    return await verify_jwt_token(token)
+def _is_user_active(sub: str, db: Session) -> bool:
+    """sub에 해당하는 User의 is_active 확인. 레코드가 없으면 True (최초 로그인 등)."""
+    if not sub:
+        return True
+    from app.models.db_models import User
+    user = db.query(User).filter(User.id == sub).first()
+    if user is None:
+        return True
+    return user.is_active is not False
+
+
+async def get_current_user(
+    token: str = Depends(get_token_auth_header),
+    db: Session = Depends(get_db),
+) -> Dict:
+    payload = await verify_jwt_token(token)
+    if not _is_user_active(payload.get("sub", ""), db):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="비활성화된 계정입니다. 관리자에게 문의하세요.",
+        )
+    return payload
 
 
 async def require_admin(current_user: Dict = Depends(get_current_user)) -> Dict:
@@ -123,11 +146,15 @@ async def require_admin(current_user: Dict = Depends(get_current_user)) -> Dict:
 
 async def get_optional_current_user(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(HTTPBearer(auto_error=False)),
+    db: Session = Depends(get_db),
 ) -> Optional[Dict]:
-    """인증 선택적 - 토큰 없어도 None 반환, 있으면 검증"""
+    """인증 선택적 - 토큰 없어도 None 반환, 있으면 검증. 비활성 계정은 익명으로 취급."""
     if not credentials:
         return None
     try:
-        return await verify_jwt_token(credentials.credentials)
+        payload = await verify_jwt_token(credentials.credentials)
     except HTTPException:
         return None
+    if not _is_user_active(payload.get("sub", ""), db):
+        return None
+    return payload

@@ -15,7 +15,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from langchain_core.output_parsers import StrOutputParser
 
-from app.services.llm_factory import get_llm
+from app.services.llm_factory import get_llm, register_reset_callback
 from app.services.llm_pipeline_prompts import (
     DEFAULT_PREFERENCES,
     STAGE1_PROMPT,
@@ -541,3 +541,11 @@ def get_llm_pipeline() -> LLMPipeline:
     if _pipeline is None:
         _pipeline = LLMPipeline()
     return _pipeline
+
+
+def _reset_pipeline():
+    global _pipeline
+    _pipeline = None
+
+
+register_reset_callback(_reset_pipeline)

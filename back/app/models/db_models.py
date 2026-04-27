@@ -25,6 +25,7 @@ class Post(Base):
     blocks_mode    = Column(String(20), default='legacy', server_default='legacy')
     # 'legacy': posts.blocks JSON 사용 (기존 게시글)
     # 'v2':     post_blocks 테이블 사용 (신규 게시글)
+    deleted_at     = Column(DateTime, nullable=True, index=True)  # 관리자 soft delete 마커. NOT NULL이면 일반 조회에서 제외
 
     # 관계
     photos = relationship("Photo", back_populates="post", cascade="all, delete-orphan")

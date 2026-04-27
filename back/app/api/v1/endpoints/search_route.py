@@ -38,7 +38,7 @@ async def search_posts(
     - duration_min/max: 사진 촬영일 기간 필터
     - sort: newest(최신), popular(사진 많은 순), most_liked(좋아요 순)
     """
-    query = db.query(Post).options(joinedload(Post.photos))
+    query = db.query(Post).filter(Post.deleted_at.is_(None)).options(joinedload(Post.photos))
 
     # 키워드 검색
     if q:
@@ -318,7 +318,7 @@ async def semantic_search(
         conditions.append(Post.description.ilike(kw_like))
         conditions.append(Post.tags.ilike(kw_like))
 
-    query = db.query(Post).options(joinedload(Post.photos)).filter(or_(*conditions)) if conditions else db.query(Post).options(joinedload(Post.photos))
+    query = db.query(Post).filter(Post.deleted_at.is_(None)).options(joinedload(Post.photos)).filter(or_(*conditions)) if conditions else db.query(Post).filter(Post.deleted_at.is_(None)).options(joinedload(Post.photos))
     query = query.order_by(Post.created_at.desc())
 
     posts = query.limit(limit * 2).all()
@@ -390,7 +390,7 @@ async def get_similar_posts(
     RAG 벡터 검색 기반 유사 여행 게시글 추천.
     TripDetailPage '이런 여행은 어때요?' 섹션에서 호출.
     """
-    post = db.query(Post).filter(Post.id == post_id).first()
+    post = db.query(Post).filter(Post.deleted_at.is_(None)).filter(Post.id == post_id).first()
     if not post:
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="게시글을 찾을 수 없습니다.")
@@ -405,7 +405,7 @@ async def get_similar_posts(
         # DB에서 상세 정보 보완
         results = []
         for item in similar:
-            p = db.query(Post).options(joinedload(Post.photos)).filter(
+            p = db.query(Post).filter(Post.deleted_at.is_(None)).options(joinedload(Post.photos)).filter(
                 Post.id == int(item["post_id"]),
                 Post.status == "published",
             ).first()

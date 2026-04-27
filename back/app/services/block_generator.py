@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Optional
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 
-from app.services.llm_factory import get_llm
+from app.services.llm_factory import get_llm, register_reset_callback
 from app.services.place_note_service import PlaceNote
 from app.services.utils import parse_llm_json
 
@@ -133,6 +133,13 @@ def _get_chain(name: str):
         _chains["intro"] = _INTRO_PROMPT       | llm_meta  | parser
         _chains["tags"]  = _TAGS_PROMPT        | llm_meta  | parser
     return _chains[name]
+
+
+def _reset_chains():
+    _chains.clear()
+
+
+register_reset_callback(_reset_chains)
 
 
 # ── 컨텍스트 포맷 헬퍼 ───────────────────────────────────────────────

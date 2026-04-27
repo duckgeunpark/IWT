@@ -667,11 +667,11 @@ async def get_user_posts(
         current_user_id = current_user["sub"] if current_user else None
         is_owner = current_user_id == user_id
 
-        base_filter = [Post.user_id == user_id]
+        base_filter = [Post.user_id == user_id, Post.deleted_at.is_(None)]
         if not (is_owner and include_drafts):
             base_filter.append(Post.status == 'published')
 
-        query = db.query(Post).options(joinedload(Post.photos)).filter(
+        query = db.query(Post).filter(Post.deleted_at.is_(None)).options(joinedload(Post.photos)).filter(
             *base_filter
         ).order_by(Post.created_at.desc())
 
@@ -700,7 +700,7 @@ async def get_posts(
 ):
     """게시글 목록 조회"""
     try:
-        count_query = db.query(Post).filter(Post.status == 'published')
+        count_query = db.query(Post).filter(Post.deleted_at.is_(None)).filter(Post.status == 'published')
 
         if user_id:
             count_query = count_query.filter(Post.user_id == user_id)
@@ -747,7 +747,7 @@ async def get_bookmarked_posts(
         .all()
     )
     post_ids = [b.post_id for b in bookmarks]
-    posts = db.query(Post).filter(Post.id.in_(post_ids)).all() if post_ids else []
+    posts = db.query(Post).filter(Post.deleted_at.is_(None)).filter(Post.id.in_(post_ids)).all() if post_ids else []
     return {
         "posts": [_build_post_response(p, db, user_id) for p in posts],
         "total": total,
@@ -764,7 +764,7 @@ async def get_post(
 ):
     """특정 게시글 조회"""
     try:
-        post = db.query(Post).options(joinedload(Post.photos)).filter(Post.id == post_id).first()
+        post = db.query(Post).filter(Post.deleted_at.is_(None)).options(joinedload(Post.photos)).filter(Post.id == post_id).first()
 
         if not post:
             raise HTTPException(status_code=404, detail="게시글을 찾을 수 없습니다.")
@@ -788,7 +788,7 @@ async def get_post_photos(
     게시글 사진 목록 조회 (S3 presigned URL 포함)
     """
     try:
-        post = db.query(Post).filter(Post.id == post_id).first()
+        post = db.query(Post).filter(Post.deleted_at.is_(None)).filter(Post.id == post_id).first()
         if not post:
             raise HTTPException(status_code=404, detail="게시글을 찾을 수 없습니다.")
 
@@ -838,7 +838,7 @@ async def get_similar_posts(
     유사 여행 추천: 같은 나라/도시 방문, 공통 태그, 비슷한 시기 기준
     """
     try:
-        post = db.query(Post).filter(Post.id == post_id).first()
+        post = db.query(Post).filter(Post.deleted_at.is_(None)).filter(Post.id == post_id).first()
         if not post:
             raise HTTPException(status_code=404, detail="게시글을 찾을 수 없습니다.")
 
@@ -884,7 +884,7 @@ async def get_similar_posts(
         if not conditions:
             # 공통점이 없으면 최신 인기 게시글
             similar = (
-                db.query(Post)
+                db.query(Post).filter(Post.deleted_at.is_(None))
                 .filter(Post.id != post_id)
                 .order_by(Post.created_at.desc())
                 .limit(limit)
@@ -892,7 +892,7 @@ async def get_similar_posts(
             )
         else:
             similar = (
-                db.query(Post)
+                db.query(Post).filter(Post.deleted_at.is_(None))
                 .filter(Post.id != post_id, or_(*conditions))
                 .order_by(Post.created_at.desc())
                 .limit(limit * 2)
@@ -963,7 +963,7 @@ async def ai_update_post(
         user_id = current_user["sub"]
 
         # 게시글 조회 + 권한 확인
-        post = db.query(Post).filter(Post.id == post_id).first()
+        post = db.query(Post).filter(Post.deleted_at.is_(None)).filter(Post.id == post_id).first()
         if not post:
             raise HTTPException(status_code=404, detail="게시글을 찾을 수 없습니다.")
         if post.user_id != user_id:
@@ -1168,7 +1168,7 @@ async def regenerate_post(
         async def run_regenerate():
             try:
                 user_id = current_user["sub"]
-                post = db.query(Post).filter(Post.id == post_id).first()
+                post = db.query(Post).filter(Post.deleted_at.is_(None)).filter(Post.id == post_id).first()
                 if not post:
                     await on_progress("error", 0, "게시글을 찾을 수 없습니다.")
                     return
@@ -1422,7 +1422,7 @@ async def update_post(
     게시글 수정
     """
     try:
-        post = db.query(Post).filter(Post.id == post_id).first()
+        post = db.query(Post).filter(Post.deleted_at.is_(None)).filter(Post.id == post_id).first()
         
         if not post:
             raise HTTPException(status_code=404, detail="게시글을 찾을 수 없습니다.")
@@ -1501,7 +1501,7 @@ async def delete_post(
     게시글 삭제
     """
     try:
-        post = db.query(Post).filter(Post.id == post_id).first()
+        post = db.query(Post).filter(Post.deleted_at.is_(None)).filter(Post.id == post_id).first()
         
         if not post:
             raise HTTPException(status_code=404, detail="게시글을 찾을 수 없습니다.")

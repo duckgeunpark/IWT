@@ -17,7 +17,11 @@ const ExplorePage = React.lazy(() => import('./pages/ExplorePage'));
 const ProfilePage = React.lazy(() => import('./pages/ProfilePage'));
 const FeedPage = React.lazy(() => import('./pages/FeedPage'));
 const UserProfilePage = React.lazy(() => import('./pages/UserProfilePage'));
+const AdminDashboardPage = React.lazy(() => import('./pages/AdminDashboardPage'));
 const AdminSettingsPage = React.lazy(() => import('./pages/AdminSettingsPage'));
+const AdminUsersPage = React.lazy(() => import('./pages/AdminUsersPage'));
+const AdminPostsPage = React.lazy(() => import('./pages/AdminPostsPage'));
+const AdminPlacesPage = React.lazy(() => import('./pages/AdminPlacesPage'));
 
 const LoadingFallback = () => (
   <div className="page-loading">
@@ -88,7 +92,11 @@ function AppContent() {
                 <Route path="/trip/:id/edit" element={<CreateTripPage toggleTheme={toggleTheme} theme={theme} />} />
                 <Route path="/profile" element={<ProfilePage toggleTheme={toggleTheme} theme={theme} />} />
                 <Route path="/profile/:userId" element={<UserProfilePage toggleTheme={toggleTheme} theme={theme} />} />
+                <Route path="/admin" element={<AdminDashboardPage toggleTheme={toggleTheme} theme={theme} />} />
                 <Route path="/admin/settings" element={<AdminSettingsPage toggleTheme={toggleTheme} theme={theme} />} />
+                <Route path="/admin/users" element={<AdminUsersPage toggleTheme={toggleTheme} theme={theme} />} />
+                <Route path="/admin/posts" element={<AdminPostsPage toggleTheme={toggleTheme} theme={theme} />} />
+                <Route path="/admin/places" element={<AdminPlacesPage toggleTheme={toggleTheme} theme={theme} />} />
                 {/* 레거시 경로 호환 */}
                 <Route path="/create-trip" element={<CreateTripPage toggleTheme={toggleTheme} theme={theme} />} />
               </Routes>

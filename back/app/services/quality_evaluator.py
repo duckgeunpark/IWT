@@ -11,7 +11,7 @@ from typing import Any, Dict, List
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 
-from app.services.llm_factory import get_llm
+from app.services.llm_factory import get_llm, register_reset_callback
 from app.services.utils import parse_llm_json
 
 logger = logging.getLogger(__name__)
@@ -86,6 +86,15 @@ def _get_rewrite_chain():
         llm = get_llm(temperature=0.6, max_tokens=400)
         _rewrite_chain = _REWRITE_PROMPT | llm | StrOutputParser()
     return _rewrite_chain
+
+
+def _reset_chains():
+    global _eval_chain, _rewrite_chain
+    _eval_chain = None
+    _rewrite_chain = None
+
+
+register_reset_callback(_reset_chains)
 
 
 async def evaluate_and_rewrite(

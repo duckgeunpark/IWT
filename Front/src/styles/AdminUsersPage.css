@@ -1,0 +1,227 @@
+.admin-users-container {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 40px 24px 80px;
+}
+
+.admin-users-inner {
+  /* AdminLayout 내부 컨테이너 — padding은 AdminLayout이 담당 */
+}
+
+.admin-users-toolbar {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 20px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.admin-users-toolbar .admin-text-input {
+  flex: 1;
+  min-width: 200px;
+}
+
+.admin-users-toolbar .admin-select-input {
+  width: 140px;
+}
+
+.admin-search-btn {
+  padding: 8px 20px;
+  border: none;
+  border-radius: 8px;
+  background: var(--accent-color, #6366f1);
+  color: white;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.admin-search-btn:hover {
+  opacity: 0.9;
+}
+
+.admin-users-table-wrapper {
+  background: var(--bg-card, #ffffff);
+  border: 1px solid var(--border-color, #e5e7eb);
+  border-radius: 12px;
+  overflow: auto;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+.admin-users-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.admin-users-table thead {
+  background: var(--bg-primary, #f9fafb);
+  border-bottom: 1px solid var(--border-color, #e5e7eb);
+}
+
+.admin-users-table th {
+  padding: 12px 16px;
+  text-align: left;
+  font-weight: 600;
+  color: var(--text-secondary, #6b7280);
+  font-size: 0.85rem;
+}
+
+.admin-users-table td {
+  padding: 12px 16px;
+  border-top: 1px solid var(--border-color, #e5e7eb);
+  vertical-align: middle;
+  color: var(--text-primary, #111827);
+}
+
+.admin-users-table tbody tr:hover {
+  background: var(--bg-hover, #f3f4f6);
+}
+
+.admin-users-num {
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-users-empty {
+  text-align: center;
+  padding: 40px;
+  color: var(--text-secondary, #6b7280);
+}
+
+.admin-user-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.admin-user-avatar-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-color, #6366f1);
+  color: white;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.admin-user-email {
+  font-weight: 500;
+}
+
+.admin-user-name {
+  font-size: 0.8rem;
+  color: var(--text-secondary, #6b7280);
+  margin-top: 2px;
+}
+
+.admin-status-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.admin-status-badge.active {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.admin-status-badge.inactive {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.admin-action-btn {
+  padding: 6px 14px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.admin-action-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.admin-action-btn.primary {
+  background: var(--accent-color, #6366f1);
+  color: white;
+}
+
+.admin-action-btn.danger {
+  background: #ffffff;
+  color: #dc2626;
+  border-color: #fca5a5;
+}
+
+.admin-action-btn.danger:hover:not(:disabled) {
+  background: #fef2f2;
+}
+
+.admin-users-pagination {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 16px;
+  padding: 0 4px;
+  font-size: 0.85rem;
+  color: var(--text-secondary, #6b7280);
+}
+
+.admin-users-pagination-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.admin-page-btn {
+  padding: 6px 14px;
+  border: 1px solid var(--border-color, #d1d5db);
+  background: var(--bg-card, #ffffff);
+  color: var(--text-primary, #111827);
+  border-radius: 6px;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.admin-page-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.admin-page-btn:hover:not(:disabled) {
+  background: var(--bg-hover, #f3f4f6);
+}
+
+.admin-post-title-link {
+  color: var(--text-primary, #111827);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.admin-post-title-link:hover {
+  text-decoration: underline;
+}
+
+.admin-deleted-tag {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: #fee2e2;
+  color: #991b1b;
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+.admin-post-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}

@@ -13,7 +13,7 @@ from langchain.agents import AgentExecutor, create_tool_calling_agent
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.tools import tool
 
-from app.services.llm_factory import get_llm
+from app.services.llm_factory import get_llm, register_reset_callback
 
 logger = logging.getLogger(__name__)
 
@@ -165,6 +165,14 @@ def get_route_agent() -> AgentExecutor:
     if _agent_executor is None:
         _agent_executor = _build_agent_executor()
     return _agent_executor
+
+
+def _reset_agent():
+    global _agent_executor
+    _agent_executor = None
+
+
+register_reset_callback(_reset_agent)
 
 
 # ── Agent 실행 (SSE 스트리밍) ────────────────────────────────────────

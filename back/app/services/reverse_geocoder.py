@@ -73,7 +73,10 @@ def _parse_google_response(data: Dict, lat: float, lng: float) -> Optional[Dict]
 
     return {
         "country":    _get("country"),
-        "city":       _get("locality") or _get("administrative_area_level_2"),
+        "city":       (_get("locality")
+                       or _get("administrative_area_level_2")
+                       or _get("sublocality_level_1")
+                       or _get("administrative_area_level_1")),
         "region":     _get("administrative_area_level_1"),
         "address":    best.get("formatted_address"),
         "landmark":   name,

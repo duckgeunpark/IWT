@@ -118,6 +118,29 @@
   box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15);
 }
 
+.admin-text-input,
+.admin-select-input {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid var(--border-color, #d1d5db);
+  border-radius: 8px;
+  font-size: 0.9rem;
+  background: var(--bg-primary, #f9fafb);
+  color: var(--text-primary, #111827);
+  outline: none;
+  font-family: inherit;
+}
+
+.admin-text-input:focus,
+.admin-select-input:focus {
+  border-color: var(--accent-color, #6366f1);
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15);
+}
+
+.admin-select-input {
+  cursor: pointer;
+}
+
 .admin-card-footer {
   display: flex;
   align-items: center;

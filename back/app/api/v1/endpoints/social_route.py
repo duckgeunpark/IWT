@@ -44,7 +44,7 @@ async def toggle_like(
     """게시글 좋아요 토글"""
     user_id = current_user["sub"]
 
-    post = db.query(Post).filter(Post.id == post_id).first()
+    post = db.query(Post).filter(Post.deleted_at.is_(None)).filter(Post.id == post_id).first()
     if not post:
         raise HTTPException(status_code=404, detail="게시글을 찾을 수 없습니다.")
 
@@ -87,7 +87,7 @@ async def toggle_bookmark(
     """게시글 북마크 토글"""
     user_id = current_user["sub"]
 
-    post = db.query(Post).filter(Post.id == post_id).first()
+    post = db.query(Post).filter(Post.deleted_at.is_(None)).filter(Post.id == post_id).first()
     if not post:
         raise HTTPException(status_code=404, detail="게시글을 찾을 수 없습니다.")
 
@@ -136,7 +136,7 @@ async def get_bookmarked_posts(
     )
 
     post_ids = [b.post_id for b in bookmarks]
-    posts = db.query(Post).filter(Post.id.in_(post_ids)).all() if post_ids else []
+    posts = db.query(Post).filter(Post.deleted_at.is_(None)).filter(Post.id.in_(post_ids)).all() if post_ids else []
 
     return {
         "posts": [
@@ -170,7 +170,7 @@ async def get_comments(
     db: Session = Depends(get_db),
 ):
     """게시글 댓글 목록 조회"""
-    post = db.query(Post).filter(Post.id == post_id).first()
+    post = db.query(Post).filter(Post.deleted_at.is_(None)).filter(Post.id == post_id).first()
     if not post:
         raise HTTPException(status_code=404, detail="게시글을 찾을 수 없습니다.")
 
@@ -233,7 +233,7 @@ async def create_comment(
     """댓글 작성"""
     user_id = current_user["sub"]
 
-    post = db.query(Post).filter(Post.id == post_id).first()
+    post = db.query(Post).filter(Post.deleted_at.is_(None)).filter(Post.id == post_id).first()
     if not post:
         raise HTTPException(status_code=404, detail="게시글을 찾을 수 없습니다.")
 
@@ -429,7 +429,7 @@ async def get_followers(
         )
         fc = db.query(func.count(Follow.id)).filter(Follow.following_id == u.id).scalar()
         fgc = db.query(func.count(Follow.id)).filter(Follow.follower_id == u.id).scalar()
-        pc = db.query(func.count(Post.id)).filter(Post.user_id == u.id).scalar()
+        pc = db.query(func.count(Post.id)).filter(Post.deleted_at.is_(None)).filter(Post.user_id == u.id).scalar()
         users.append(
             UserProfileResponse(
                 id=u.id,
@@ -478,7 +478,7 @@ async def get_following(
         )
         fc = db.query(func.count(Follow.id)).filter(Follow.following_id == u.id).scalar()
         fgc = db.query(func.count(Follow.id)).filter(Follow.follower_id == u.id).scalar()
-        pc = db.query(func.count(Post.id)).filter(Post.user_id == u.id).scalar()
+        pc = db.query(func.count(Post.id)).filter(Post.deleted_at.is_(None)).filter(Post.user_id == u.id).scalar()
         users.append(
             UserProfileResponse(
                 id=u.id,
@@ -519,7 +519,7 @@ async def get_user_profile(
             is not None
         )
 
-    posts_count = db.query(func.count(Post.id)).filter(Post.user_id == user_id).scalar()
+    posts_count = db.query(func.count(Post.id)).filter(Post.deleted_at.is_(None)).filter(Post.user_id == user_id).scalar()
     followers_count = db.query(func.count(Follow.id)).filter(Follow.following_id == user_id).scalar()
     following_count = db.query(func.count(Follow.id)).filter(Follow.follower_id == user_id).scalar()
 
@@ -562,10 +562,10 @@ async def get_feed(
     if not following_ids:
         return {"posts": [], "total": 0, "skip": skip, "limit": limit}
 
-    total = db.query(func.count(Post.id)).filter(Post.user_id.in_(following_ids)).scalar()
+    total = db.query(func.count(Post.id)).filter(Post.deleted_at.is_(None)).filter(Post.user_id.in_(following_ids)).scalar()
 
     posts = (
-        db.query(Post)
+        db.query(Post).filter(Post.deleted_at.is_(None))
         .filter(Post.user_id.in_(following_ids))
         .order_by(Post.created_at.desc())
         .offset(skip)
@@ -638,7 +638,7 @@ async def get_post_social_info(
     """게시글의 소셜 정보 (좋아요/댓글/북마크 수 및 현재 유저 상태)"""
     user_id = current_user["sub"] if current_user else None
 
-    post = db.query(Post).filter(Post.id == post_id).first()
+    post = db.query(Post).filter(Post.deleted_at.is_(None)).filter(Post.id == post_id).first()
     if not post:
         raise HTTPException(status_code=404, detail="게시글을 찾을 수 없습니다.")
 
@@ -688,7 +688,7 @@ async def get_travel_pattern(
     - 여행 테마 (태그 분석)
     """
     try:
-        posts = db.query(Post).filter(Post.user_id == user_id).order_by(Post.created_at.desc()).all()
+        posts = db.query(Post).filter(Post.deleted_at.is_(None)).filter(Post.user_id == user_id).order_by(Post.created_at.desc()).all()
         if not posts:
             return {"success": True, "pattern": None, "message": "아직 여행 기록이 없습니다."}
 

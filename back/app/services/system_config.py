@@ -9,18 +9,32 @@ from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
-_DEFAULTS: Dict[str, Dict[str, str]] = {
+_DEFAULTS: Dict[str, Dict[str, Any]] = {
     "place_match_radius_m": {
         "value": "20",
+        "type": "number",
         "description": "Place DB 캐시 매칭 반경 (미터). 이 반경 내 기존 Place가 있으면 Google Maps API 호출 생략.",
     },
     "cluster_distance_km": {
         "value": "0.1",
+        "type": "number",
         "description": "사진 클러스터링 거리 기준 (km). 직전 사진과 이 거리 이내이면 같은 클러스터로 분류.",
     },
     "cluster_time_hours": {
         "value": "2.0",
+        "type": "number",
         "description": "사진 클러스터링 시간 기준 (시간). 직전 사진과 이 시간 이내이면 같은 클러스터로 분류.",
+    },
+    "llm_provider": {
+        "value": "",
+        "type": "enum",
+        "options": ["gemini", "openai", "groq", "anthropic"],
+        "description": "LLM 제공자. 비워두면 환경변수(LLM_PROVIDER) 사용.",
+    },
+    "llm_model_name": {
+        "value": "",
+        "type": "string",
+        "description": "LLM 모델명. 비워두면 환경변수(LLM_MODEL_NAME) 사용. 예: gemini-2.5-flash, gemini-2.0-flash-lite",
     },
 }
 
@@ -95,10 +109,20 @@ class SystemConfigService:
         result = []
         all_keys = set(list(self._cache.keys()) + list(_DEFAULTS.keys()))
         for key in sorted(all_keys):
-            value = self._cache.get(key, _DEFAULTS.get(key, {}).get("value", ""))
-            description = _DEFAULTS.get(key, {}).get("description", "")
-            result.append({"key": key, "value": value, "description": description})
+            meta = _DEFAULTS.get(key, {})
+            value = self._cache.get(key, meta.get("value", ""))
+            result.append({
+                "key": key,
+                "value": value,
+                "description": meta.get("description", ""),
+                "type": meta.get("type", "string"),
+                "options": meta.get("options", []),
+            })
         return result
+
+    def get_meta(self, key: str) -> Dict[str, Any]:
+        """키의 메타데이터 (type, options 등) 반환"""
+        return _DEFAULTS.get(key, {"type": "string"})
 
     def initialize_defaults(self, db) -> None:
         """서버 시작 시 기본값이 없는 키만 삽입"""
