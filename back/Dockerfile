@@ -9,7 +9,8 @@ RUN apt-get update && apt-get install -y \
 
 # requirements.txt 복사 및 의존성 설치
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# 초고속 패키지 매니저 uv를 설치하고, uv를 통해 requirements.txt 설치
+RUN pip install uv && uv pip install --system --no-cache -r requirements.txt
 
 # 소스 코드 복사
 COPY . .
