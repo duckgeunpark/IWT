@@ -102,7 +102,7 @@ async def list_users(
             email=u.email,
             name=u.name,
             picture=u.picture,
-            is_active=u.is_active,
+            is_active=True if u.is_active is None else u.is_active,
             created_at=u.created_at,
             post_count=post_counts.get(u.id, 0),
         )
@@ -132,7 +132,7 @@ async def get_user(
         email=user.email,
         name=user.name,
         picture=user.picture,
-        is_active=user.is_active,
+        is_active=True if user.is_active is None else user.is_active,
         created_at=user.created_at,
         updated_at=user.updated_at,
         post_count=post_count,

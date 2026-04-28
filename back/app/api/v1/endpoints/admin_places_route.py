@@ -125,9 +125,9 @@ async def list_places(
     total = query.with_entities(Place.id).count()
 
     if sort == "visits":
-        query = query.order_by(Place.visit_count.desc().nullslast(), Place.id.desc())
+        query = query.order_by(Place.visit_count.desc(), Place.id.desc())
     else:
-        query = query.order_by(Place.created_at.desc().nullslast(), Place.id.desc())
+        query = query.order_by(Place.created_at.desc(), Place.id.desc())
 
     rows = query.offset((page - 1) * size).limit(size).all()
     return PlaceListResponse(

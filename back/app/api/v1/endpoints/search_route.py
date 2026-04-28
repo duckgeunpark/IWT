@@ -111,7 +111,7 @@ async def search_posts(
             .subquery()
         )
         query = query.outerjoin(photo_count_sub, Post.id == photo_count_sub.c.post_id).order_by(
-            photo_count_sub.c.cnt.desc().nullslast()
+            photo_count_sub.c.cnt.desc()
         )
     elif sort == "most_liked":
         like_count_sub = (
@@ -120,7 +120,7 @@ async def search_posts(
             .subquery()
         )
         query = query.outerjoin(like_count_sub, Post.id == like_count_sub.c.post_id).order_by(
-            like_count_sub.c.cnt.desc().nullslast()
+            like_count_sub.c.cnt.desc()
         )
     else:
         query = query.order_by(Post.created_at.desc())
