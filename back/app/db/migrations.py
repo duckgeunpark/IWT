@@ -18,6 +18,8 @@ logger = logging.getLogger(__name__)
 _TYPE_MIGRATIONS = [
     ("posts", "blocks", {"text"}, "ALTER TABLE `posts` MODIFY COLUMN `blocks` LONGTEXT NULL"),
     ("posts", "description", {"text"}, "ALTER TABLE `posts` MODIFY COLUMN `description` LONGTEXT NULL"),
+    # day_cache: 과거 _col_type_sql 버그로 VARCHAR(255)로 생성된 환경 → LONGTEXT로 확장
+    ("posts", "day_cache", {"varchar", "text"}, "ALTER TABLE `posts` MODIFY COLUMN `day_cache` LONGTEXT NULL"),
 ]
 
 
@@ -43,12 +45,18 @@ def run_type_migrations(engine) -> None:
 
 
 def _col_type_sql(col) -> str:
-    """SQLAlchemy 컬럼 타입 → MySQL DDL 타입 문자열"""
+    """
+    SQLAlchemy 컬럼 타입 → MySQL DDL 타입 문자열.
+
+    중요: Text는 String의 서브클래스, mysql.LONGTEXT는 Text의 서브클래스이므로
+    구체 타입(LONGTEXT, Text)을 먼저 검사해야 함. String 먼저 검사하면 모든
+    Text/LONGTEXT 컬럼이 VARCHAR로 잘못 생성됨.
+    """
     t = col.type
-    if isinstance(t, String):
-        return f"VARCHAR({t.length or 255})"
     if isinstance(t, Text):
         return "LONGTEXT"
+    if isinstance(t, String):
+        return f"VARCHAR({t.length or 255})"
     if isinstance(t, Boolean):
         return "TINYINT(1)"
     if isinstance(t, Integer):

@@ -80,7 +80,8 @@ def _get_chunk_chain():
 def _get_title_intro_chain():
     global _chain_title_intro
     if _chain_title_intro is None:
-        llm = get_llm(temperature=0.5, max_tokens=400)
+        # 한국어 + JSON 오버헤드 고려해 1000으로 (이전 400은 응답 잘림 발생)
+        llm = get_llm(temperature=0.5, max_tokens=1000)
         _chain_title_intro = TITLE_INTRO_PROMPT | llm | StrOutputParser()
     return _chain_title_intro
 
