@@ -107,7 +107,7 @@ const photoSlice = createSlice({
       const photoData = {
         id: `existing_${photo.id}`,
         dbId: photo.id,
-        fileKey: photo.file_key || '',   // ai-update fingerprint 계산용
+        fileKey: photo.file_key || '',   // regenerate fingerprint 계산용
         name: photo.file_name,
         size: photo.file_size || 0,
         type: photo.content_type || 'image/jpeg',

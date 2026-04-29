@@ -141,7 +141,6 @@ const DocumentPanel = ({
   onContentChange,
   onBlocksChange,
   postId,
-  onAIResult,
 }) => {
   const { photos } = useSelector(state => state.photos);
   const toast = useToast();
@@ -250,62 +249,6 @@ const DocumentPanel = ({
       setIsLLMProcessing(false);
     }
   }, [photos, postId, toast, updateBlocks]);
-
-  // ── AI 생성 (마크다운 모드: 기존 ai-update) ──────────────────────────────
-  const handleLLMGenerate = async () => {
-    if (photos.length === 0) {
-      toast.warning('사진을 먼저 업로드해주세요.');
-      return;
-    }
-
-    setIsLLMProcessing(true);
-    try {
-      if (postId) {
-        const photoData = photos.map(p => ({
-          file_key: p.fileKey || '',
-          file_name: p.name,
-          file_size: p.size,
-          content_type: p.type,
-          _lat: p.gpsData?.lat || null,
-          _lon: p.gpsData?.lng || null,
-          location_info: p.locationInfo || null,
-        }));
-
-        const response = await apiClient.post(`/api/v1/posts/${postId}/ai-update`, {
-          photos: photoData,
-          current_content: content,
-        });
-        if (response.markdown) {
-          updateContent(response.markdown);
-          onAIResult?.({ title: response.title, tags: response.tags });
-          const stats = response.cache_stats;
-          if (stats) {
-            const parts = [
-              stats.miss > 0 && `${stats.miss}개 섹션 업데이트`,
-              stats.new_sections > 0 && `${stats.new_sections}개 새 섹션 추가`,
-            ].filter(Boolean);
-            if (parts.length) toast.success(parts.join(', '));
-          }
-        }
-      } else {
-        const photoData = photos.map(p => ({
-          name: p.name, captureTime: p.captureTime, gps: p.gpsData,
-        }));
-        const locationData = (useSelector ? [] : []);
-        const response = await apiClient.post('/api/v1/llm/generate-itinerary', {
-          route_data: { photos: photoData, locations: locationData, total_photos: photos.length },
-          user_preferences: { language: 'ko', format: 'markdown' },
-        });
-        if (response.success && response.itinerary) updateContent(response.itinerary);
-        else throw new Error(response.error_message || 'LLM 생성 실패');
-      }
-    } catch (error) {
-      console.error('LLM 처리 중 오류:', error);
-      toast.error('AI 생성에 실패했습니다. 다시 시도해주세요.');
-    } finally {
-      setIsLLMProcessing(false);
-    }
-  };
 
   // ── 마크다운 툴바 헬퍼 ───────────────────────────────────────────────────
   const insertFormatting = useCallback((prefix, suffix = prefix) => {
@@ -511,19 +454,6 @@ const DocumentPanel = ({
       </div>
 
       <div className="document-footer">
-        <div className="document-actions">
-          <button
-            className="llm-generate-btn"
-            onClick={handleLLMGenerate}
-            disabled={isLLMProcessing}
-          >
-            {isLLMProcessing ? (
-              <><span className="loading-spinner"></span>AI 생성 중...</>
-            ) : (
-              'LLM으로 여행 기록 생성'
-            )}
-          </button>
-        </div>
         <div className="document-status">
           <span className="word-count">{content.length}자 · {content.split('\n').length}줄</span>
         </div>

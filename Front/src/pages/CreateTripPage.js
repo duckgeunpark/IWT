@@ -186,12 +186,6 @@ const CreateTripPage = ({ toggleTheme, theme }) => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── ai-update 완료 후 title/tags 동기화 ──
-  const handleAIResult = useCallback(({ title, tags: newTags }) => {
-    if (title) setTripTitle(title);
-    if (newTags?.length) setTags(newTags);
-  }, []);
-
   // ── LLM 설정 로드 (편집 모드 또는 모달 오픈 시) ──
   useEffect(() => {
     if (!isEditMode) return;
@@ -765,7 +759,6 @@ const CreateTripPage = ({ toggleTheme, theme }) => {
               initialContent={content}
               onContentChange={setContent}
               postId={isEditMode ? editPostId : null}
-              onAIResult={handleAIResult}
             />
           </div>
 

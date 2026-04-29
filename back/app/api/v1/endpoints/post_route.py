@@ -8,7 +8,7 @@ import asyncio
 from datetime import datetime
 
 from app.core.auth import get_current_user, get_optional_current_user
-from app.models.db_models import PostLike, PostBookmark, Comment, Post, Photo, Location, Category, User, UserLLMPreference, Cluster
+from app.models.db_models import PostLike, PostBookmark, Comment, Post, Photo, Location, Category, User, UserLLMPreference, Cluster, PostBlock
 from sqlalchemy import func, or_
 from app.schemas.post import (
     PostCreateRequest,
@@ -22,9 +22,8 @@ from app.services.s3_presigned_url import S3PresignedURLService
 from app.services.labeling_service import LabelingService
 from app.services.photo_filter_service import photo_filter
 from app.services.reverse_geocoder import geocoder_service
-from app.services.llm_pipeline import get_llm_pipeline, _merge_into_document, _extract_title_from_markdown, _extract_tags_from_markdown
-from app.services.block_assembler import assemble_blocks, compute_cluster_hash
-from app.services.block_merger import merge_blocks, has_user_edits as _has_user_edits
+from app.services.llm_pipeline import get_llm_pipeline  # /preview 미리보기 전용 (Phase 1 미적용)
+from app.services.block_assembler import compute_cluster_hash
 from app.services.photo_cluster import cluster_photos_by_location
 
 router = APIRouter(prefix="/posts", tags=["posts"])
@@ -69,12 +68,28 @@ def _build_post_response(post: Post, db: Session, current_user_id: Optional[str]
     else:
         author = None
 
-    blocks_data = None
-    if post.blocks:
-        try:
-            blocks_data = json.loads(post.blocks)
-        except Exception:
-            pass
+    # PostBlock 테이블에서 블록 데이터 로드 (v2 통일)
+    pb_rows = db.query(PostBlock).filter(PostBlock.post_id == post.id).order_by(PostBlock.block_order).all()
+    blocks_data = [
+        {
+            "block_id":              b.id,
+            "block_type":             b.block_type,
+            "block_order":            b.block_order,
+            "day":                    b.day,
+            "cluster_id":             b.cluster_id,
+            "pin_number":             b.pin_number,
+            "depth":                  b.depth,
+            "ai_content":             b.ai_content,
+            "user_content":           b.user_content,
+            "locked":                 b.locked,
+            "quality_score":          b.quality_score,
+            "stay_min":               b.stay_min,
+            "travel_from_prev_min":   b.travel_from_prev_min,
+            "distance_from_prev_km":  b.distance_from_prev_km,
+            "transport":              b.transport,
+        }
+        for b in pb_rows
+    ] or None
 
     return PostResponse(
         id=post.id,
@@ -396,21 +411,12 @@ async def auto_create_post(
                 from app.services.timeline_service import build_timeline
                 timeline = build_timeline(tmp_clusters)
 
-                # PlaceNote 생성 (LLM, 병렬)
-                await on_progress("stage1", 52, f"장소 분석 중... ({timeline['total_places']}곳)")
-                from app.services.place_note_service import generate_place_notes_batch
-                all_day_items = [item for day_items in timeline["days"].values() for item in day_items]
-                notes = await generate_place_notes_batch(all_day_items)
-
-                # 블록 생성 (LLM, 병렬)
-                await on_progress("stage2", 70, "여행 글 작성 중...")
-                from app.services.block_generator import generate_all_blocks
-                blocks_data, post_title, post_tags = await generate_all_blocks(timeline, notes)
-
-                # 품질 평가 + 재작성
-                await on_progress("stage3", 85, "품질 검토 중...")
-                from app.services.quality_evaluator import evaluate_and_rewrite
-                blocks_data = await evaluate_and_rewrite(blocks_data, notes)
+                # 일차 통합 LLM 호출 (Phase 1 최적화 — D+1콜 고정)
+                await on_progress("stage1", 60, f"여행 글 작성 중... ({timeline['total_places']}곳)")
+                from app.services.day_chunk_generator import generate_blocks_day_chunked
+                blocks_data, post_title, post_tags, new_day_cache, _stats = await generate_blocks_day_chunked(
+                    timeline,
+                )
 
                 # DB 저장
                 await on_progress("saving", 93, "임시저장 중...")
@@ -429,7 +435,6 @@ async def auto_create_post(
                     description=None,
                     tags=json.dumps(post_tags, ensure_ascii=False),
                     status="draft",
-                    blocks_mode="v2",
                     user_id=user_id,
                     created_at=datetime.utcnow(),
                     updated_at=datetime.utcnow(),
@@ -438,6 +443,7 @@ async def auto_create_post(
                         "usage_report":  clean_result["usage_report"],
                         "clean_summary": clean_result["summary"],
                     }, ensure_ascii=False, default=lambda o: o.isoformat() if hasattr(o, "isoformat") else str(o)),
+                    day_cache=json.dumps(new_day_cache, ensure_ascii=False) if new_day_cache else None,
                 )
                 db.add(post)
                 db.flush()
@@ -469,12 +475,7 @@ async def auto_create_post(
                     db.flush()
                     db_cluster_id_map[pc["cluster_id"]] = db_cluster.id
 
-                    # PlaceNote 캐시 저장
-                    tmp_id = pc["cluster_id"]
-                    note = notes.get(tmp_id)
-                    if note:
-                        from app.services.place_note_service import place_note_to_cache_json, cluster_fingerprint as _fp
-                        db_cluster.place_note = place_note_to_cache_json(note, getattr(note, "_fingerprint", ""))
+                    # 일차 캐시는 Post.day_cache에 통합 저장됨 (개별 PlaceNote 캐시 불필요)
 
                 # PostBlock 저장
                 from app.models.db_models import PostBlock
@@ -940,203 +941,6 @@ async def get_similar_posts(
         raise HTTPException(status_code=500, detail="유사 게시글 조회에 실패했습니다.")
 
 
-class AIUpdateRequest(BaseModel):
-    photos: List[dict]
-    current_content: Optional[str] = None  # 현재 편집 중인 문서 — 없으면 Stage 3 전체 재생성
-
-
-@router.post("/{post_id}/ai-update")
-async def ai_update_post(
-    post_id: int,
-    request: AIUpdateRequest,
-    current_user = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """
-    편집창에서 'AI로 게시글 생성' 버튼 클릭 시 호출.
-
-    - 변경된 클러스터만 Stage 2 재실행 (캐시 히트 시 재사용)
-    - Stage 1 · Stage 3은 항상 재실행
-    - post.description(마크다운) + recommended_route(캐시) 갱신
-    """
-    try:
-        user_id = current_user["sub"]
-
-        # 게시글 조회 + 권한 확인
-        post = db.query(Post).filter(Post.deleted_at.is_(None)).filter(Post.id == post_id).first()
-        if not post:
-            raise HTTPException(status_code=404, detail="게시글을 찾을 수 없습니다.")
-        if post.user_id != user_id:
-            raise HTTPException(status_code=403, detail="수정 권한이 없습니다.")
-
-        # 기존 stage2_cache 추출
-        existing_route = {}
-        if post.recommended_route:
-            try:
-                existing_route = json.loads(post.recommended_route)
-            except Exception:
-                pass
-        stage2_cache: dict = existing_route.get("stage2_cache", {})
-
-        photos = request.photos
-
-        # ── 1단계: 역지오코딩 ────────────────────────────────────────
-        for photo_dict in photos:
-            lat = photo_dict.get("_lat")
-            lon = photo_dict.get("_lon")
-            if lat and lon and not photo_dict.get("location_info"):
-                try:
-                    from app.services.reverse_geocoder import reverse_geocode as _rg
-                    addr = await _rg(lat, lon, db)
-                    photo_dict["location_info"] = {
-                        "country": addr.get("country"),
-                        "city": addr.get("city"),
-                        "region": addr.get("region"),
-                        "address": addr.get("address"),
-                        "coordinates": {"latitude": lat, "longitude": lon},
-                    }
-                except Exception as geo_err:
-                    logger.warning(f"역지오코딩 실패: {geo_err}")
-
-        # ── 2단계: 클러스터링 ────────────────────────────────────────
-        cluster_input = []
-        for p in photos:
-            lat = p.get("_lat")
-            lon = p.get("_lon")
-            cluster_input.append({
-                **p,
-                "gps": {"lat": lat, "lng": lon} if (lat and lon) else None,
-                "taken_at": (p.get("exif_data") or {}).get("datetime"),
-            })
-
-        raw_clusters = cluster_photos_by_location(cluster_input)
-
-        date_to_day: dict = {}
-        for cluster in raw_clusters:
-            start = cluster.get("start_time")
-            if start:
-                d = start[:10]
-                if d not in date_to_day:
-                    date_to_day[d] = len(date_to_day) + 1
-
-        pipeline_clusters = []
-        for i, cluster in enumerate(raw_clusters):
-            start = cluster.get("start_time")
-            date_str = start[:10] if start else None
-            day = date_to_day.get(date_str, 1)
-
-            cluster_photo_list = cluster["photos"]
-            rep_photo = max(cluster_photo_list, key=lambda p: p.get("file_size", 0))
-            try:
-                rep_url = await s3_service.generate_download_url(rep_photo["file_key"])
-            except Exception:
-                rep_url = ""
-
-            loc_info = next(
-                (p["location_info"] for p in cluster_photo_list if p.get("location_info")),
-                None,
-            )
-            location_name = (
-                loc_info.get("landmark") or loc_info.get("city") or loc_info.get("region") or "알 수 없는 장소"
-                if loc_info else "알 수 없는 장소"
-            )
-
-            pipeline_clusters.append({
-                "cluster_id": i,
-                "day": day,
-                "location_name": location_name,
-                "location_info": {
-                    "country": loc_info.get("country", "") if loc_info else "",
-                    "city":    loc_info.get("city", "") if loc_info else "",
-                    "address": loc_info.get("address", "") if loc_info else "",
-                },
-                # photos 포함 → fingerprint 계산에 사용
-                "photos": [{"file_key": p.get("file_key", "")} for p in cluster_photo_list],
-                "representative_photo_url": rep_url,
-                "photo_count": cluster["photo_count"],
-                "start_time": cluster.get("start_time"),
-                "end_time":   cluster.get("end_time"),
-            })
-
-        # ── 3단계: 사용자 LLM 설정 ───────────────────────────────────
-        user_pref_row = db.query(UserLLMPreference).filter(
-            UserLLMPreference.user_id == user_id
-        ).first()
-        user_prefs = {
-            "tone":         user_pref_row.tone,
-            "style":        user_pref_row.style,
-            "lang":         user_pref_row.lang,
-            "stage1_extra": user_pref_row.stage1_extra,
-            "stage2_extra": user_pref_row.stage2_extra,
-            "stage3_extra": user_pref_row.stage3_extra,
-        } if user_pref_row else None
-
-        # ── 4단계: 증분 파이프라인 실행 ──────────────────────────────
-        pipeline = get_llm_pipeline()
-        use_merge = bool(request.current_content)
-        result = await pipeline.run_incremental(
-            pipeline_clusters, stage2_cache, user_prefs,
-            skip_stage3=use_merge,
-        )
-
-        cache_stats = result.get("cache_stats", {})
-        logger.info(
-            f"ai-update post={post_id} merge={use_merge} | "
-            f"hit={cache_stats.get('hit',0)} "
-            f"miss={cache_stats.get('miss',0)} "
-            f"removed={cache_stats.get('removed',0)} "
-            f"new={cache_stats.get('new_sections',0)}"
-        )
-
-        # ── 5단계: 결과 마크다운 결정 ────────────────────────────────
-        if use_merge:
-            # 편집 내용 보존 모드: 문서 머지 (Stage 3 스킵)
-            final_markdown = _merge_into_document(
-                current_content=request.current_content,
-                stage2_results=result["stage2_results"],
-                cache_hit_ids=result["cache_hit_ids"],
-                itinerary_table=result["itinerary_table"],
-            )
-            final_title = _extract_title_from_markdown(final_markdown)
-            existing_tags = json.loads(post.tags) if post.tags else []
-            final_tags = _extract_tags_from_markdown(final_markdown) or existing_tags
-        else:
-            # 전체 재생성 모드: Stage 3 출력 그대로
-            final_markdown = result["markdown"]
-            final_title    = result["title"]
-            final_tags     = result["tags"]
-
-        # ── 6단계: 포스트 갱신 ───────────────────────────────────────
-        post.title       = final_title
-        post.description = final_markdown
-        post.tags        = json.dumps(final_tags, ensure_ascii=False)
-        post.updated_at  = datetime.utcnow()
-        post.recommended_route = json.dumps({
-            **existing_route,
-            "itinerary_table": result["itinerary_table"],
-            "stage2_cache":    result["stage2_cache"],
-        }, ensure_ascii=False)
-
-        db.commit()
-        db.refresh(post)
-
-        return {
-            "id":           post.id,
-            "title":        final_title,
-            "markdown":     final_markdown,
-            "tags":         final_tags,
-            "updated_at":   post.updated_at.isoformat(),
-            "cache_stats":  cache_stats,
-        }
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        db.rollback()
-        logger.error(f"AI 업데이트 실패 post={post_id}: {str(e)}")
-        raise HTTPException(status_code=500, detail="AI 게시글 업데이트에 실패했습니다.")
-
-
 class RegenerateRequest(BaseModel):
     photos: List[dict]
     regenerate_title: bool = False
@@ -1150,10 +954,13 @@ async def regenerate_post(
     db: Session = Depends(get_db),
 ):
     """
-    케이스 2: 편집 중 사진 추가 후 AI 재생성 (SSE 스트리밍).
-    - cluster_hash 기반 diff → 변경된 클러스터만 Stage 2 재실행
-    - 사용자가 편집한 user_content 절대 보존
-    - blocks[] 병합 후 저장
+    편집 중 사진 추가/삭제 후 AI 재생성 (SSE 스트리밍, blocks_mode='v2' 전용).
+
+    동작:
+      - cluster_hash 기반 diff → 신규/유지/삭제 클러스터 분류
+      - Post.day_cache의 일차 fingerprint 비교로 변경된 일차만 day_chunk 호출
+      - PostBlock.locked=True 블록은 LLM 결과로 덮지 않음
+      - regenerate_title=False면 기존 title/intro 유지 (LLM 호출 1회 절감)
     """
     def sse(step: str, progress: int, message: str, **extra) -> str:
         data = {"step": step, "progress": progress, "message": message, **extra}
@@ -1175,7 +982,6 @@ async def regenerate_post(
                 if post.user_id != user_id:
                     await on_progress("error", 0, "수정 권한이 없습니다.")
                     return
-
                 photos = request.photos
 
                 # STEP 1: 역지오코딩
@@ -1219,17 +1025,25 @@ async def regenerate_post(
                         if d not in date_to_day:
                             date_to_day[d] = len(date_to_day) + 1
 
+                from dataclasses import dataclass, field as dc_field
+                from datetime import datetime as dt
+
+                def _parse_dt(s):
+                    if not s:
+                        return None
+                    for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S.%f"):
+                        try:
+                            return dt.strptime(s[:19], fmt[:19])
+                        except ValueError:
+                            continue
+                    return None
+
                 pipeline_clusters = []
                 for i, cluster in enumerate(raw_clusters):
                     start = cluster.get("start_time")
                     date_str = start[:10] if start else None
                     day = date_to_day.get(date_str, 1)
                     cluster_photo_list = cluster["photos"]
-                    rep_photo = max(cluster_photo_list, key=lambda p: p.get("file_size", 0))
-                    try:
-                        rep_url = await s3_service.generate_download_url(rep_photo["file_key"])
-                    except Exception:
-                        rep_url = ""
                     loc_info = next(
                         (p["location_info"] for p in cluster_photo_list if p.get("location_info")), None,
                     )
@@ -1240,17 +1054,18 @@ async def regenerate_post(
                     center_gps = cluster.get("center_gps") or {}
                     centroid_lat = center_gps.get("lat")
                     centroid_lng = center_gps.get("lng")
+                    if not centroid_lat:
+                        for pp in cluster_photo_list:
+                            if pp.get("_lat"):
+                                centroid_lat, centroid_lng = pp["_lat"], pp["_lon"]
+                                break
                     pipeline_clusters.append({
                         "cluster_id": i,
                         "day": day,
                         "location_name": location_name,
-                        "location_info": {
-                            "country": loc_info.get("country", "") if loc_info else "",
-                            "city": loc_info.get("city", "") if loc_info else "",
-                            "address": loc_info.get("address", "") if loc_info else "",
-                        },
+                        "city":      loc_info.get("city", "") if loc_info else "",
+                        "country":   loc_info.get("country", "") if loc_info else "",
                         "photos": [{"file_key": p.get("file_key", "")} for p in cluster_photo_list],
-                        "representative_photo_url": rep_url,
                         "photo_count": cluster["photo_count"],
                         "start_time": cluster.get("start_time"),
                         "end_time": cluster.get("end_time"),
@@ -1259,135 +1074,192 @@ async def regenerate_post(
                         "_date_str": date_str,
                     })
 
-                # STEP 3: 기존 clusters 조회 + diff (cluster_hash 기반)
+                # STEP 3: 기존 clusters 조회 + cluster_hash 기반 diff
                 await on_progress("diff", 38, "변경 사항 분석 중...")
                 existing_clusters = db.query(Cluster).filter(Cluster.post_id == post_id).all()
                 existing_hash_to_cluster: dict = {c.cluster_hash: c for c in existing_clusters}
 
-                new_hashes_needed: List[str] = []
-                hash_to_pipeline: dict = {}
-
                 for pc in pipeline_clusters:
-                    c_hash = compute_cluster_hash(pc.get("_centroid_lat"), pc.get("_centroid_lng"), pc.get("_date_str"))
-                    pc["_cluster_hash"] = c_hash
-                    hash_to_pipeline[c_hash] = pc
-                    if c_hash not in existing_hash_to_cluster:
-                        new_hashes_needed.append(c_hash)
-
-                cache_hit_hashes = set(existing_hash_to_cluster.keys()) - set(new_hashes_needed)
-
-                # STEP 4: 사용자 LLM 설정
-                user_pref_row = db.query(UserLLMPreference).filter(
-                    UserLLMPreference.user_id == user_id
-                ).first()
-                user_prefs = {
-                    "tone": user_pref_row.tone, "style": user_pref_row.style,
-                    "lang": user_pref_row.lang,
-                    "stage1_extra": user_pref_row.stage1_extra,
-                    "stage2_extra": user_pref_row.stage2_extra,
-                    "stage3_extra": user_pref_row.stage3_extra,
-                } if user_pref_row else None
-
-                # STEP 5: LLM — cache miss 클러스터 + 일정표 + 결론 재생성
-                await on_progress("llm", 50, f"AI 글 작성 중... ({len(new_hashes_needed)}곳 신규)")
-
-                # cache miss 클러스터만 Stage 2 실행
-                miss_pipeline_clusters = [pc for pc in pipeline_clusters if pc["_cluster_hash"] in new_hashes_needed]
-
-                hash_to_new_paragraph: dict = {}
-                if miss_pipeline_clusters:
-                    pipeline = get_llm_pipeline()
-                    # Stage 2만 실행 (stage1/3 별도 처리)
-                    stage2_only_result = await pipeline.run_incremental(
-                        miss_pipeline_clusters,
-                        {},  # 캐시 없음 → 전부 miss 처리
-                        user_prefs,
-                        skip_stage3=True,
+                    pc["_cluster_hash"] = compute_cluster_hash(
+                        pc.get("_centroid_lat"), pc.get("_centroid_lng"), pc.get("_date_str"),
                     )
-                    for r in stage2_only_result.get("stage2_results", []):
-                        c_hash = miss_pipeline_clusters[r["cluster_id"]]["_cluster_hash"] if r["cluster_id"] < len(miss_pipeline_clusters) else None
-                        if c_hash:
-                            hash_to_new_paragraph[c_hash] = r.get("paragraph", "")
 
-                # 일정표 재생성 (Stage 1)
-                await on_progress("llm", 70, "일정표 재생성 중...")
-                pipeline = get_llm_pipeline()
-                itinerary_result = await pipeline.run(pipeline_clusters, user_prefs)
-                new_itinerary = itinerary_result.get("itinerary_table", "")
-                new_conclusion = ""  # Stage 3 결과에서 결론 추출
-                if itinerary_result.get("markdown"):
-                    from app.services.block_assembler import _parse_stage3_markdown
-                    parsed = _parse_stage3_markdown(itinerary_result["markdown"])
-                    new_conclusion = "\n\n".join(s["body"] for s in parsed.get("sections", [])[-1:]) if parsed.get("sections") else ""
+                new_hash_set = {pc["_cluster_hash"] for pc in pipeline_clusters}
+                added_hashes = new_hash_set - existing_hash_to_cluster.keys()
+                removed_hashes = existing_hash_to_cluster.keys() - new_hash_set
 
-                # STEP 6: 클러스터 DB 동기화
-                await on_progress("merging", 85, "편집 내용 보존 중...")
-
-                # 신규 클러스터 DB 저장
+                # STEP 4: 신규 클러스터 DB 저장 / 기존 메타 갱신 / 삭제 클러스터 제거
                 for pc in pipeline_clusters:
                     c_hash = pc["_cluster_hash"]
-                    if c_hash not in existing_hash_to_cluster:
-                        loc_info_tmp = pc.get("location_info") or {}
+                    if c_hash in existing_hash_to_cluster:
+                        existing = existing_hash_to_cluster[c_hash]
+                        existing.cluster_order = pc["cluster_id"]
+                        existing.location_name = pc.get("location_name") or existing.location_name
+                        existing.city          = pc.get("city") or existing.city
+                        existing.country       = pc.get("country") or existing.country
+                        existing.time_start    = _parse_dt(pc.get("start_time")) or existing.time_start
+                        existing.time_end      = _parse_dt(pc.get("end_time")) or existing.time_end
+                        existing.photo_count   = pc.get("photo_count", existing.photo_count)
+                    else:
                         new_db_cluster = Cluster(
                             post_id=post_id,
                             cluster_hash=c_hash,
                             centroid_lat=pc.get("_centroid_lat"),
                             centroid_lng=pc.get("_centroid_lng"),
                             location_name=pc.get("location_name"),
-                            city=loc_info_tmp.get("city"),
-                            country=loc_info_tmp.get("country"),
+                            city=pc.get("city"),
+                            country=pc.get("country"),
+                            time_start=_parse_dt(pc.get("start_time")),
+                            time_end=_parse_dt(pc.get("end_time")),
                             photo_count=pc.get("photo_count", 0),
                             cluster_order=pc["cluster_id"],
-                            ai_paragraph=hash_to_new_paragraph.get(c_hash),
                         )
                         db.add(new_db_cluster)
                         db.flush()
                         existing_hash_to_cluster[c_hash] = new_db_cluster
-                    else:
-                        # 기존 cluster_order 업데이트
-                        existing_hash_to_cluster[c_hash].cluster_order = pc["cluster_id"]
-                        if c_hash in hash_to_new_paragraph:
-                            existing_hash_to_cluster[c_hash].ai_paragraph = hash_to_new_paragraph[c_hash]
 
-                # 삭제된 클러스터 제거
-                new_hash_set = {pc["_cluster_hash"] for pc in pipeline_clusters}
-                for old_hash, old_cluster in list(existing_hash_to_cluster.items()):
-                    if old_hash not in new_hash_set:
-                        db.delete(old_cluster)
+                for h in removed_hashes:
+                    db.delete(existing_hash_to_cluster[h])
                 db.flush()
 
-                # 현재 blocks 파싱
-                existing_blocks = []
-                if post.blocks:
-                    try:
-                        existing_blocks = json.loads(post.blocks)
-                    except Exception:
-                        pass
+                # STEP 5: timeline 빌드용 임시 클러스터 (DB 클러스터 객체 그대로 사용)
+                await on_progress("timeline", 50, "여행 타임라인 분석 중...")
+                from app.services.timeline_service import build_timeline
 
-                # DB cluster rows 정렬 후 병합
-                new_db_clusters = [existing_hash_to_cluster[pc["_cluster_hash"]] for pc in pipeline_clusters]
-                merged_blocks = merge_blocks(
-                    existing_blocks=existing_blocks,
-                    new_cluster_db_rows=new_db_clusters,
-                    cache_hit_hashes=cache_hit_hashes,
-                    hash_to_new_paragraph=hash_to_new_paragraph,
-                    new_itinerary=new_itinerary,
-                    new_conclusion=new_conclusion,
-                    regenerate_title=request.regenerate_title,
+                @dataclass
+                class _TmpCluster:
+                    id: int
+                    cluster_hash: str = ""
+                    centroid_lat: float = None
+                    centroid_lng: float = None
+                    location_name: str = ""
+                    city: str = ""
+                    country: str = ""
+                    time_start: object = None
+                    time_end: object = None
+                    photo_count: int = 0
+                    cluster_order: int = 0
+                    photos: list = dc_field(default_factory=list)
+
+                tmp_clusters = []
+                tmp_id_to_db_cluster: dict = {}
+                for pc in pipeline_clusters:
+                    db_cluster = existing_hash_to_cluster[pc["_cluster_hash"]]
+                    tmp = _TmpCluster(
+                        id            = db_cluster.id,
+                        cluster_hash  = db_cluster.cluster_hash,
+                        centroid_lat  = pc.get("_centroid_lat"),
+                        centroid_lng  = pc.get("_centroid_lng"),
+                        location_name = pc.get("location_name"),
+                        city          = pc.get("city", ""),
+                        country       = pc.get("country", ""),
+                        time_start    = _parse_dt(pc.get("start_time")),
+                        time_end      = _parse_dt(pc.get("end_time")),
+                        photo_count   = pc.get("photo_count", 0),
+                        cluster_order = pc["cluster_id"],
+                        photos        = [type("P", (), {"file_key": p.get("file_key", "")})() for p in pc.get("photos", [])],
+                    )
+                    tmp_clusters.append(tmp)
+                    tmp_id_to_db_cluster[tmp.id] = db_cluster
+
+                timeline = build_timeline(tmp_clusters)
+
+                # STEP 6: 기존 잠금 블록 + 캐시 로드
+                from app.models.db_models import PostBlock
+                existing_blocks = db.query(PostBlock).filter(PostBlock.post_id == post_id).all()
+
+                locked_blocks: dict = {}
+                old_title = None
+                old_intro = None
+                for b in existing_blocks:
+                    if b.block_type == "title":
+                        old_title = b.ai_content
+                    elif b.block_type == "intro":
+                        old_intro = b.ai_content
+                    elif b.block_type == "place" and b.locked and b.cluster_id is not None:
+                        locked_blocks[b.cluster_id] = {
+                            "ai_content":    b.ai_content,
+                            "depth":         b.depth,
+                            "quality_score": b.quality_score,
+                        }
+
+                cached_day_cache = {}
+                if post.day_cache:
+                    try:
+                        cached_day_cache = json.loads(post.day_cache)
+                    except Exception:
+                        cached_day_cache = {}
+
+                # STEP 7: day_chunk 호출 (변경된 일차만 LLM)
+                await on_progress("llm", 60, "AI 글 작성 중...")
+                from app.services.day_chunk_generator import generate_blocks_day_chunked
+                blocks_data, new_title, new_tags, new_day_cache, cache_stats = await generate_blocks_day_chunked(
+                    timeline,
+                    cached_day_cache=cached_day_cache,
+                    locked_blocks=locked_blocks,
+                    locked_title=None if request.regenerate_title else old_title,
+                    locked_intro=None if request.regenerate_title else old_intro,
                 )
 
-                post.blocks = json.dumps(merged_blocks, ensure_ascii=False)
+                # STEP 8: PostBlock 전체 교체
+                await on_progress("merging", 85, "블록 갱신 중...")
+                # 기존 블록 삭제
+                db.query(PostBlock).filter(PostBlock.post_id == post_id).delete(synchronize_session=False)
+                db.flush()
+
+                for bd in blocks_data:
+                    db_cid = bd.get("cluster_id")  # day_chunk_generator는 timeline의 cluster.id 그대로 사용 → DB 클러스터 id와 동일
+                    db.add(PostBlock(
+                        post_id               = post_id,
+                        block_type            = bd["block_type"],
+                        block_order           = bd["block_order"],
+                        day                   = bd.get("day"),
+                        cluster_id            = db_cid,
+                        pin_number            = bd.get("pin_number"),
+                        depth                 = bd.get("depth", "brief"),
+                        ai_content            = bd.get("ai_content"),
+                        locked                = False,
+                        quality_score         = bd.get("quality_score"),
+                        stay_min              = bd.get("stay_min"),
+                        travel_from_prev_min  = bd.get("travel_from_prev_min"),
+                        distance_from_prev_km = bd.get("distance_from_prev_km"),
+                        transport             = bd.get("transport"),
+                    ))
+
+                # 잠금 정보 복원: 위에서 새 블록은 locked=False로 만들었으므로 잠겨있던 cluster_id에 다시 locked=True 설정
+                if locked_blocks:
+                    for locked_cid in locked_blocks.keys():
+                        db.query(PostBlock).filter(
+                            PostBlock.post_id == post_id,
+                            PostBlock.cluster_id == locked_cid,
+                            PostBlock.block_type == "place",
+                        ).update({"locked": True}, synchronize_session=False)
+
+                # STEP 9: Post 메타 갱신
+                post.title          = new_title if request.regenerate_title else (old_title or new_title)
+                post.tags           = json.dumps(new_tags, ensure_ascii=False)
+                post.day_cache      = json.dumps(new_day_cache, ensure_ascii=False) if new_day_cache else None
                 post.blocks_version = (post.blocks_version or 0) + 1
-                post.has_user_edits = _has_user_edits(merged_blocks)
-                post.description = itinerary_result.get("markdown", post.description)
-                post.updated_at = datetime.utcnow()
+                post.has_user_edits = bool(locked_blocks)
+                post.updated_at     = datetime.utcnow()
 
                 db.commit()
-                cache_stats = {
-                    "hit": len(cache_hit_hashes),
-                    "miss": len(new_hashes_needed),
+
+                stats_payload = {
+                    "hit":      cache_stats.get("day_hit", 0),
+                    "miss":     cache_stats.get("day_miss", 0),
+                    "added":    len(added_hashes),
+                    "removed":  len(removed_hashes),
+                    "locked":   len(locked_blocks),
+                    "chunks":   cache_stats.get("chunk_calls", 0),
                 }
-                await on_progress("done", 100, "재생성 완료!", post_id=post_id, cache_stats=cache_stats)
+                logger.info(
+                    f"regenerate post={post_id} | day_hit={stats_payload['hit']} "
+                    f"day_miss={stats_payload['miss']} added={stats_payload['added']} "
+                    f"removed={stats_payload['removed']} locked={stats_payload['locked']} "
+                    f"chunk_calls={stats_payload['chunks']}"
+                )
+                await on_progress("done", 100, "재생성 완료!", post_id=post_id, cache_stats=stats_payload)
 
             except Exception as e:
                 db.rollback()

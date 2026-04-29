@@ -52,7 +52,6 @@ class PostListResponse(BaseModel):
 class PostDetail(PostListItem):
     description: Optional[str] = None
     tags: Optional[str] = None
-    blocks_mode: Optional[str] = None
 
 
 class PostStatusUpdate(BaseModel):
@@ -142,7 +141,6 @@ async def get_post(
         **base.model_dump(),
         description=post.description,
         tags=post.tags,
-        blocks_mode=post.blocks_mode,
     )
 
 

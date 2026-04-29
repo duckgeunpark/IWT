@@ -115,3 +115,55 @@ def run_column_migrations(engine, metadata) -> None:
         logger.info("[migration] 스키마 최신 상태 — 변경 없음")
     else:
         logger.info(f"[migration] 총 {applied}개 컬럼 추가 완료")
+
+
+# ── 레거시 데이터/컬럼 정리 (Phase 1 통합 후 일회성, 재실행 안전) ──────
+
+def run_legacy_blocks_cleanup(engine) -> None:
+    """
+    Post.blocks (LONGTEXT JSON, v1 레거시) / Post.blocks_mode (v0/v1/v2 구분자) 정리.
+
+    동작 (idempotent):
+      1) blocks_mode 컬럼이 있으면 → 'v2'가 아닌 게시글 DELETE
+      2) blocks 컬럼이 있으면 → DROP COLUMN
+      3) blocks_mode 컬럼이 있으면 → DROP COLUMN
+
+    배경: Phase 1 통합으로 모든 게시글이 post_blocks 테이블 사용. 레거시 형식은 재생성 불가하므로
+          출시 전 일괄 정리. 컬럼이 이미 제거된 환경에서는 자동으로 스킵.
+    """
+    inspector = inspect(engine)
+    db_tables = set(inspector.get_table_names())
+    if "posts" not in db_tables:
+        return
+
+    cols = {c["name"] for c in inspector.get_columns("posts")}
+    has_blocks = "blocks" in cols
+    has_blocks_mode = "blocks_mode" in cols
+
+    if not has_blocks and not has_blocks_mode:
+        return  # 이미 정리됨
+
+    try:
+        with engine.begin() as conn:
+            # 1) 레거시 게시글 삭제 (blocks_mode 컬럼이 있을 때만)
+            if has_blocks_mode:
+                count_row = conn.execute(text(
+                    "SELECT COUNT(*) FROM posts WHERE blocks_mode IS NULL OR blocks_mode <> 'v2'"
+                )).scalar() or 0
+                if count_row > 0:
+                    conn.execute(text(
+                        "DELETE FROM posts WHERE blocks_mode IS NULL OR blocks_mode <> 'v2'"
+                    ))
+                    logger.info(f"[migration] 레거시 게시글 {count_row}건 삭제")
+
+            # 2) blocks 컬럼 제거
+            if has_blocks:
+                conn.execute(text("ALTER TABLE posts DROP COLUMN blocks"))
+                logger.info("[migration] posts.blocks 컬럼 제거 완료")
+
+            # 3) blocks_mode 컬럼 제거
+            if has_blocks_mode:
+                conn.execute(text("ALTER TABLE posts DROP COLUMN blocks_mode"))
+                logger.info("[migration] posts.blocks_mode 컬럼 제거 완료")
+    except Exception as e:
+        logger.error(f"[migration] 레거시 정리 실패: {e}")

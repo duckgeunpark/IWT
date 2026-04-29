@@ -19,13 +19,10 @@ class Post(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     recommended_route = Column(Text, nullable=True)  # 추천 경로 정보를 JSON 문자열로 저장
-    blocks         = Column(LONGTEXT, nullable=True)        # JSON blocks[] — 레거시 (blocks_mode='legacy')
     blocks_version = Column(Integer, default=0)           # 재생성 이력 추적용 버전 번호
     has_user_edits = Column(Boolean, default=False)       # 사용자 편집 여부 플래그
-    blocks_mode    = Column(String(20), default='legacy', server_default='legacy')
-    # 'legacy': posts.blocks JSON 사용 (기존 게시글)
-    # 'v2':     post_blocks 테이블 사용 (신규 게시글)
     deleted_at     = Column(DateTime, nullable=True, index=True)  # 관리자 soft delete 마커. NOT NULL이면 일반 조회에서 제외
+    day_cache      = Column(LONGTEXT, nullable=True)  # 일차 통합 콜 결과 캐시: {day_idx: {fp, places: [...]}}. fp 일치 시 재호출 생략
 
     # 관계
     photos = relationship("Photo", back_populates="post", cascade="all, delete-orphan")
@@ -426,8 +423,7 @@ class UserCorrection(Base):
 
 class PostBlock(Base):
     """
-    게시글 블록 — v2 생성 시스템에서 사용.
-    posts.blocks_mode = 'v2' 인 게시글은 이 테이블에서 블록을 읽는다.
+    게시글 블록 — 모든 게시글이 이 테이블에서 블록을 읽는다.
 
     블록 타입:
       title       — 게시글 제목 (1개)
