@@ -44,6 +44,16 @@ const ClusterCarousel = ({ photos }) => {
   );
 };
 
+// JSON 안전 파싱 (day_header / tags 블록은 ai_content 가 JSON 문자열)
+const safeParseJson = (raw) => {
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+};
+
 // 블록 뷰어 (읽기 전용)
 const BlockViewer = ({ blocks, photos }) => (
   <div className="block-viewer">
@@ -54,6 +64,65 @@ const BlockViewer = ({ blocks, photos }) => (
         case 'title':
           return null; // 상단 meta에 이미 표시
 
+        // ── v2 신규 블록 타입 ─────────────────────────────────────
+        case 'intro':
+          if (!content) return null;
+          return (
+            <div key={block.block_id} className="bv-block bv-intro">
+              <MarkdownPreview content={content} />
+            </div>
+          );
+
+        case 'day_header': {
+          const headerData = safeParseJson(content) || {};
+          const day = headerData.day ?? block.day;
+          const pins = Array.isArray(headerData.pins) ? headerData.pins : [];
+          return (
+            <div key={block.block_id} className="bv-block bv-day-header">
+              <h2 className="bv-day-title">Day {day ?? ''}</h2>
+              {pins.length > 0 && (
+                <ol className="bv-day-pins">
+                  {pins.map((pin, i) => (
+                    <li key={`${pin.cluster_id}-${i}`} className={`bv-pin${pin.is_skip ? ' skipped' : ''}`}>
+                      <span className="bv-pin-number">{pin.pin_number ?? i + 1}</span>
+                      <span className="bv-pin-name">{pin.place_name || '알 수 없는 장소'}</span>
+                      {pin.arrival_str && <span className="bv-pin-time">{pin.arrival_str}</span>}
+                      {pin.stay_str && <span className="bv-pin-stay">· 머문 시간 {pin.stay_str}</span>}
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </div>
+          );
+        }
+
+        case 'place': {
+          if (!content) return null;
+          const clusterPhotos = block.cluster_id
+            ? photos.filter(p => p.cluster_id === block.cluster_id)
+            : [];
+          const depthClass = block.depth === 'main' ? ' depth-main' : ' depth-brief';
+          return (
+            <div key={block.block_id} className={`bv-block bv-place${depthClass}`}>
+              {clusterPhotos.length > 0 && <ClusterCarousel photos={clusterPhotos} />}
+              <MarkdownPreview content={content} />
+            </div>
+          );
+        }
+
+        case 'tags': {
+          const tagList = safeParseJson(content);
+          if (!Array.isArray(tagList) || tagList.length === 0) return null;
+          return (
+            <div key={block.block_id} className="bv-block bv-tags">
+              {tagList.map((t, i) => (
+                <span key={i} className="bv-tag">#{t}</span>
+              ))}
+            </div>
+          );
+        }
+
+        // ── legacy 블록 타입 (옛 게시글 호환) ──────────────────────
         case 'cluster_photos': {
           const clusterPhotos = photos.filter(p => p.cluster_id === block.cluster_id);
           if (clusterPhotos.length === 0) return null;
@@ -97,7 +166,13 @@ const BlockViewer = ({ blocks, photos }) => (
           );
 
         default:
-          return null;
+          // 알 수 없는 블록 타입은 content 가 있으면 일반 텍스트로 표시
+          if (!content) return null;
+          return (
+            <div key={block.block_id} className="bv-block bv-unknown">
+              <MarkdownPreview content={content} />
+            </div>
+          );
       }
     })}
   </div>

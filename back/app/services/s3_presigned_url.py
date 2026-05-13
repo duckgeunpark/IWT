@@ -99,10 +99,10 @@ class S3PresignedURLService:
         """
         try:
             logger.info(f"Presigned URL 생성 시작 - file_key: {file_key}, content_type: {content_type}")
-            
-            # 임시 폴더에 저장
-            temp_key = f"temp/{file_key}"
-            
+
+            # 호출 측 엔드포인트가 이미 "temp/{user}/{filename}" 형태로 전달함
+            temp_key = file_key
+
             presigned_url = self.s3_presign_client.generate_presigned_url(
                 'put_object',
                 Params={
