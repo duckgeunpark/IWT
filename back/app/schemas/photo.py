@@ -51,4 +51,6 @@ class PhotoData(BaseModel):
     location_info: Optional[LocationInfo] = None
     exif_data: Optional[Dict[str, Any]] = None
     llm_analysis: Optional[Dict[str, Any]] = None
-    labeling_data: Optional[Dict[str, Any]] = None 
+    labeling_data: Optional[Dict[str, Any]] = None
+    taken_at_utc: Optional[datetime] = None
+    taken_at_local: Optional[str] = None

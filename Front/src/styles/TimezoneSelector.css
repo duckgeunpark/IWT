@@ -1,0 +1,154 @@
+/* ── 타임존 선택 칩 + 드롭다운 ───────────────────────────── */
+
+.tz-selector {
+  position: relative;
+  display: inline-block;
+}
+
+.tz-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 20px;
+  font-size: 14px;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  font-family: inherit;
+}
+
+.tz-chip:hover {
+  background: var(--bg-hover, var(--bg-secondary));
+  border-color: var(--accent-color);
+}
+
+.tz-chip-label {
+  font-weight: 500;
+}
+
+.tz-chip-arrow {
+  font-size: 10px;
+  opacity: 0.6;
+}
+
+.tz-selector.compact .tz-chip {
+  padding: 4px 10px;
+  font-size: 13px;
+  border-radius: 14px;
+}
+
+/* ── 드롭다운 ───────────────────────────────────────────── */
+
+.tz-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 100;
+  min-width: 340px;
+  max-width: 420px;
+  max-height: 420px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.tz-search {
+  padding: 10px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.tz-search-input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 14px;
+  font-family: inherit;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.tz-search-input:focus {
+  border-color: var(--accent-color);
+}
+
+.tz-options {
+  list-style: none;
+  padding: 4px;
+  margin: 0;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.tz-empty {
+  padding: 16px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.tz-option {
+  display: grid;
+  grid-template-columns: 24px 56px 1fr auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  cursor: pointer;
+  border-radius: 6px;
+  font-size: 14px;
+  color: var(--text-primary);
+  transition: background 0.1s;
+}
+
+.tz-option:hover {
+  background: var(--bg-tertiary);
+}
+
+.tz-option.selected {
+  background: var(--accent-color-faint, rgba(59, 130, 246, 0.1));
+  color: var(--accent-color);
+  font-weight: 500;
+}
+
+.tz-option-flag {
+  font-size: 18px;
+}
+
+.tz-option-offset {
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.tz-option-label {
+  font-weight: 500;
+}
+
+.tz-option-country {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-right: 4px;
+}
+
+.tz-option-badge {
+  font-size: 11px;
+  padding: 2px 6px;
+  background: var(--accent-color);
+  color: #fff;
+  border-radius: 8px;
+  white-space: nowrap;
+}
+
+.tz-option-check {
+  color: var(--accent-color);
+  font-weight: 700;
+}

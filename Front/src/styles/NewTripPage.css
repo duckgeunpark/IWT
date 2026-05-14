@@ -961,6 +961,35 @@
   text-align: center;
   margin-bottom: 28px;
 }
+
+/* 여행 타임존 카드 */
+.trip-timezone-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 18px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  margin-bottom: 24px;
+}
+.trip-timezone-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: left;
+}
+.trip-timezone-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.trip-timezone-help {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
 .cluster-review-title {
   font-size: 20px;
   font-weight: 700;

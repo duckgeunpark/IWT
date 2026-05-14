@@ -23,6 +23,7 @@ class Post(Base):
     has_user_edits = Column(Boolean, default=False)       # 사용자 편집 여부 플래그
     deleted_at     = Column(DateTime, nullable=True, index=True)  # 관리자 soft delete 마커. NOT NULL이면 일반 조회에서 제외
     day_cache      = Column(LONGTEXT, nullable=True)  # 일차 통합 콜 결과 캐시: {day_idx: {fp, places: [...]}}. fp 일치 시 재호출 생략
+    timezone       = Column(String(50), nullable=True)  # 게시글 표시 타임존 (IANA name, 예: "Asia/Bangkok"). 사진 EXIF naive 시각의 해석/표시 기준
 
     # 관계
     photos = relationship("Photo", back_populates="post", cascade="all, delete-orphan")
@@ -68,6 +69,8 @@ class Photo(Base):
     content_type = Column(String(100), nullable=False)
     upload_time = Column(DateTime, default=datetime.utcnow)
     exif_data = Column(Text, nullable=True)  # EXIF 메타데이터를 JSON 문자열로 저장
+    taken_at_utc = Column(DateTime, nullable=True, index=True)  # 촬영 시각 (UTC, 정렬·필터링용)
+    taken_at_local = Column(String(25), nullable=True)  # 촬영 시각 (naive local ISO, 예: "2024-03-15T20:00:00"). 표시용
     
     # 관계
     post = relationship("Post", back_populates="photos")

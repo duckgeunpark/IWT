@@ -5,6 +5,7 @@ import logging
 
 from app.core.auth import get_current_user
 from app.services.photo_filter_service import PhotoFilterService
+from app.services.timezone_service import detect_timezone_from_gps
 
 router = APIRouter(prefix="/photos", tags=["사진 필터링"])
 logger = logging.getLogger(__name__)
@@ -27,6 +28,14 @@ class PhotoFilterRequest(BaseModel):
     enable_ai_quality: bool = False
 
 
+def _first_gps(photos: List[PhotoFilterItem]) -> Optional[Dict[str, float]]:
+    """첫 GPS 좌표 찾기 (타임존 자동 감지용)."""
+    for p in photos:
+        if p.gps and p.gps.get("lat") is not None and p.gps.get("lng") is not None:
+            return p.gps
+    return None
+
+
 @router.post("/filter")
 async def filter_photos(
     request: PhotoFilterRequest,
@@ -43,9 +52,16 @@ async def filter_photos(
     5. AI 품질 분석 (선택)
     6. 쓰레기 데이터 구분
     7. 데이터 활용 내역 표기
+
+    추가: 첫 GPS 좌표로 타임존 자동 감지 → 응답에 detected_timezone 포함.
     """
     photos_data = [p.model_dump() for p in request.photos]
     result = filter_service.run_pipeline(photos_data, request.enable_ai_quality)
+
+    first_gps = _first_gps(request.photos)
+    detected_tz = None
+    if first_gps:
+        detected_tz = detect_timezone_from_gps(first_gps.get("lat"), first_gps.get("lng"))
 
     return {
         "summary": {
@@ -60,4 +76,5 @@ async def filter_photos(
         },
         "photos": result.photos,
         "place_groups": result.place_group_details,
+        "detected_timezone": detected_tz,  # IANA name 또는 null (GPS 없을 시)
     }

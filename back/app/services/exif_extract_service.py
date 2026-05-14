@@ -39,6 +39,7 @@ class ExifExtractService:
             processed_data = {
                 "camera_info": self._process_camera_info(exif_data.get("camera_info", {})),
                 "datetime": self._process_datetime(exif_data.get("datetime")),
+                "datetime_offset": exif_data.get("datetime_offset"),  # EXIF OffsetTimeOriginal (예: "+07:00")
                 "gps": self._process_gps_data(exif_data.get("gps")),
                 "image_info": self._process_image_info(exif_data.get("image_info", {})),
                 "extraction_success": exif_data.get("extraction_success", False)

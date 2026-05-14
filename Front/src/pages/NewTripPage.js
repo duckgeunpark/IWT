@@ -12,6 +12,8 @@ import { computeFileHash } from '../utils/fileHash';
 import { apiClient } from '../services/apiClient';
 import { useToast } from '../components/Toast';
 import Header from '../components/Header';
+import TimezoneSelector from '../components/TimezoneSelector';
+import { DEFAULT_TIMEZONE } from '../data/timezones';
 import '../styles/NewTripPage.css';
 
 // ── 프론트 간이 클러스터링 (대표사진 선택 화면용) ──
@@ -127,6 +129,10 @@ const NewTripPage = ({ toggleTheme, theme }) => {
   const [isGeneratingDraft, setIsGeneratingDraft] = useState(false);
   const [generatedDraft, setGeneratedDraft] = useState(null);
 
+  // ── 타임존 상태 ──
+  const [detectedTimezone, setDetectedTimezone] = useState(null); // 백엔드가 GPS 로 감지한 tz
+  const [selectedTimezone, setSelectedTimezone] = useState(DEFAULT_TIMEZONE); // 사용자 선택 (기본=감지값)
+
   // ── 계획 모드 상태 ──
   const [destination, setDestination] = useState('');
   const [selectedStyles, setSelectedStyles] = useState([]);
@@ -234,9 +240,11 @@ const NewTripPage = ({ toggleTheme, theme }) => {
         // EXIF 추출
         let exifData = { hasExif: false, backendData: null };
         let gps = null;
-        let takenAtLocal = null;
+        let takenAtLocal = null;     // EXIF 원본 naive 문자열 (예: "2024:03:15 20:00:00") — 백엔드가 post.timezone 으로 해석
+        let datetimeOffset = null;   // EXIF OffsetTimeOriginal (예: "+07:00") — 있으면 백엔드 fallback 감지에 활용
         try {
-          const raw = await exifr.parse(file, { tiff: true, gps: true });
+          // reviveValues: false → Date 객체로 변환하지 않고 원본 문자열 유지 (브라우저 tz 오염 방지)
+          const raw = await exifr.parse(file, { tiff: true, gps: true, reviveValues: false });
           const lat = raw?.latitude || raw?.GPSLatitude;
           const lng = raw?.longitude || raw?.GPSLongitude;
           if (lat && lng && !isNaN(lat) && !isNaN(lng)) {
@@ -244,15 +252,16 @@ const NewTripPage = ({ toggleTheme, theme }) => {
             if (raw?.GPSAltitude) gps.alt = parseFloat(raw.GPSAltitude);
           }
 
-          const dateTime = raw?.DateTime || raw?.DateTimeOriginal || raw?.CreateDate;
+          const dateTime = raw?.DateTimeOriginal || raw?.DateTime || raw?.CreateDate;
           if (dateTime) {
-            const d = new Date(dateTime);
-            if (!isNaN(d.getTime())) takenAtLocal = d.toISOString();
+            // 원본 문자열 그대로 유지. EXIF 콜론 형식은 백엔드에서 파싱.
+            takenAtLocal = typeof dateTime === 'string' ? dateTime : String(dateTime);
           }
+          datetimeOffset = raw?.OffsetTimeOriginal || raw?.OffsetTime || null;
 
           exifData = {
             hasExif: !!raw,
-            backendData: { gps, takenAtLocal, originalFilename: file.name, fileSizeBytes: file.size },
+            backendData: { gps, takenAtLocal, datetimeOffset, originalFilename: file.name, fileSizeBytes: file.size },
           };
         } catch (_) { /* EXIF 없어도 진행 */ }
 
@@ -305,6 +314,12 @@ const NewTripPage = ({ toggleTheme, theme }) => {
         setFilterSummary(filterResponse.summary);
         dispatch(setFilterResult(filterResponse));
 
+        // 감지된 타임존 저장 (없으면 기본값 유지)
+        if (filterResponse.detected_timezone) {
+          setDetectedTimezone(filterResponse.detected_timezone);
+          setSelectedTimezone(filterResponse.detected_timezone);
+        }
+
         // 사진별 필터 결과 매핑
         const filterPhotoMap = {};
         (filterResponse.photos || []).forEach(p => { filterPhotoMap[p.id] = p; });
@@ -345,7 +360,7 @@ const NewTripPage = ({ toggleTheme, theme }) => {
 
   const goToEditPage = () => {
     uploadedFiles.forEach(f => { if (f.preview) URL.revokeObjectURL(f.preview); });
-    navigate('/trip/new/edit', { state: { fromRecord: true } });
+    navigate('/trip/new/edit', { state: { fromRecord: true, timezone: selectedTimezone } });
   };
 
   // ═══════════════════════════════════════════
@@ -775,6 +790,22 @@ const NewTripPage = ({ toggleTheme, theme }) => {
               <p className="cluster-review-subtitle">
                 선택한 사진이 게시글 각 섹션 상단에 표시됩니다. 선택하지 않으면 첫 번째 사진이 자동 선택됩니다.
               </p>
+            </div>
+
+            {/* 여행 타임존 선택 */}
+            <div className="trip-timezone-card">
+              <div className="trip-timezone-info">
+                <span className="trip-timezone-title">여행 시간대</span>
+                <span className="trip-timezone-help">
+                  사진 시각이 이 타임존 기준으로 표시됩니다
+                  {detectedTimezone && <> · GPS 로 자동 감지됨</>}
+                </span>
+              </div>
+              <TimezoneSelector
+                value={selectedTimezone}
+                onChange={setSelectedTimezone}
+                detectedTz={detectedTimezone}
+              />
             </div>
 
             {clusters.length === 0 ? (

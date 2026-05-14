@@ -25,6 +25,12 @@ from app.services.reverse_geocoder import geocoder_service
 from app.services.llm_pipeline import get_llm_pipeline  # /preview 미리보기 전용 (Phase 1 미적용)
 from app.services.block_assembler import compute_cluster_hash
 from app.services.photo_cluster import cluster_photos_by_location
+from app.services.timezone_service import (
+    resolve_post_timezone,
+    compute_taken_times,
+    is_valid_iana_tz,
+    DEFAULT_TIMEZONE,
+)
 
 router = APIRouter(prefix="/posts", tags=["posts"])
 
@@ -109,6 +115,7 @@ def _build_post_response(post: Post, db: Session, current_user_id: Optional[str]
         is_liked=is_liked,
         is_bookmarked=is_bookmarked,
         author=author,
+        timezone=getattr(post, 'timezone', None),
     )
 
 @router.post("/", response_model=PostResponse)
@@ -232,13 +239,25 @@ async def create_post(
         logger.error(f"게시글 생성 실패: {str(e)}")
         raise HTTPException(status_code=500, detail="게시글 생성에 실패했습니다.")
 
+class AutoCreateRequest(BaseModel):
+    photos: List[dict]
+    timezone: Optional[str] = None  # 사용자가 클러스터 확인 화면에서 선택한 IANA tz (없으면 GPS 자동 감지)
+
+
 @router.post("/auto-create")
 async def auto_create_post(
-    photos: List[dict],
+    request: AutoCreateRequest,
     current_user = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """사진 → 3단계 LLM 파이프라인 → 게시글 생성 (SSE 진행 상황 스트리밍)"""
+    """사진 → 3단계 LLM 파이프라인 → 게시글 생성 (SSE 진행 상황 스트리밍).
+
+    Body:
+      - photos: 사진 페이로드 배열 (file_key, _lat, _lon, exif_data 등)
+      - timezone: 게시글 표시 타임존 (IANA name, 예: "Asia/Bangkok"). 없으면 첫 사진 GPS 로 자동 감지.
+    """
+    photos = request.photos
+    user_tz_choice = request.timezone
 
     def sse(step: str, progress: int, message: str, **extra) -> str:
         data = {"step": step, "progress": progress, "message": message, **extra}
@@ -430,6 +449,20 @@ async def auto_create_post(
                     ))
                     db.flush()
 
+                # ── 게시글 타임존 결정 (사용자 선택 > 첫 사진 GPS > EXIF offset > 기본값) ──
+                first_gps = None
+                first_offset = None
+                for _p in usable_photos:
+                    lat, lon = _p.get("_lat"), _p.get("_lon")
+                    if lat is not None and lon is not None and first_gps is None:
+                        first_gps = (float(lat), float(lon))
+                    exif = _p.get("exif_data") or {}
+                    if exif.get("datetime_offset") and first_offset is None:
+                        first_offset = exif.get("datetime_offset")
+                    if first_gps and first_offset:
+                        break
+                post_timezone = resolve_post_timezone(user_tz_choice, first_gps, first_offset)
+
                 post = Post(
                     title=post_title,
                     description=None,
@@ -444,6 +477,7 @@ async def auto_create_post(
                         "clean_summary": clean_result["summary"],
                     }, ensure_ascii=False, default=lambda o: o.isoformat() if hasattr(o, "isoformat") else str(o)),
                     day_cache=json.dumps(new_day_cache, ensure_ascii=False) if new_day_cache else None,
+                    timezone=post_timezone,
                 )
                 db.add(post)
                 db.flush()
@@ -514,6 +548,9 @@ async def auto_create_post(
                         temp_key=temp_key, permanent_key=permanent_key,
                     )
                     if move_success:
+                        # 사진 촬영 시각: EXIF datetime 을 post_timezone 으로 해석해 UTC + local 둘 다 저장
+                        exif_dt = (photo_dict.get("exif_data") or {}).get("datetime")
+                        taken_utc, taken_local = compute_taken_times(exif_dt, post_timezone)
                         photo = Photo(
                             post_id=post.id, file_key=permanent_key,
                             file_name=photo_dict["file_name"],
@@ -521,6 +558,8 @@ async def auto_create_post(
                             content_type=photo_dict["content_type"],
                             upload_time=datetime.utcnow(),
                             cluster_id=temp_key_to_cluster_id.get(temp_key),
+                            taken_at_utc=taken_utc,
+                            taken_at_local=taken_local,
                         )
                         db.add(photo)
                         db.flush()
@@ -818,6 +857,8 @@ async def get_post_photos(
                 "url": url,
                 "location": location,
                 "upload_time": photo.upload_time.isoformat() if photo.upload_time else None,
+                "taken_at_utc": photo.taken_at_utc.isoformat() if photo.taken_at_utc else None,
+                "taken_at_local": photo.taken_at_local,
             })
 
         return {"photos": photo_list, "total": len(photo_list)}
@@ -1312,6 +1353,16 @@ async def update_post(
             post.tags = json.dumps(request.tags, ensure_ascii=False)
         if request.status is not None:
             post.status = request.status
+
+        # 타임존 변경 → 모든 사진의 taken_at_utc 재계산 (local 문자열은 그대로 유지 — naive 표시 기준)
+        if request.timezone is not None and is_valid_iana_tz(request.timezone):
+            if post.timezone != request.timezone:
+                post.timezone = request.timezone
+                for ph in post.photos:
+                    if ph.taken_at_local:
+                        new_utc, _ = compute_taken_times(ph.taken_at_local, request.timezone)
+                        if new_utc is not None:
+                            ph.taken_at_utc = new_utc
 
         # 사진 업데이트 (keep_photo_ids가 전달된 경우)
         if request.keep_photo_ids is not None:

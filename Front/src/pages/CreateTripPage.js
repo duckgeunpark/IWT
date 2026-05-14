@@ -137,7 +137,10 @@ const CreateTripPage = ({ toggleTheme, theme }) => {
             _lat: photo.gpsData?.lat || null,
             _lon: photo.gpsData?.lng || null,
             location_info: null,
-            exif_data: { datetime: photo.captureTime || null },
+            exif_data: {
+              datetime: photo.captureTime || null,
+              datetime_offset: photo.exifData?.backendData?.datetimeOffset || null,
+            },
           });
         }
 
@@ -146,8 +149,14 @@ const CreateTripPage = ({ toggleTheme, theme }) => {
           return;
         }
 
+        // 클러스터 확인 화면에서 사용자가 선택한 타임존 (없으면 백엔드가 GPS 로 자동 감지)
+        const selectedTimezone = routeLocation.state?.timezone || null;
+
         // 2. 3단계 LLM 파이프라인 + 게시글 자동 생성 (SSE 스트리밍)
-        const response = await apiClient.postStream('/api/v1/posts/auto-create', photoPayload);
+        const response = await apiClient.postStream('/api/v1/posts/auto-create', {
+          photos: photoPayload,
+          timezone: selectedTimezone,
+        });
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let buffer = '';

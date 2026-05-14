@@ -38,6 +38,7 @@ class PostResponse(BaseModel):
     is_liked: bool = False
     is_bookmarked: bool = False
     author: Optional[PostAuthor] = None
+    timezone: Optional[str] = None  # 게시글 표시 타임존 (IANA name)
 
 
 class PostListResponse(BaseModel):
@@ -54,6 +55,7 @@ class PostUpdateRequest(BaseModel):
     status: Optional[str] = None
     keep_photo_ids: Optional[List[int]] = None  # 유지할 기존 사진 DB ID 목록
     new_photos: Optional[List[Dict[str, Any]]] = None  # 새로 추가할 사진 목록
+    timezone: Optional[str] = None  # 게시글 타임존 변경 (IANA name)
 
 
 class PostDetailResponse(BaseModel):

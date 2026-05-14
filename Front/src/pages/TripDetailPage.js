@@ -14,20 +14,24 @@ import {
   toggleFollow,
 } from '../store/socialSlice';
 import { apiClient } from '../services/apiClient';
-import { formatDate } from '../utils/dateUtils';
+import { formatDate, formatPhotoTime, formatPhotoTimeOnly } from '../utils/dateUtils';
+import { findTimezone, formatGmtLabel } from '../data/timezones';
 import '../styles/TripDetailPage.css';
 
 const GOOGLE_MAPS_KEY = process.env.REACT_APP_GOOGLE_MAPS_API_KEY;
 
 // 클러스터 사진 캐러셀
-const ClusterCarousel = ({ photos }) => {
+const ClusterCarousel = ({ photos, postTimezone }) => {
   const [idx, setIdx] = useState(0);
   if (photos.length === 0) return null;
   const prev = () => setIdx(i => (i - 1 + photos.length) % photos.length);
   const next = () => setIdx(i => (i + 1) % photos.length);
+  const currentPhoto = photos[idx];
+  const timeLabel = formatPhotoTimeOnly(currentPhoto.taken_at_local, currentPhoto.taken_at_utc, postTimezone);
   return (
     <div className="cluster-carousel">
-      <img src={photos[idx].url} alt={photos[idx].file_name} className="cluster-carousel-img" />
+      <img src={currentPhoto.url} alt={currentPhoto.file_name} className="cluster-carousel-img" />
+      {timeLabel && <div className="carousel-time">{timeLabel}</div>}
       {photos.length > 1 && (
         <>
           <button className="carousel-btn carousel-btn-prev" onClick={prev}>‹</button>
@@ -55,7 +59,7 @@ const safeParseJson = (raw) => {
 };
 
 // 블록 뷰어 (읽기 전용)
-const BlockViewer = ({ blocks, photos }) => (
+const BlockViewer = ({ blocks, photos, postTimezone }) => (
   <div className="block-viewer">
     {blocks.map(block => {
       const content = block.user_content ?? block.ai_content ?? '';
@@ -104,7 +108,7 @@ const BlockViewer = ({ blocks, photos }) => (
           const depthClass = block.depth === 'main' ? ' depth-main' : ' depth-brief';
           return (
             <div key={block.block_id} className={`bv-block bv-place${depthClass}`}>
-              {clusterPhotos.length > 0 && <ClusterCarousel photos={clusterPhotos} />}
+              {clusterPhotos.length > 0 && <ClusterCarousel photos={clusterPhotos} postTimezone={postTimezone} />}
               <MarkdownPreview content={content} />
             </div>
           );
@@ -128,7 +132,7 @@ const BlockViewer = ({ blocks, photos }) => (
           if (clusterPhotos.length === 0) return null;
           return (
             <div key={block.block_id} className="bv-block bv-cluster-photos">
-              <ClusterCarousel photos={clusterPhotos} />
+              <ClusterCarousel photos={clusterPhotos} postTimezone={postTimezone} />
             </div>
           );
         }
@@ -481,6 +485,19 @@ const TripDetailPage = ({ toggleTheme, theme }) => {
             <span className="trip-meta-item">{formatDate(trip.created_at)}</span>
             <span className="trip-meta-divider">&middot;</span>
             <span className="trip-meta-item">사진 {trip.photo_count || 0}장</span>
+            {trip.timezone && (
+              <>
+                <span className="trip-meta-divider">&middot;</span>
+                <span className="trip-meta-item trip-meta-tz" title={trip.timezone}>
+                  {(() => {
+                    const t = findTimezone(trip.timezone);
+                    return t
+                      ? `${t.flag} ${formatGmtLabel(trip.timezone)} · ${t.label}`
+                      : trip.timezone;
+                  })()}
+                </span>
+              </>
+            )}
           </div>
           <div className="trip-likes" style={{ visibility: likesCount > 0 ? 'visible' : 'hidden' }}>
             <strong>{likesCount || 0}</strong>명이 좋아합니다
@@ -519,7 +536,7 @@ const TripDetailPage = ({ toggleTheme, theme }) => {
       <div className="trip-body">
         <div className="trip-content">
           {hasBlocks ? (
-            <BlockViewer blocks={trip.blocks} photos={photos} />
+            <BlockViewer blocks={trip.blocks} photos={photos} postTimezone={trip.timezone} />
           ) : trip.description ? (
             <MarkdownPreview content={trip.description} />
           ) : (
